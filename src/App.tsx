@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { HashRouter, Routes, Route, Link, useNavigate } from "react-router-dom";
 import CreateDemoSession from "./pages/CreateDemoSession";
 import PresenterSession from "./pages/PresenterSession";
 import JoinSession from "./pages/JoinSession";
-import { isConfigured } from "./firebase";
+import { ensureSignedIn, isConfigured } from "./firebase";
 
 function Home() {
     const [joinCode, setJoinCode] = useState("");
@@ -86,6 +86,12 @@ function Home() {
 }
 
 export default function App() {
+  useEffect(() => {
+    ensureSignedIn().catch((error) =>
+      console.error("Failed to initialize auth", error)
+    );
+  }, []);
+
   return (
     <HashRouter>
       <Routes>

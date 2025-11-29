@@ -1,5 +1,11 @@
-import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeApp, type FirebaseApp } from "firebase/app";
+import { getFirestore, type Firestore } from "firebase/firestore";
+import { getFunctions, type Functions } from "firebase/functions";
+import {
+  getAuth,
+  signInAnonymously,
+  type Auth,
+} from "firebase/auth";
 
 const placeholderConfig = {
   apiKey: "YOUR_FIREBASE_API_KEY",
@@ -25,5 +31,30 @@ export const isConfigured =
   firebaseConfig.apiKey !== placeholderConfig.apiKey &&
   firebaseConfig.projectId !== placeholderConfig.projectId;
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+let app: FirebaseApp | undefined;
+let db: Firestore | undefined;
+let functions: Functions | undefined;
+let auth: Auth | undefined;
+
+if (isConfigured) {
+  app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  functions = getFunctions(app);
+  auth = getAuth(app);
+}
+
+let authInitPromise: Promise<void> | null = null;
+
+export async function ensureSignedIn(): Promise<void> {
+  if (!auth) return;
+  if (auth.currentUser) return;
+  if (!authInitPromise) {
+    authInitPromise = signInAnonymously(auth).catch((error) => {
+      authInitPromise = null;
+      throw error;
+    });
+  }
+  return authInitPromise;
+}
+
+export { app, db, functions, auth };

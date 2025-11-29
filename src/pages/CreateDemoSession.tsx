@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { isConfigured } from "../firebase";
+import { auth, ensureSignedIn } from "../firebase";
 import { addDoc, collection, db } from "../utils/firestore"; 
 import { createInitialSessionData } from "../data/ductalDeck";
 import { SessionData } from "../types";
@@ -15,10 +15,13 @@ export default function CreateDemoSession() {
     setLoading(true);
     setError(null);
     try {
+      await ensureSignedIn();
       const data = createInitialSessionData();
-      const docRef = await addDoc(collection(db, "sessions"), data);
+      const createdBy = auth?.currentUser?.uid;
+      const docData = createdBy ? { ...data, createdBy } : data;
+      const docRef = await addDoc(collection(db, "sessions"), docData);
       setSessionId(docRef.id);
-      setSessionInfo({ ...data, id: docRef.id });
+      setSessionInfo({ ...data, createdBy: createdBy ?? undefined, id: docRef.id });
     } catch (err: any) {
       console.error(err);
       setError(err?.message ?? "Failed to create session. Check console/network.");

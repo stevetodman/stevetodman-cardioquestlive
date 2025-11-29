@@ -215,7 +215,8 @@ const mockGetDocs = async (q: any) => {
 // --- Export Logic ---
 
 // Use the existing 'db' exported from firebase.ts, which is already configured
-export const db = isConfigured ? realDb : ({ type: 'mock' } as any);
+const mockDb = { type: "mock" } as any;
+export const db = isConfigured && realDb ? realDb : mockDb;
 
 export const collection = isConfigured ? fCollection : (mockCollection as any);
 export const doc = isConfigured ? fDoc : (mockDoc as any);

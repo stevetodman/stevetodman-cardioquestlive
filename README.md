@@ -15,6 +15,14 @@ View your app in AI Studio: https://ai.studio/apps/drive/1MhhV-tJNaEOnpggBaha68l
 
 1. Install dependencies:
    `npm install`
-2. Copy `.env.example` to `.env.local` and fill in your Firebase project keys (`VITE_FIREBASE_*`) plus the `GEMINI_API_KEY`. Keep this file out of source control.
+2. Copy `.env.example` to `.env.local` and fill in your Firebase project keys (`VITE_FIREBASE_*`). Keep this file out of source control.
 3. Run the app:
    `npm run dev`
+
+To enable the secure Gemini callable function, store your Gemini API key server-side:
+
+```
+firebase functions:config:set gemini.api_key="YOUR_GEMINI_KEY"
+```
+
+Looking for a full explanation of how the Firebase project, Google AI Studio, and Gemini API key work together? Read [docs/GOOGLE_AI_STUDIO.md](docs/GOOGLE_AI_STUDIO.md).

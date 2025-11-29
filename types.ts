@@ -20,6 +20,7 @@ export interface SessionData {
   id?: string;        // Firestore doc id
   title: string;
   joinCode: string;
+  createdBy?: string;
   currentSlideIndex: number;
   currentQuestionId: string | null;
   showResults: boolean;

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   collection,
   doc,
@@ -13,8 +14,9 @@ import {
 } from "../utils/firestore"; // Updated import
 import { SessionData, Question } from "../types";
 import { SlidePreview } from "../components/SlidePreview";
+import { auth, ensureSignedIn, isConfigured } from "../firebase";
 
-function getOrCreateUserId(): string {
+function getLocalUserId(): string {
   const key = "cq_live_user_id";
   const existing = localStorage.getItem(key);
   if (existing) return existing;
@@ -30,36 +32,50 @@ export default function JoinSession() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
-  const userId = getOrCreateUserId();
+  const [userId, setUserId] = useState<string | null>(
+    isConfigured ? auth?.currentUser?.uid ?? null : getLocalUserId()
+  );
+
+  useEffect(() => {
+    if (!isConfigured || !auth) return;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUserId(user?.uid ?? null);
+    });
+    ensureSignedIn().catch((error) =>
+      console.error("Anonymous auth failed", error)
+    );
+    return () => unsubscribe();
+  }, []);
 
   // Find session by joinCode once
   useEffect(() => {
     async function findSession() {
       if (!joinCode) return;
+      if (isConfigured && !userId) return;
       setLoading(true);
       try {
         const q = query(
-            collection(db, "sessions"),
-            where("joinCode", "==", joinCode.toUpperCase()),
-            limit(1)
+          collection(db, "sessions"),
+          where("joinCode", "==", joinCode.toUpperCase()),
+          limit(1)
         );
         const snap = await getDocs(q);
         if (!snap.empty) {
-            const docSnap = snap.docs[0];
-            setSessionId(docSnap.id);
-            setSession({ ...(docSnap.data() as SessionData), id: docSnap.id });
+          const docSnap = snap.docs[0];
+          setSessionId(docSnap.id);
+          setSession({ ...(docSnap.data() as SessionData), id: docSnap.id });
         } else {
-            setSession(null);
-            setSessionId(null);
+          setSession(null);
+          setSessionId(null);
         }
       } catch (e) {
-          console.error("Error finding session:", e);
+        console.error("Error finding session:", e);
       } finally {
-          setLoading(false);
+        setLoading(false);
       }
     }
     findSession();
-  }, [joinCode]);
+  }, [joinCode, userId]);
 
   // Subscribe to session updates
   useEffect(() => {
@@ -122,7 +138,7 @@ export default function JoinSession() {
   const isQuestionActive = currentQuestion && session.currentQuestionId === currentQuestion.id;
 
   const handleChoice = async (choiceIndex: number) => {
-    if (!currentQuestion || !isQuestionActive) return;
+    if (!currentQuestion || !isQuestionActive || !userId) return;
     if (submitting) return;
     setSubmitting(true);
     try {
