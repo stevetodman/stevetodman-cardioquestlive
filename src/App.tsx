@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Link, useNavigate } from "react-router-dom";
 import CreateDemoSession from "./pages/CreateDemoSession";
 import PresenterSession from "./pages/PresenterSession";
 import JoinSession from "./pages/JoinSession";
+import AdminDeckEditor from "./pages/AdminDeckEditor";
 import { ensureSignedIn, isConfigured } from "./firebase";
 
 function Home() {
@@ -79,6 +80,12 @@ function Home() {
                   <p className="text-[10px] text-slate-600">
                     Ductal-Dependent Lesions Module • v1.0
                   </p>
+                  <Link
+                    to="/admin"
+                    className="text-[10px] text-slate-500 hover:text-slate-300 underline block mt-1"
+                  >
+                    Admin
+                  </Link>
               </div>
             </div>
         </div>
@@ -99,6 +106,7 @@ export default function App() {
         <Route path="/create-demo" element={<CreateDemoSession />} />
         <Route path="/presenter/:sessionId" element={<PresenterSession />} />
         <Route path="/join/:joinCode" element={<JoinSession />} />
+        <Route path="/admin" element={<AdminDeckEditor />} />
       </Routes>
     </HashRouter>
   );

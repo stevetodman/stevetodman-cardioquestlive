@@ -85,6 +85,7 @@ When running the Functions emulator you can also export `GEMINI_API_KEY=...` bef
 - **Firestore rules** live in `firestore.rules`; deploy them with `firebase deploy --only firestore:rules`.
 - **Gemini Cloud Function** lives in `functions/index.js`. Deploy via `firebase deploy --only functions` (or bundle with hosting using `firebase deploy --only functions,firestore,hosting`).
 - Remember to set the Gemini API key with `firebase functions:config:set gemini.api_key=...` before deploying; the callable function will throw if the key is missing.
+- **Deck Admin UI** stores its state in `configs/deck`. Use `VITE_ADMIN_ACCESS_CODE` to gate access and ensure authenticated users only can reach `/admin`.
 
 ### 5.3 Packaging for Google AI Studio
 
@@ -110,9 +111,10 @@ When running the Functions emulator you can also export `GEMINI_API_KEY=...` bef
    - The UI polls Firestore (or localStorage) for slides and question state; answers are saved under `sessions/{sessionId}/responses`.
    - Learners see whether the presenter has opened the question, whether answers are locked, and the revealed result state.
 3. **Data Model**
-   - Sessions contain sorted `slides[]` and `questions[]`. Slide templates live in `src/data/ductalDeck.ts`, and `types.ts` documents each field.
-   - Responses are lightweight docs with `sessionId`, `userId`, `questionId`, `choiceIndex`, and timestamps.
-   - Firestore security rules require authenticated users. Presenters own the session they created (`createdBy` UID) and learners submit `responses` tagged with their UID.
+- Sessions contain sorted `slides[]` and `questions[]`. Slide templates live in `src/data/ductalDeck.ts`, and `types.ts` documents each field.
+- Responses are lightweight docs with `sessionId`, `userId`, `questionId`, `choiceIndex`, and timestamps.
+- Firestore security rules require authenticated users. Presenters own the session they created (`createdBy` UID) and learners submit `responses` tagged with their UID.
+- The admin editor (`/#/admin`) persists deck edits to Firestore, so every new session uses the most recent content without touching the codebase.
 
 ---
 

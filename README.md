@@ -25,4 +25,10 @@ To enable the secure Gemini callable function, store your Gemini API key server-
 firebase functions:config:set gemini.api_key="YOUR_GEMINI_KEY"
 ```
 
+### Deck Admin
+
+- Set an optional `VITE_ADMIN_ACCESS_CODE` in `.env.local` (and hosting secrets) to gate the deck editor UI.
+- Visit `/#/admin` after running `npm run dev` (or on production) to edit slides/questions via the UI.
+- Changes are saved to Firestore (`configs/deck`) and used automatically when creating new sessions.
+
 Looking for a full explanation of how the Firebase project, Google AI Studio, and Gemini API key work together? Read [docs/GOOGLE_AI_STUDIO.md](docs/GOOGLE_AI_STUDIO.md).

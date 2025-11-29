@@ -16,6 +16,13 @@ export interface Slide {
   questionId?: string;
 }
 
+export interface DeckData {
+  title: string;
+  slides: Slide[];
+  questions: Question[];
+  updatedAt?: string;
+}
+
 export interface SessionData {
   id?: string;        // Firestore doc id
   title: string;

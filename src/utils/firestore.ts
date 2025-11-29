@@ -9,6 +9,8 @@ import {
   where as fWhere, 
   limit as fLimit, 
   getDocs as fGetDocs,
+  getDoc as fGetDoc,
+  setDoc as fSetDoc,
   DocumentSnapshot,
   QuerySnapshot,
   DocumentData
@@ -212,6 +214,26 @@ const mockGetDocs = async (q: any) => {
     });
 };
 
+const mockGetDoc = async (docRef: any) => {
+    const store = getStore();
+    const tableName = docRef.collectionPath;
+    const id = docRef.id;
+    const data = store[tableName]?.[id];
+    return {
+        exists: () => !!data,
+        id,
+        data: () => data
+    };
+};
+
+const mockSetDoc = async (docRef: any, data: any) => {
+    const store = getStore();
+    const tableName = docRef.collectionPath;
+    if (!store[tableName]) store[tableName] = {};
+    store[tableName][docRef.id] = { ...data, id: docRef.id };
+    setStore(store);
+};
+
 // --- Export Logic ---
 
 // Use the existing 'db' exported from firebase.ts, which is already configured
@@ -227,3 +249,5 @@ export const query = isConfigured ? fQuery : (mockQuery as any);
 export const where = isConfigured ? fWhere : (mockWhere as any);
 export const limit = isConfigured ? fLimit : (mockLimit as any);
 export const getDocs = isConfigured ? fGetDocs : (mockGetDocs as any);
+export const getDoc = isConfigured ? fGetDoc : (mockGetDoc as any);
+export const setDoc = isConfigured ? fSetDoc : (mockSetDoc as any);

@@ -1,4 +1,4 @@
-import { SessionData, Slide, Question } from "../types";
+import { SessionData, Slide, Question, DeckData } from "../types";
 
 // Helper to wrap content in standard slide styles
 const slideWrapper = (content: string) => `
@@ -7,7 +7,7 @@ const slideWrapper = (content: string) => `
   </div>
 `;
 
-const slides: Slide[] = [
+export const defaultSlides: Slide[] = [
   {
     id: "title",
     index: 0,
@@ -161,7 +161,7 @@ const slides: Slide[] = [
   */
 ];
 
-const questions: Question[] = [
+export const defaultQuestions: Question[] = [
   {
     id: "q_pge_gray_infant",
     stem: `A 30-hour-old term infant presents with poor feeding, mottling, and lethargy.
@@ -211,18 +211,24 @@ Which of the following patterns best describes this presentation?`,
   */
 ];
 
-export function createInitialSessionData(): SessionData {
+export const defaultDeck: DeckData = {
+  title: "Ductal-Dependent Lesions – Demo Session",
+  slides: defaultSlides,
+  questions: defaultQuestions,
+};
+
+export function createInitialSessionData(deck: DeckData = defaultDeck): SessionData {
   const now = new Date().toISOString();
   const joinCode = Math.random().toString(36).substring(2, 6).toUpperCase();
 
   return {
-    title: "Ductal-Dependent Lesions – Demo Session",
+    title: deck.title,
     joinCode,
     currentSlideIndex: 0,
     currentQuestionId: null,
     showResults: false,
-    slides,
-    questions,
+    slides: deck.slides,
+    questions: deck.questions,
     createdAt: now,
   };
 }

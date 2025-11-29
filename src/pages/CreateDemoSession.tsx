@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { auth, ensureSignedIn } from "../firebase";
 import { addDoc, collection, db } from "../utils/firestore"; 
-import { createInitialSessionData } from "../data/ductalDeck";
+import { createInitialSessionData, defaultDeck } from "../data/ductalDeck";
+import { fetchDeck } from "../utils/deckService";
 import { SessionData } from "../types";
 
 export default function CreateDemoSession() {
@@ -16,7 +17,13 @@ export default function CreateDemoSession() {
     setError(null);
     try {
       await ensureSignedIn();
-      const data = createInitialSessionData();
+      let deck = defaultDeck;
+      try {
+        deck = await fetchDeck();
+      } catch (deckError) {
+        console.warn("Falling back to default deck", deckError);
+      }
+      const data = createInitialSessionData(deck);
       const createdBy = auth?.currentUser?.uid;
       const docData = createdBy ? { ...data, createdBy } : data;
       const docRef = await addDoc(collection(db, "sessions"), docData);
