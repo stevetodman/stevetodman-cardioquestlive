@@ -1,0 +1,5 @@
+{
+  "name": "CardioQuest Live",
+  "description": "A real-time interactive presentation tool for pediatric cardiology, featuring synchronized slides and live audience polling.",
+  "requestFramePermissions": []
+}
