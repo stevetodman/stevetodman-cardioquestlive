@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { doc, onSnapshot, updateDoc, db } from "../utils/firestore"; // Updated import
 import { SessionData, Question } from "../types";
 import { ResponsesChart } from "../components/ResponsesChart";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 export default function PresenterSession() {
   const { sessionId } = useParams();
@@ -54,6 +55,7 @@ export default function PresenterSession() {
     session.questions.map((q) => [q.id, q])
   );
 
+  const sanitizedSlideHtml = sanitizeHtml(currentSlide.html);
   const currentQuestion =
     currentSlide.type === "question" && currentSlide.questionId
       ? questionsMap.get(currentSlide.questionId)
@@ -91,7 +93,7 @@ export default function PresenterSession() {
       <div className="flex-1 flex items-center justify-center bg-slate-950 p-4 md:p-8 relative">
         <div
           className="w-full max-w-5xl aspect-video rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
-          dangerouslySetInnerHTML={{ __html: currentSlide.html }}
+          dangerouslySetInnerHTML={{ __html: sanitizedSlideHtml }}
         />
         
         {/* Mobile controls overlay (visible only on small screens) */}

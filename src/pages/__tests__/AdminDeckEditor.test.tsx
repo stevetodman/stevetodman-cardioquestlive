@@ -42,9 +42,19 @@ jest.mock("../../data/ductalDeck", () => ({
 
 describe("AdminDeckEditor", () => {
   const { fetchDeck, persistDeck } = require("../../utils/deckService");
+  const originalEnv = process.env.VITE_ADMIN_ACCESS_CODE;
 
   beforeEach(() => {
+    process.env.VITE_ADMIN_ACCESS_CODE = "TEST_CODE";
     jest.clearAllMocks();
+  });
+
+  afterAll(() => {
+    if (originalEnv === undefined) {
+      delete process.env.VITE_ADMIN_ACCESS_CODE;
+    } else {
+      process.env.VITE_ADMIN_ACCESS_CODE = originalEnv;
+    }
   });
 
   test("displays loading state and renders deck after fetch", async () => {
@@ -60,8 +70,11 @@ describe("AdminDeckEditor", () => {
       questions: [],
     });
 
+    const user = userEvent.setup();
     render(<AdminDeckEditor />);
-    expect(screen.getByText(/loading deck/i)).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText(/access code/i), "TEST_CODE");
+    await user.click(screen.getByRole("button", { name: /unlock editor/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/deck admin/i)).toBeInTheDocument();
@@ -69,24 +82,10 @@ describe("AdminDeckEditor", () => {
     expect(screen.getByText(/slide 1/i)).toBeInTheDocument();
   });
 
-  test("skips passcode prompt when admin code is not defined", async () => {
-    (fetchDeck as jest.Mock).mockResolvedValue({
-      slides: [
-        {
-          id: "slideA",
-          index: 0,
-          type: "content",
-          html: "<div>Slide A</div>",
-        },
-      ],
-      questions: [],
-    });
-
+  test("shows disabled state when admin code is not defined", async () => {
+    delete process.env.VITE_ADMIN_ACCESS_CODE;
     render(<AdminDeckEditor />);
-    await waitFor(() => {
-      expect(screen.getByText(/deck admin/i)).toBeInTheDocument();
-    });
-    expect(screen.queryByText(/admin access/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/admin locked/i)).toBeInTheDocument();
   });
 
   test("calls fetchDeck on mount and lists slides ordered by index", async () => {
@@ -108,6 +107,8 @@ describe("AdminDeckEditor", () => {
     });
 
     render(<AdminDeckEditor />);
+    await userEvent.type(screen.getByPlaceholderText(/access code/i), "TEST_CODE");
+    await userEvent.click(screen.getByRole("button", { name: /unlock editor/i }));
     expect(fetchDeck).toHaveBeenCalledTimes(1);
 
     await waitFor(() => {
@@ -131,10 +132,12 @@ describe("AdminDeckEditor", () => {
     (fetchDeck as jest.Mock).mockResolvedValue(deck);
 
     render(<AdminDeckEditor />);
+    await userEvent.type(screen.getByPlaceholderText(/access code/i), "TEST_CODE");
+    await userEvent.click(screen.getByRole("button", { name: /unlock editor/i }));
+
     await waitFor(() => {
       expect(screen.getByText(/deck admin/i)).toBeInTheDocument();
     });
-
     await userEvent.click(screen.getByRole("button", { name: /save deck/i }));
 
     await waitFor(() => {

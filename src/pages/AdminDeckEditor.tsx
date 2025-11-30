@@ -4,7 +4,10 @@ import { defaultDeck } from "../data/ductalDeck";
 import { fetchDeck, persistDeck } from "../utils/deckService";
 import { SlidePreview } from "../components/SlidePreview";
 
-const ADMIN_CODE = (import.meta.env.VITE_ADMIN_ACCESS_CODE ?? "5470").trim();
+function getAdminCode(): string {
+  // Vite injects env vars onto process.env via define() in vite.config.ts
+  return (process.env.VITE_ADMIN_ACCESS_CODE ?? "").trim();
+}
 
 type SlideField = keyof Omit<Slide, "id">;
 
@@ -33,17 +36,20 @@ function createEmptyQuestion(): Question {
 
 export default function AdminDeckEditor() {
   const [deck, setDeck] = useState<DeckData>(defaultDeck);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [selectedSlideId, setSelectedSlideId] = useState<string | null>(null);
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
-  const [accessGranted, setAccessGranted] = useState(!ADMIN_CODE);
+  const [accessGranted, setAccessGranted] = useState(false);
   const [codeInput, setCodeInput] = useState("");
+  const adminCode = useMemo(getAdminCode, []);
+  const hasAdminCode = adminCode.length > 0;
 
   useEffect(() => {
+    if (!hasAdminCode || !accessGranted) return;
     loadDeck();
-  }, []);
+  }, [hasAdminCode, accessGranted]);
 
   async function loadDeck() {
     setLoading(true);
@@ -199,40 +205,15 @@ export default function AdminDeckEditor() {
     return messages;
   }, [slidesSorted, deck.questions]);
 
-  const deckPasscodeSection = !accessGranted ? (
-    <div className="max-w-md mx-auto bg-slate-900 border border-slate-700 rounded-xl p-6 space-y-4">
-      <h2 className="text-xl font-semibold text-white text-center">Admin Access</h2>
-      <p className="text-slate-400 text-sm">
-        Enter the admin access code to modify the CardioQuest Live deck.
-      </p>
-      <input
-        type="password"
-        value={codeInput}
-        onChange={(event) => setCodeInput(event.target.value)}
-        placeholder="Access code"
-        className="w-full rounded-lg bg-slate-800 border border-slate-700 px-4 py-2 text-white focus:ring-2 focus:ring-sky-500 outline-none"
-      />
-      <button
-        onClick={() => {
-          if (codeInput.trim() === ADMIN_CODE) {
-            setAccessGranted(true);
-            setStatus(null);
-          } else {
-            setStatus("Incorrect access code");
-          }
-        }}
-        className="w-full rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2 transition-colors"
-      >
-        Unlock Editor
-      </button>
-      {status && <p className="text-sm text-rose-400 text-center">{status}</p>}
-    </div>
-  ) : null;
-
-  if (loading) {
+  if (!hasAdminCode) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
-        <div className="text-slate-400">Loading deck...</div>
+      <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center p-4">
+        <div className="max-w-md mx-auto bg-slate-900 border border-rose-800 rounded-xl p-6 space-y-3 text-center">
+          <h2 className="text-xl font-semibold text-white">Admin Locked</h2>
+          <p className="text-slate-300 text-sm">
+            Set <code className="text-rose-300">VITE_ADMIN_ACCESS_CODE</code> to enable the deck editor.
+          </p>
+        </div>
       </div>
     );
   }
@@ -240,7 +221,41 @@ export default function AdminDeckEditor() {
   if (!accessGranted) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center p-4">
-        {deckPasscodeSection}
+        <div className="max-w-md mx-auto bg-slate-900 border border-slate-700 rounded-xl p-6 space-y-4">
+          <h2 className="text-xl font-semibold text-white text-center">Admin Access</h2>
+          <p className="text-slate-400 text-sm text-center">
+            Enter the admin access code to modify the CardioQuest Live deck.
+          </p>
+          <input
+            type="password"
+            value={codeInput}
+            onChange={(event) => setCodeInput(event.target.value)}
+            placeholder="Access code"
+            className="w-full rounded-lg bg-slate-800 border border-slate-700 px-4 py-2 text-white focus:ring-2 focus:ring-sky-500 outline-none"
+          />
+          <button
+            onClick={() => {
+              if (codeInput.trim() === adminCode) {
+                setAccessGranted(true);
+                setStatus(null);
+              } else {
+                setStatus("Incorrect access code");
+              }
+            }}
+            className="w-full rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2 transition-colors"
+          >
+            Unlock Editor
+          </button>
+          {status && <p className="text-sm text-rose-400 text-center">{status}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
+        <div className="text-slate-400">Loading deck...</div>
       </div>
     );
   }
@@ -363,7 +378,7 @@ export default function AdminDeckEditor() {
                 <h2 className="text-lg font-semibold">Preview</h2>
                 {selectedSlide && (
                   <span className="text-[11px] text-slate-500">
-                    Slide {selectedSlide.index + 1} of {slidesSorted.length}
+                    Viewing {selectedSlide.index + 1} of {slidesSorted.length}
                   </span>
                 )}
               </div>

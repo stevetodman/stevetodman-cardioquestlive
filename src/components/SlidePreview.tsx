@@ -1,10 +1,12 @@
 import React from "react";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 interface Props {
   html: string;
 }
 
 export function SlidePreview({ html }: Props) {
+  const safeHtml = sanitizeHtml(html);
   return (
     <div className="rounded-2xl bg-slate-900 border border-slate-800 p-3 shadow-md w-full">
       {/* 
@@ -14,7 +16,7 @@ export function SlidePreview({ html }: Props) {
       <div className="relative w-full pb-[56.25%] overflow-hidden rounded-xl bg-slate-950"> 
           <div
             className="absolute top-0 left-0 w-[200%] h-[200%] origin-top-left scale-[0.5] pointer-events-none transform"
-            dangerouslySetInnerHTML={{ __html: html }}
+            dangerouslySetInnerHTML={{ __html: safeHtml }}
             style={{
                 // Ensure internal scrolling is disabled for preview
                 overflow: 'hidden' 
