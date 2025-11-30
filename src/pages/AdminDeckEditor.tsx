@@ -3,7 +3,7 @@ import type { DeckData, Question, Slide } from "../types";
 import { defaultDeck } from "../data/ductalDeck";
 import { fetchDeck, persistDeck } from "../utils/deckService";
 
-const ADMIN_CODE = import.meta.env.VITE_ADMIN_ACCESS_CODE?.trim();
+const ADMIN_CODE = (import.meta.env.VITE_ADMIN_ACCESS_CODE ?? "5470").trim();
 
 type SlideField = keyof Omit<Slide, "id">;
 
