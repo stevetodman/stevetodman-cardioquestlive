@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { DeckData, Question, Slide } from "../types";
 import { defaultDeck } from "../data/ductalDeck";
 import { fetchDeck, persistDeck } from "../utils/deckService";
+import { SlidePreview } from "../components/SlidePreview";
 
 const ADMIN_CODE = (import.meta.env.VITE_ADMIN_ACCESS_CODE ?? "5470").trim();
 
@@ -51,21 +52,22 @@ export default function AdminDeckEditor() {
       setDeck(data);
       setSelectedSlideId(data.slides[0]?.id ?? null);
       setSelectedQuestionId(data.questions[0]?.id ?? null);
+      setStatus(null);
     } catch (error) {
       console.error("Failed to load deck", error);
+      setStatus("Failed to load deck from Firestore. Using default deck.");
     } finally {
       setLoading(false);
     }
   }
 
-  const slidesSorted = useMemo(() => {
-    return [...deck.slides].sort((a, b) => a.index - b.index);
-  }, [deck.slides]);
+  const slidesSorted = useMemo(
+    () => [...deck.slides].sort((a, b) => a.index - b.index),
+    [deck.slides]
+  );
 
   const selectedSlide = slidesSorted.find((slide) => slide.id === selectedSlideId) ?? null;
-  const selectedQuestion =
-    deck.questions.find((q) => q.id === selectedQuestionId) ?? null;
-
+  const selectedQuestion = deck.questions.find((q) => q.id === selectedQuestionId) ?? null;
   const linkedQuestion = selectedSlide?.questionId
     ? deck.questions.find((q) => q.id === selectedSlide.questionId)
     : null;
@@ -77,6 +79,7 @@ export default function AdminDeckEditor() {
         slide.id === id ? { ...slide, [field]: value } : slide
       ),
     }));
+    setStatus(null);
   }
 
   function moveSlide(id: string, delta: number) {
@@ -85,30 +88,41 @@ export default function AdminDeckEditor() {
       const currentIndex = sorted.findIndex((s) => s.id === id);
       const targetIndex = currentIndex + delta;
       if (targetIndex < 0 || targetIndex >= sorted.length) return prev;
+
       [sorted[currentIndex], sorted[targetIndex]] = [
         { ...sorted[targetIndex], index: currentIndex },
         { ...sorted[currentIndex], index: targetIndex },
       ];
-      return { ...prev, slides: sorted.map((slide, idx) => ({ ...slide, index: idx })) };
-    });
-  }
 
-  function addSlide(type: Slide["type"]) {
-    setDeck((prev) => {
-      const newSlide = createEmptySlide(type, prev.slides.length);
-      return { ...prev, slides: [...prev.slides, newSlide] };
+      return {
+        ...prev,
+        slides: sorted.map((slide, idx) => ({ ...slide, index: idx })),
+      };
     });
     setStatus(null);
   }
 
-  function removeSlide(id: string) {
+  function addSlide(type: Slide["type"]) {
+    const newSlide = createEmptySlide(type, deck.slides.length);
     setDeck((prev) => ({
       ...prev,
-      slides: prev.slides
-        .filter((slide) => slide.id !== id)
-        .map((slide, idx) => ({ ...slide, index: idx })),
+      slides: [...prev.slides, newSlide],
     }));
+    setSelectedSlideId(newSlide.id);
+    setStatus(null);
+  }
+
+  function removeSlide(id: string) {
+    setDeck((prev) => {
+      const filtered = prev.slides.filter((slide) => slide.id !== id);
+      const reindexed = filtered.map((slide, idx) => ({
+        ...slide,
+        index: idx,
+      }));
+      return { ...prev, slides: reindexed };
+    });
     setSelectedSlideId((prevId) => (prevId === id ? null : prevId));
+    setStatus(null);
   }
 
   function addQuestion() {
@@ -118,6 +132,7 @@ export default function AdminDeckEditor() {
       questions: [...prev.questions, newQuestion],
     }));
     setSelectedQuestionId(newQuestion.id);
+    setStatus(null);
   }
 
   function updateQuestion(id: string, updater: (question: Question) => Question) {
@@ -127,6 +142,7 @@ export default function AdminDeckEditor() {
         question.id === id ? updater(question) : question
       ),
     }));
+    setStatus(null);
   }
 
   async function handleSave() {
@@ -147,6 +163,42 @@ export default function AdminDeckEditor() {
     }
   }
 
+  const validationMessages = useMemo(() => {
+    const messages: string[] = [];
+    const questionIds = new Set(deck.questions.map((q) => q.id));
+
+    slidesSorted.forEach((slide, idx) => {
+      const humanIndex = idx + 1;
+
+      if (!slide.html?.trim()) {
+        messages.push(`Slide ${humanIndex} has empty HTML content.`);
+      }
+
+      if (slide.type === "question") {
+        if (!slide.questionId) {
+          messages.push(
+            `Slide ${humanIndex} is a question slide but has no linked question.`
+          );
+        } else if (!questionIds.has(slide.questionId)) {
+          messages.push(
+            `Slide ${humanIndex} links to missing question id "${slide.questionId}".`
+          );
+        }
+      }
+    });
+
+    deck.questions.forEach((q) => {
+      if (!q.stem?.trim()) {
+        messages.push(`Question "${q.id}" is missing a stem.`);
+      }
+      if (!q.options || q.options.length < 2) {
+        messages.push(`Question "${q.id}" should have at least 2 options.`);
+      }
+    });
+
+    return messages;
+  }, [slidesSorted, deck.questions]);
+
   const deckPasscodeSection = !accessGranted ? (
     <div className="max-w-md mx-auto bg-slate-900 border border-slate-700 rounded-xl p-6 space-y-4">
       <h2 className="text-xl font-semibold text-white text-center">Admin Access</h2>
@@ -164,6 +216,7 @@ export default function AdminDeckEditor() {
         onClick={() => {
           if (codeInput.trim() === ADMIN_CODE) {
             setAccessGranted(true);
+            setStatus(null);
           } else {
             setStatus("Incorrect access code");
           }
@@ -211,7 +264,12 @@ export default function AdminDeckEditor() {
               Reload Deck
             </button>
             <button
-              onClick={() => setDeck(defaultDeck)}
+              onClick={() => {
+                setDeck(defaultDeck);
+                setSelectedSlideId(defaultDeck.slides[0]?.id ?? null);
+                setSelectedQuestionId(defaultDeck.questions[0]?.id ?? null);
+                setStatus("Reset to default deck (local). Remember to save.");
+              }}
               className="rounded-lg border border-rose-700/70 px-4 py-2 text-sm text-rose-300 hover:bg-rose-900/30"
             >
               Reset to Default
@@ -232,26 +290,44 @@ export default function AdminDeckEditor() {
           </div>
         )}
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <section className="space-y-4">
+        {validationMessages.length > 0 && (
+          <div className="rounded-lg border border-amber-600/60 bg-amber-900/20 px-4 py-3 text-xs text-amber-100 space-y-1">
+            <div className="font-semibold text-amber-300 text-sm">
+              Deck issues
+            </div>
+            <ul className="list-disc list-inside space-y-0.5">
+              {validationMessages.slice(0, 4).map((msg, idx) => (
+                <li key={idx}>{msg}</li>
+              ))}
+            </ul>
+            {validationMessages.length > 4 && (
+              <div className="text-[11px] text-amber-300/80">
+                + {validationMessages.length - 4} more…
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-6 lg:flex-row">
+          <section className="lg:w-72 lg:flex-shrink-0 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Slides</h2>
               <div className="flex gap-2">
                 <button
                   onClick={() => addSlide("content")}
-                  className="rounded-lg bg-slate-800 hover:bg-slate-700 text-sm px-3 py-1.5"
+                  className="rounded-lg bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1.5"
                 >
                   + Content
                 </button>
                 <button
                   onClick={() => addSlide("question")}
-                  className="rounded-lg bg-slate-800 hover:bg-slate-700 text-sm px-3 py-1.5"
+                  className="rounded-lg bg-slate-800 hover-bg-slate-700 text-xs px-3 py-1.5"
                 >
                   + Question
                 </button>
               </div>
             </div>
-            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
+            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-2">
               {slidesSorted.map((slide) => (
                 <button
                   key={slide.id}
@@ -262,101 +338,147 @@ export default function AdminDeckEditor() {
                       : "border-slate-700 bg-slate-900 hover:bg-slate-800/60"
                   }`}
                 >
-                  <div className="text-xs text-slate-400">
-                    Slide {slide.index + 1} • {slide.type}
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 mb-0.5">
+                    <span>
+                      Slide {slide.index + 1} • {slide.type}
+                    </span>
+                    {slide.type === "question" && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-sky-900/60 text-sky-300">
+                        Q
+                      </span>
+                    )}
                   </div>
-                  <div className="text-sm line-clamp-1 text-slate-100">
-                    {slide.html.replace(/<[^>]+>/g, "").slice(0, 80) || "Untitled slide"}
+                  <div className="text-xs line-clamp-2 text-slate-100">
+                    {slide.html.replace(/<[^>]+>/g, "").slice(0, 100) ||
+                      "Untitled slide"}
                   </div>
                 </button>
               ))}
             </div>
           </section>
 
-          <section className="space-y-4">
-            <h2 className="text-lg font-semibold">Slide Editor</h2>
-            {selectedSlide ? (
-              <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900 p-4">
-                <div className="flex gap-3 text-sm">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs uppercase text-slate-500">Type</label>
-                    <select
-                      value={selectedSlide.type}
-                      onChange={(event) =>
-                        updateSlide(selectedSlide.id, "type", event.target.value as Slide["type"])
-                      }
-                      className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2"
-                    >
-                      <option value="content">Content</option>
-                      <option value="question">Question</option>
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-xs uppercase text-slate-500">Question ID</label>
-                    <select
-                      value={selectedSlide.questionId ?? ""}
-                      onChange={(event) =>
-                        updateSlide(selectedSlide.id, "questionId", event.target.value || undefined)
-                      }
-                      disabled={selectedSlide.type !== "question"}
-                      className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 disabled:opacity-50"
-                    >
-                      <option value="">Select question</option>
-                      {deck.questions.map((question) => (
-                        <option key={question.id} value={question.id}>
-                          {question.id}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => moveSlide(selectedSlide.id, -1)}
-                    className="rounded-lg border border-slate-700 px-3 py-1 text-xs"
-                  >
-                    ↑ Move Up
-                  </button>
-                  <button
-                    onClick={() => moveSlide(selectedSlide.id, 1)}
-                    className="rounded-lg border border-slate-700 px-3 py-1 text-xs"
-                  >
-                    ↓ Move Down
-                  </button>
-                  <button
-                    onClick={() => removeSlide(selectedSlide.id)}
-                    className="rounded-lg border border-rose-700 px-3 py-1 text-xs text-rose-300"
-                  >
-                    Delete Slide
-                  </button>
-                </div>
-                <label className="text-xs uppercase text-slate-500">
-                  Slide HTML
-                  <textarea
-                    value={selectedSlide.html}
-                    onChange={(event) => updateSlide(selectedSlide.id, "html", event.target.value)}
-                    rows={10}
-                    className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm font-mono"
-                  />
-                </label>
-                <div>
-                  <h3 className="text-sm font-semibold mb-2">Preview</h3>
-                  <div
-                    className="rounded-xl border border-slate-800 bg-slate-950 p-4"
-                    dangerouslySetInnerHTML={{ __html: selectedSlide.html }}
-                  />
-                </div>
-                {linkedQuestion && (
-                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
-                    <p className="text-xs text-slate-400 mb-1">Linked Question</p>
-                    <p className="text-sm text-slate-100">{linkedQuestion.stem}</p>
+          <div className="flex-1 flex flex-col gap-6 lg:flex-row">
+            <section className="flex-1 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Preview</h2>
+                {selectedSlide && (
+                  <span className="text-[11px] text-slate-500">
+                    Slide {selectedSlide.index + 1} of {slidesSorted.length}
+                  </span>
+                )}
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+                {selectedSlide ? (
+                  <SlidePreview html={selectedSlide.html} />
+                ) : (
+                  <div className="text-sm text-slate-500 text-center py-12">
+                    Select a slide to preview.
                   </div>
                 )}
               </div>
-            ) : (
-              <p className="text-slate-400 text-sm">Select a slide to edit.</p>
-            )}
-          </section>
+            </section>
+
+            <section className="flex-1 space-y-4">
+              <h2 className="text-lg font-semibold">Slide Editor</h2>
+              {selectedSlide ? (
+                <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900 p-4">
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs uppercase text-slate-500">
+                        Type
+                      </label>
+                      <select
+                        value={selectedSlide.type}
+                        onChange={(event) =>
+                          updateSlide(
+                            selectedSlide.id,
+                            "type",
+                            event.target.value as Slide["type"]
+                          )
+                        }
+                        className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm"
+                      >
+                        <option value="content">Content</option>
+                        <option value="question">Question</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
+                      <label className="text-xs uppercase text-slate-500">
+                        Question ID
+                      </label>
+                      <select
+                        value={selectedSlide.questionId ?? ""}
+                        onChange={(event) =>
+                          updateSlide(
+                            selectedSlide.id,
+                            "questionId",
+                            event.target.value || undefined
+                          )
+                        }
+                        disabled={selectedSlide.type !== "question"}
+                        className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm disabled:opacity-50"
+                      >
+                        <option value="">Select question</option>
+                        {deck.questions.map((question) => (
+                          <option key={question.id} value={question.id}>
+                            {question.id}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <button
+                      onClick={() => moveSlide(selectedSlide.id, -1)}
+                      className="rounded-lg border border-slate-700 px-3 py-1"
+                    >
+                      ↑ Move Up
+                    </button>
+                    <button
+                      onClick={() => moveSlide(selectedSlide.id, 1)}
+                      className="rounded-lg border border-slate-700 px-3 py-1"
+                    >
+                      ↓ Move Down
+                    </button>
+                    <button
+                      onClick={() => removeSlide(selectedSlide.id)}
+                      className="rounded-lg border border-rose-700 px-3 py-1 text-rose-300"
+                    >
+                      Delete Slide
+                    </button>
+                  </div>
+
+                  <label className="text-xs uppercase text-slate-500">
+                    Slide HTML
+                    <textarea
+                      value={selectedSlide.html}
+                      onChange={(event) =>
+                        updateSlide(
+                          selectedSlide.id,
+                          "html",
+                          event.target.value
+                        )
+                      }
+                      rows={12}
+                      className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs font-mono leading-relaxed"
+                    />
+                  </label>
+
+                  {linkedQuestion && (
+                    <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-1">
+                      <p className="text-[11px] text-slate-400">Linked Question</p>
+                      <p className="text-sm text-slate-100">{linkedQuestion.stem}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-slate-400 text-sm">
+                  Select a slide from the list to edit its content.
+                </p>
+              )}
+            </section>
+          </div>
         </div>
 
         <section className="space-y-4">
@@ -369,6 +491,7 @@ export default function AdminDeckEditor() {
               + Add Question
             </button>
           </div>
+
           <div className="grid gap-6 md:grid-cols-2">
             <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
               {deck.questions.map((question) => (
@@ -388,18 +511,25 @@ export default function AdminDeckEditor() {
                 </button>
               ))}
             </div>
+
             {selectedQuestion ? (
               <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900 p-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs uppercase text-slate-500">Question ID</label>
+                  <label className="text-xs uppercase text-slate-500">
+                    Question ID
+                  </label>
                   <input
                     value={selectedQuestion.id}
                     onChange={(event) =>
-                      updateQuestion(selectedQuestion.id, (q) => ({ ...q, id: event.target.value }))
+                      updateQuestion(selectedQuestion.id, (q) => ({
+                        ...q,
+                        id: event.target.value,
+                      }))
                     }
                     className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm"
                   />
                 </div>
+
                 <label className="text-xs uppercase text-slate-500">
                   Question Stem
                   <textarea
@@ -414,6 +544,7 @@ export default function AdminDeckEditor() {
                     className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm"
                   />
                 </label>
+
                 <div className="space-y-2">
                   <p className="text-xs uppercase text-slate-500">Options</p>
                   {selectedQuestion.options.map((option, idx) => (
@@ -443,6 +574,7 @@ export default function AdminDeckEditor() {
                     </div>
                   ))}
                 </div>
+
                 <label className="text-xs uppercase text-slate-500">
                   Explanation
                   <textarea
@@ -459,7 +591,9 @@ export default function AdminDeckEditor() {
                 </label>
               </div>
             ) : (
-              <p className="text-slate-400 text-sm">Select a question to edit.</p>
+              <p className="text-slate-400 text-sm">
+                Select a question to edit its details.
+              </p>
             )}
           </div>
         </section>
