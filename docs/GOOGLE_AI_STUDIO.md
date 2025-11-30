@@ -60,7 +60,7 @@ When running the Functions emulator you can also export `GEMINI_API_KEY=...` bef
 
 1. Install dependencies: `npm install`
 2. Run the dev server: `npm run dev`
-3. Visit `http://localhost:5173` (or the port Vite prints). Routes use `HashRouter`, so URLs look like `/#/presenter/...`, which also works inside the AI Studio iframe.
+3. Visit `http://localhost:3000` (or the port Vite prints). Routes use `HashRouter`, so URLs look like `/#/presenter/...`, which also works inside the AI Studio iframe.
 
 ### Mock vs Cloud Data
 
@@ -86,6 +86,7 @@ When running the Functions emulator you can also export `GEMINI_API_KEY=...` bef
 - **Gemini Cloud Function** lives in `functions/index.js`. Deploy via `firebase deploy --only functions` (or bundle with hosting using `firebase deploy --only functions,firestore,hosting`).
 - Remember to set the Gemini API key with `firebase functions:config:set gemini.api_key=...` before deploying; the callable function will throw if the key is missing.
 - **Deck Admin UI** stores its state in `configs/deck`. Use `VITE_ADMIN_ACCESS_CODE` to gate access and ensure authenticated users only can reach `/admin`.
+- **Unit tests** run with Jest/Testing Library (`npm test`). Example coverage for the deck admin lives under `src/pages/__tests__/`.
 
 ### 5.3 Packaging for Google AI Studio
 
