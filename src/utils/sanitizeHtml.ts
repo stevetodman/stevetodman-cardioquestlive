@@ -13,6 +13,7 @@ const allowedTags = new Set([
   "h4",
   "h5",
   "h6",
+  "img",
   "section",
   "article",
   "header",
