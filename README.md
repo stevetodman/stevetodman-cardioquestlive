@@ -10,21 +10,33 @@ View your app in AI Studio: https://ai.studio/apps/drive/1MhhV-tJNaEOnpggBaha68l
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
+**Prerequisites:** Node.js, Firebase project with **Anonymous Auth enabled**.
 
-
-1. Install dependencies:
+1. Install dependencies:  
    `npm install`
-2. Copy `.env.example` to `.env.local` and fill in your Firebase project keys (`VITE_FIREBASE_*`). Keep this file out of source control.
-3. Run the app:
+2. Copy `.env.example` to `.env.local` and set your Firebase keys (`VITE_FIREBASE_*`). Keep this file out of source control.
+3. Start dev server:  
    `npm run dev`
-4. Open `http://localhost:3000` (default Vite port) and use the links provided, e.g. presenter `/create-demo`, learner `/#/join/CODE`, or admin `/#/admin`.
+4. Open `http://localhost:3000` (default Vite port) and use:
+   - Presenter: `/#/create-demo` (gets the join code)
+   - Student: `/#/join/CODE` (same network; anonymous auth required)
+   - Admin: `/#/admin` (guarded by `VITE_ADMIN_ACCESS_CODE` if set)
 
-To enable the secure Gemini callable function, store your Gemini API key server-side:
+### Styling
 
-```
-firebase functions:config:set gemini.api_key="YOUR_GEMINI_KEY"
-```
+Tailwind is built locally (no CDN). The build pipeline uses `tailwind.config.js`, `postcss.config.js`, and the `@tailwind` imports in `src/index.css`. Just run `npm run dev` or `npm run build`; no extra steps needed.
+
+### Deploy
+
+- Build: `npm run build`
+- Deploy hosting + rules: `firebase deploy --only hosting,firestore:rules`
+- Functions are optional and require billing + secret if you use Gemini:
+  - Set secret: `firebase functions:secrets:set GEMINI_API_KEY`
+  - Deploy with functions: `firebase deploy --only hosting,firestore:rules,functions`
+
+### Gemini (optional)
+
+The callable function needs the secret set server-side (see above) and billing enabled on your Firebase project.
 
 ### Deck Admin
 
