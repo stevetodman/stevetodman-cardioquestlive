@@ -25,14 +25,22 @@ service cloud.firestore {
       match /responses/{responseId} {
         allow read: if isAuthenticated();
 
-        allow create, update: if isAuthenticated()
+        // One response per user per question
+        allow create: if isAuthenticated()
           && request.resource.data.sessionId == sessionId
           && request.resource.data.userId == request.auth.uid
           && request.resource.data.questionId is string
           && request.resource.data.choiceIndex is number
-          && (request.resource.data.questionId == resource.data.questionId || !exists(resource))
-          && (request.resource.data.userId == resource.data.userId || !exists(resource))
-          && (request.resource.data.sessionId == resource.data.sessionId || !exists(resource));
+          && !exists(resource);
+
+        allow update: if isAuthenticated()
+          && request.resource.data.sessionId == sessionId
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.questionId is string
+          && request.resource.data.choiceIndex is number
+          && request.resource.data.questionId == resource.data.questionId
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.sessionId == resource.data.sessionId;
 
         allow delete: if false;
       }
