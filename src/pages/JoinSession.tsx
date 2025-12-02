@@ -193,7 +193,7 @@ export default function JoinSession() {
                 <p className="text-sm font-semibold mb-4 leading-relaxed">
                     {currentQuestion.stem}
                 </p>
-                <div className="flex flex-col gap-3 relative z-10">
+                <div className="grid grid-cols-1 gap-3 relative z-10">
                 {currentQuestion.options.map((opt, i) => {
                     const isSelected = selectedChoice === i;
                     const isCorrect = session.showResults && i === currentQuestion.correctIndex;
@@ -209,7 +209,7 @@ export default function JoinSession() {
                         key={i}
                         disabled={submitting || (!isQuestionActive && !session.showResults)}
                         onClick={() => handleChoice(i)}
-                        className={`w-full text-left rounded-lg border px-4 py-3 text-sm transition-all duration-200 relative overflow-hidden group
+                        className={`w-full text-left rounded-xl border px-4 py-3 text-base sm:text-lg transition-all duration-200 relative overflow-hidden group
                         ${btnClass}
                         `}
                     >
