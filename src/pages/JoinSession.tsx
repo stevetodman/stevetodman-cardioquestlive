@@ -171,11 +171,6 @@ export default function JoinSession() {
       </header>
 
       <main className="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6">
-        <section>
-             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Live Slide</h3>
-             <SlidePreview html={currentSlide.html} />
-        </section>
-
         {currentQuestion ? (
           <section className="animate-slide-up">
             <h3 className="text-xs font-bold text-sky-500 uppercase tracking-wider mb-2 flex items-center gap-2">
@@ -254,7 +249,7 @@ export default function JoinSession() {
           </section>
         ) : (
           <div className="py-8 text-center text-slate-500 text-sm bg-slate-900/50 rounded-xl border border-slate-900 border-dashed">
-            View the slide above.<br/>Wait for the next question.
+            Waiting for the next question.
           </div>
         )}
       </main>
