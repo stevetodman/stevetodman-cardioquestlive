@@ -143,22 +143,22 @@ export default function PresenterSession() {
 
             {currentQuestion ? (
             <div className="space-y-4 animate-slide-up">
-                <div className="space-y-2">
-                    <div className="text-xs font-bold text-sky-500 uppercase tracking-wider">
-                    Interact
-                    </div>
-                    <button
-                    onClick={openQuestion}
-                    className={`w-full rounded-lg font-semibold py-3 text-sm shadow-lg transition-all
-                        ${session.currentQuestionId === currentQuestion.id 
-                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white ring-2 ring-emerald-400/50' 
-                            : 'bg-sky-600 hover:bg-sky-500 text-white'}
-                    `}
-                    >
-                    {session.currentQuestionId === currentQuestion.id ? "Question is OPEN" : "Open Question"}
-                    </button>
-                    
-                    {session.currentQuestionId === currentQuestion.id && (
+            <div className="space-y-2">
+                <div className="text-xs font-bold text-sky-500 uppercase tracking-wider">
+                Interact
+                </div>
+                <button
+                onClick={openQuestion}
+                className={`w-full rounded-lg font-semibold py-3 text-sm shadow-lg transition-all uppercase tracking-wide
+                    ${session.currentQuestionId === currentQuestion.id 
+                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-900 ring-2 ring-emerald-300 shadow-emerald-500/30' 
+                        : 'bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white shadow-sky-500/30'}
+                `}
+                >
+                {session.currentQuestionId === currentQuestion.id ? "Question is OPEN" : "Open Question"}
+                </button>
+                
+                {session.currentQuestionId === currentQuestion.id && (
                         <button
                         onClick={toggleResults}
                         className="w-full rounded-lg border border-slate-600 bg-slate-800 text-slate-200 py-3 text-sm hover:bg-slate-700 transition-colors"

@@ -194,17 +194,17 @@ export default function JoinSession() {
                     const isCorrect = session.showResults && i === currentQuestion.correctIndex;
                     
                     // Determine button style state
-                    let btnClass = "border-slate-700 bg-slate-900 hover:bg-slate-800"; // default
-                    if (isSelected) btnClass = "border-sky-500 bg-sky-500/20 text-sky-100 ring-1 ring-sky-500/50";
+                    let btnClass = "border-slate-700 bg-slate-900/80 hover:bg-slate-800/80"; // default
+                    if (isSelected) btnClass = "border-sky-500 bg-sky-500/15 text-sky-100 ring-1 ring-sky-500/50";
                     if (isCorrect) btnClass = "border-emerald-500 bg-emerald-500/20 text-emerald-100 ring-1 ring-emerald-500/50";
-                    if (!isQuestionActive && !session.showResults) btnClass = "opacity-50 cursor-not-allowed border-slate-800 bg-slate-900";
+                    if (!isQuestionActive && !session.showResults) btnClass = "opacity-50 cursor-not-allowed border-slate-800 bg-slate-900/70";
 
                     return (
                     <button
                         key={i}
                         disabled={submitting || (!isQuestionActive && !session.showResults)}
                         onClick={() => handleChoice(i)}
-                        className={`w-full text-left rounded-xl border px-4 py-3 text-base sm:text-lg transition-all duration-200 relative overflow-hidden group
+                        className={`w-full text-left rounded-xl border px-4 py-3 text-base sm:text-lg transition-all duration-200 relative overflow-hidden group whitespace-normal break-words leading-tight shadow-sm
                         ${btnClass}
                         `}
                     >

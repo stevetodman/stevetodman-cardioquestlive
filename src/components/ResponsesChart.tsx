@@ -20,6 +20,14 @@ export function ResponsesChart({
     Array(options.length).fill(0)
   );
 
+  const barColors = [
+    "bg-cyan-500",
+    "bg-rose-500",
+    "bg-amber-500",
+    "bg-emerald-500",
+    "bg-indigo-500",
+  ];
+
   useEffect(() => {
     const q = query(
       collection(db, "sessions", sessionId, "responses"),
@@ -44,38 +52,42 @@ export function ResponsesChart({
 
   return (
     <div className="space-y-3 text-xs w-full">
-      <h3 className="text-slate-300 font-semibold text-sm border-b border-slate-800 pb-2 mb-4">
+      <h3 className="text-slate-300 font-semibold text-sm border-b border-slate-800 pb-2 mb-4 flex items-center justify-between">
         Live Responses
+        <span className="text-[10px] text-slate-500">Total: {totalRaw}</span>
       </h3>
+      {totalRaw === 0 && (
+        <div className="text-slate-500 text-xs bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-2">
+          Waiting for responses…
+        </div>
+      )}
       {options.map((opt, i) => {
         const pct = Math.round((counts[i] / total) * 100);
         const isCorrect = showResults && i === correctIndex;
+        const color = barColors[i % barColors.length];
 
         return (
           <div key={i} className="space-y-1">
-            <div className="flex justify-between items-end">
-              <span className={`font-medium ${isCorrect ? 'text-emerald-400' : 'text-slate-300'}`}>
+            <div className={`flex items-center gap-2 text-sm font-semibold ${isCorrect ? "text-emerald-400" : "text-slate-200"}`}>
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-800 border border-slate-700 text-[11px]">
                 {String.fromCharCode(65 + i)}
               </span>
-              <span className="text-slate-400">{pct}%</span>
+              <span className="truncate">{opt}</span>
+              <span className="ml-auto text-slate-400 text-xs">{pct}%</span>
             </div>
             <div className="w-full h-3 rounded-full bg-slate-800 overflow-hidden relative">
               <div
-                className={`h-full transition-all duration-500 ease-out ${
-                  isCorrect ? "bg-emerald-500" : "bg-sky-500/80"
-                }`}
+                className={`h-full transition-all duration-500 ease-out ${color} ${isCorrect ? "ring-1 ring-emerald-300" : ""}`}
                 style={{ width: `${pct}%` }}
+                role="progressbar"
+                aria-valuenow={pct}
+                aria-valuemin={0}
+                aria-valuemax={100}
               />
-            </div>
-            <div className="text-[10px] text-slate-500 truncate pl-1">
-                {opt}
             </div>
           </div>
         );
       })}
-      <div className="pt-2 text-[10px] text-slate-500 text-right">
-        Total responses: {totalRaw}
-      </div>
     </div>
   );
 }

@@ -3,6 +3,29 @@
 @tailwind utilities;
 
 :root {
+  --background: 222 47% 11%;
+  --foreground: 210 40% 98%;
+  --card: 222 47% 12%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222 47% 12%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 199 89% 48%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 222 30% 20%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 222 30% 24%;
+  --muted-foreground: 222 15% 75%;
+  --accent: 151 83% 40%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 222 30% 24%;
+  --input: 222 30% 24%;
+  --ring: 199 89% 48%;
+  --radius: 0.5rem;
+}
+
+:root {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #f8fafc;
   background-color: #020617;
@@ -12,4 +35,13 @@ body {
   margin: 0;
   min-height: 100vh;
   background-color: #020617;
+}
+
+@layer base {
+  * {
+    @apply border-[hsl(var(--border))];
+  }
+  body {
+    @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))] font-sans;
+  }
 }
