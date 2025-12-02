@@ -25,13 +25,16 @@ service cloud.firestore {
       match /responses/{responseId} {
         allow read: if isAuthenticated();
 
-        allow create: if isAuthenticated()
+        allow create, update: if isAuthenticated()
           && request.resource.data.sessionId == sessionId
           && request.resource.data.userId == request.auth.uid
           && request.resource.data.questionId is string
-          && request.resource.data.choiceIndex is number;
+          && request.resource.data.choiceIndex is number
+          && (request.resource.data.questionId == resource.data.questionId || !exists(resource))
+          && (request.resource.data.userId == resource.data.userId || !exists(resource))
+          && (request.resource.data.sessionId == resource.data.sessionId || !exists(resource));
 
-        allow update, delete: if false;
+        allow delete: if false;
       }
     }
 

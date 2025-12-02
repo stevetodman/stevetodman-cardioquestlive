@@ -9,7 +9,7 @@ import {
   onSnapshot,
   query,
   where,
-  addDoc,
+  setDoc,
   db
 } from "../utils/firestore"; // Updated import
 import { SessionData, Question } from "../types";
@@ -142,13 +142,17 @@ export default function JoinSession() {
     if (submitting) return;
     setSubmitting(true);
     try {
-      await addDoc(collection(db, "sessions", sessionId, "responses"), {
-        sessionId,
-        userId,
-        questionId: currentQuestion.id,
-        choiceIndex,
-        createdAt: new Date().toISOString(),
-      });
+      const responseId = `${userId}_${currentQuestion.id}`;
+      await setDoc(
+        doc(db, "sessions", sessionId, "responses", responseId),
+        {
+          sessionId,
+          userId,
+          questionId: currentQuestion.id,
+          choiceIndex,
+          createdAt: new Date().toISOString(),
+        }
+      );
       setSelectedChoice(choiceIndex);
     } catch (err) {
         console.error("Failed to submit answer", err);
