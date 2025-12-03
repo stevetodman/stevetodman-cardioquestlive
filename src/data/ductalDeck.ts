@@ -8,6 +8,7 @@ import { case5Deck } from "./case5Deck";
 import { case6Deck } from "./case6Deck";
 import { case7Deck } from "./case7Deck";
 import { case8Deck } from "./case8Deck";
+import { case9Deck } from "./case9Deck";
 import { slideWrapper as baseWrapper } from "../utils/slideWrapper";
 
 // Consistent layout for audience question slides
@@ -823,6 +824,7 @@ const filteredLegacySlides = legacySlides.filter(
     !slide.id.startsWith("case6_") &&
     !slide.id.startsWith("case7_") &&
     !slide.id.startsWith("case8_") &&
+    !slide.id.startsWith("case9_") &&
     !slide.id.startsWith("intro_")
 );
 const mergedSlides = [
@@ -835,6 +837,7 @@ const mergedSlides = [
   ...case6Deck,
   ...case7Deck,
   ...case8Deck,
+  ...case9Deck,
   ...filteredLegacySlides,
 ];
 
