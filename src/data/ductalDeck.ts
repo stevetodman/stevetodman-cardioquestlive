@@ -1,11 +1,7 @@
 import { SessionData, Slide, Question, DeckData } from "../types";
-
-// Helper to wrap content in standard slide styles (tighter padding to avoid scroll)
-const slideWrapper = (content: string) => `
-  <div class="w-full h-full text-slate-50 bg-slate-900 rounded-2xl p-5 shadow-xl overflow-hidden" style="display:flex; flex-direction:column; gap:10px;">
-    ${content}
-  </div>
-`;
+import { slideWrapper } from "../utils/slideWrapper";
+import { case1Deck } from "./case1Deck";
+import { case2Deck } from "./case2Deck";
 
 // Consistent layout for audience question slides
 const questionSlide = (title: string, content: string) =>
@@ -23,17 +19,21 @@ const questionSlide = (title: string, content: string) =>
     </div>
   `);
 
-export const defaultSlides: Slide[] = [
+const legacySlides: Slide[] = [
   {
     id: "intro_title",
     index: 0,
     type: "content",
     html: slideWrapper(`
-      <h1 class="text-3xl font-bold mb-3">Genetic Syndromes Involving the Heart</h1>
-      <p class="text-lg text-slate-300 mb-4">Case-based review of congenital heart disease associations</p>
-      <p class="text-sm text-slate-400">Based on material by Steven H. Todman, M.D. — Pediatric Cardiology, LSUHSC-Shreveport</p>
-      <div class="mt-6 flex justify-center">
-        <img src="/images/genetic/img-000.png" alt="Heart illustration" class="max-h-48 drop-shadow-lg" / style="max-height: 180px; width: 100%; object-fit: contain;">
+      <div class="flex h-full w-full items-center justify-center">
+        <div class="w-full max-w-5xl space-y-6 text-center px-4">
+          <h1 class="text-4xl md:text-5xl font-black tracking-tight">Genetic Syndromes Involving the Heart</h1>
+          <p class="text-lg md:text-xl text-slate-200">Case-based review of congenital heart disease associations</p>
+          <p class="text-sm md:text-base text-slate-400">Based on material by Steven H. Todman, M.D. — Pediatric Cardiology, LSUHSC-Shreveport</p>
+          <div class="mt-8 flex justify-center">
+            <img src="/images/genetic/img-000.png" alt="Heart illustration" class="max-h-[240px] w-auto drop-shadow-2xl rounded-xl border border-slate-700/70 bg-slate-900/60 p-4">
+          </div>
+        </div>
       </div>
     `),
   },
@@ -42,14 +42,18 @@ export const defaultSlides: Slide[] = [
     index: 1,
     type: "content",
     html: slideWrapper(`
-      <h2 class="text-2xl font-semibold mb-3">Goals & Objectives</h2>
-      <ul class="list-disc list-inside space-y-2 text-sm">
-        <li>Review common genetic syndromes linked to congenital heart disease</li>
-        <li>Discuss high-yield case images and clinical clues</li>
-        <li>Practice rapid pattern recognition for exam and bedside decision-making</li>
-      </ul>
-      <div class="mt-6">
-        <img src="/images/genetic/img-003.png" alt="Exam weights for pediatric board content" class="w-full rounded-xl border border-slate-800" / style="max-height: 180px; width: 100%; object-fit: contain;">
+      <div class="flex h-full w-full items-center justify-center">
+        <div class="w-full max-w-5xl space-y-6 px-4">
+          <h2 class="text-3xl md:text-4xl font-bold">Goals & Objectives</h2>
+          <ul class="list-disc list-outside pl-6 space-y-3 text-base md:text-lg text-slate-100">
+            <li>Review common genetic syndromes linked to congenital heart disease.</li>
+            <li>Discuss high-yield case images and clinical clues.</li>
+            <li>Practice rapid pattern recognition for exam and bedside decision-making.</li>
+          </ul>
+          <div class="mt-6 flex justify-center">
+            <img src="/images/genetic/img-003.png" alt="Exam weights for pediatric board content" class="max-h-[260px] w-auto rounded-xl border border-slate-700/70 bg-slate-900/60 p-4 shadow-2xl">
+          </div>
+        </div>
       </div>
     `),
   },
@@ -728,6 +732,19 @@ export const defaultSlides: Slide[] = [
     `),
   },
 ];
+
+function reindexSlides(slides: Slide[]): Slide[] {
+  return slides.map((slide, index) => ({ ...slide, index }));
+}
+
+const filteredLegacySlides = legacySlides.filter(
+  (slide) => !slide.id.startsWith("case1_") && !slide.id.startsWith("case2_")
+);
+const introAndGoals = filteredLegacySlides.slice(0, 2);
+const remainingLegacySlides = filteredLegacySlides.slice(2);
+const mergedSlides = [...introAndGoals, ...case1Deck, ...case2Deck, ...remainingLegacySlides];
+
+export const defaultSlides: Slide[] = reindexSlides(mergedSlides);
 
 export const defaultQuestions: Question[] = [
   {
