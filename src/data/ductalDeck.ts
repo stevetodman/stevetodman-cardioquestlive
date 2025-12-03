@@ -3,6 +3,7 @@ import { slideWrapper } from "../utils/slideWrapper";
 import { case1Deck } from "./case1Deck";
 import { case2Deck } from "./case2Deck";
 import { case3Deck } from "./case3Deck";
+import { case4Deck } from "./case4Deck";
 import { slideWrapper as baseWrapper } from "../utils/slideWrapper";
 
 // Consistent layout for audience question slides
@@ -813,9 +814,10 @@ const filteredLegacySlides = legacySlides.filter(
     !slide.id.startsWith("case1_") &&
     !slide.id.startsWith("case2_") &&
     !slide.id.startsWith("case3_") &&
+    !slide.id.startsWith("case4_") &&
     !slide.id.startsWith("intro_")
 );
-const mergedSlides = [...introSlides, ...case1Deck, ...case2Deck, ...case3Deck, ...filteredLegacySlides];
+const mergedSlides = [...introSlides, ...case1Deck, ...case2Deck, ...case3Deck, ...case4Deck, ...filteredLegacySlides];
 
 export const defaultSlides: Slide[] = reindexSlides(mergedSlides);
 
