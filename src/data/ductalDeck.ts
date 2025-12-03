@@ -2,6 +2,7 @@ import { SessionData, Slide, Question, DeckData } from "../types";
 import { slideWrapper } from "../utils/slideWrapper";
 import { case1Deck } from "./case1Deck";
 import { case2Deck } from "./case2Deck";
+import { case3Deck } from "./case3Deck";
 import { slideWrapper as baseWrapper } from "../utils/slideWrapper";
 
 // Consistent layout for audience question slides
@@ -280,25 +281,7 @@ const legacySlides: Slide[] = [
       </ul>
     `),
   },
-  {
-    id: "case4_masses",
-    index: 14,
-    type: "question",
-    questionId: "q_case4_mass_course",
-    html: questionSlide(
-      "Case 4 - Cardiac Masses",
-      `
-        <p class="text-sm text-slate-300">What is the usual course of these tumors?</p>
-        <ol class="list-decimal list-inside space-y-1" style="list-style-type: upper-alpha;">
-          <li>Progress in size</li>
-          <li>Regress in size</li>
-          <li>Result in obstruction of cardiac output</li>
-          <li>Require surgical excision</li>
-        </ul>
-      `
-    ),
-  },
-  {
+{
     id: "case4_syndrome",
     index: 15,
     type: "question",
@@ -826,9 +809,13 @@ const introSlides: Slide[] = [
 ];
 
 const filteredLegacySlides = legacySlides.filter(
-  (slide) => !slide.id.startsWith("case1_") && !slide.id.startsWith("case2_") && !slide.id.startsWith("intro_")
+  (slide) =>
+    !slide.id.startsWith("case1_") &&
+    !slide.id.startsWith("case2_") &&
+    !slide.id.startsWith("case3_") &&
+    !slide.id.startsWith("intro_")
 );
-const mergedSlides = [...introSlides, ...case1Deck, ...case2Deck, ...filteredLegacySlides];
+const mergedSlides = [...introSlides, ...case1Deck, ...case2Deck, ...case3Deck, ...filteredLegacySlides];
 
 export const defaultSlides: Slide[] = reindexSlides(mergedSlides);
 
@@ -883,18 +870,6 @@ export const defaultQuestions: Question[] = [
     ],
     correctIndex: 3,
     explanation: "Alagille (JAG1) causes bile duct paucity, characteristic facies, butterfly vertebrae, and peripheral PA stenosis.",
-  },
-  {
-    id: "q_case4_mass_course",
-    stem: "Case 4: Cardiac rhabdomyomas detected prenatally. What is their usual course?",
-    options: [
-      "Progress in size",
-      "Regress in size",
-      "Result in obstruction of cardiac output",
-      "Require surgical excision",
-    ],
-    correctIndex: 1,
-    explanation: "Rhabdomyomas in tuberous sclerosis typically regress spontaneously over time.",
   },
   {
     id: "q_case4_syndrome",
