@@ -2,6 +2,7 @@ import { SessionData, Slide, Question, DeckData } from "../types";
 import { slideWrapper } from "../utils/slideWrapper";
 import { case1Deck } from "./case1Deck";
 import { case2Deck } from "./case2Deck";
+import { slideWrapper as baseWrapper } from "../utils/slideWrapper";
 
 // Consistent layout for audience question slides
 const questionSlide = (title: string, content: string) =>
@@ -737,29 +738,101 @@ function reindexSlides(slides: Slide[]): Slide[] {
   return slides.map((slide, index) => ({ ...slide, index }));
 }
 
+// Intro slides in Gemini style
+const introSlides: Slide[] = [
+  {
+    id: "intro_title",
+    index: 0,
+    type: "content",
+    html: baseWrapper(`
+      <div class="cq-shell relative">
+        <div class="cq-appbar">
+          <div class="cq-brand">
+            <div class="cq-logo" aria-hidden="true"><span class="text-base">💙</span></div>
+            <div>
+              <div class="cq-brandTitle">Genetic Syndromes</div>
+              <div class="cq-brandSub">Interactive Case Series</div>
+            </div>
+          </div>
+          <div class="cq-meta">
+            <span>Welcome</span>
+          </div>
+        </div>
+        <div class="cq-body">
+          <div class="h-full w-full flex items-center justify-center">
+            <div class="w-full max-w-4xl text-center space-y-4">
+              <h1 class="cq-h1 text-4xl md:text-5xl">Genetic Syndromes Involving the Heart</h1>
+              <p class="cq-p text-lg md:text-xl text-slate-200">Case-based review of congenital heart disease associations</p>
+              <p class="cq-mute text-sm md:text-base">Based on material by Steven H. Todman, M.D. — Pediatric Cardiology, LSUHSC-Shreveport</p>
+              <div class="flex justify-center mt-6">
+                <div class="cq-card cq-hoverable inline-flex p-4">
+                  <img src="/images/genetic/img-000.png" alt="Heart illustration" class="max-h-[240px] w-auto rounded-xl border border-slate-700/70 bg-slate-900/60 p-3 shadow-2xl">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="cq-nav" aria-hidden="true">
+          <div class="cq-btn">← Previous</div>
+          <div class="cq-navHint"><span>←</span><span>→</span><span>Space</span></div>
+          <div class="cq-btn cq-btnPrimary">Next →</div>
+        </div>
+      </div>
+    `),
+  },
+  {
+    id: "intro_goals",
+    index: 1,
+    type: "content",
+    html: baseWrapper(`
+      <div class="cq-shell relative">
+        <div class="cq-appbar">
+          <div class="cq-brand">
+            <div class="cq-logo" aria-hidden="true"><span class="text-base">💙</span></div>
+            <div>
+              <div class="cq-brandTitle">Genetic Syndromes</div>
+              <div class="cq-brandSub">Interactive Case Series</div>
+            </div>
+          </div>
+          <div class="cq-meta">
+            <span>Goals &amp; Objectives</span>
+          </div>
+        </div>
+        <div class="cq-body">
+          <div class="h-full w-full flex items-center justify-center">
+            <div class="w-full max-w-5xl space-y-6">
+              <h2 class="cq-h1 text-3xl md:text-4xl">Goals &amp; Objectives</h2>
+              <ul class="list-disc list-outside pl-6 space-y-3 text-base md:text-lg text-slate-100">
+                <li>Review common genetic syndromes linked to congenital heart disease.</li>
+                <li>Discuss high-yield case images and clinical clues.</li>
+                <li>Practice rapid pattern recognition for exam and bedside decision-making.</li>
+              </ul>
+              <div class="mt-6 flex justify-center">
+                <div class="cq-card cq-hoverable inline-flex p-4">
+                  <img src="/images/genetic/img-003.png" alt="Exam weights" class="max-h-[260px] w-auto rounded-xl border border-slate-700/70 bg-slate-900/60 p-3 shadow-2xl">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="cq-nav" aria-hidden="true">
+          <div class="cq-btn">← Previous</div>
+          <div class="cq-navHint"><span>←</span><span>→</span><span>Space</span></div>
+          <div class="cq-btn cq-btnPrimary">Next →</div>
+        </div>
+      </div>
+    `),
+  },
+];
+
 const filteredLegacySlides = legacySlides.filter(
-  (slide) => !slide.id.startsWith("case1_") && !slide.id.startsWith("case2_")
+  (slide) => !slide.id.startsWith("case1_") && !slide.id.startsWith("case2_") && !slide.id.startsWith("intro_")
 );
-const introAndGoals = filteredLegacySlides.slice(0, 2);
-const remainingLegacySlides = filteredLegacySlides.slice(2);
-const mergedSlides = [...introAndGoals, ...case1Deck, ...case2Deck, ...remainingLegacySlides];
+const mergedSlides = [...introSlides, ...case1Deck, ...case2Deck, ...filteredLegacySlides];
 
 export const defaultSlides: Slide[] = reindexSlides(mergedSlides);
 
 export const defaultQuestions: Question[] = [
-  {
-    id: "q_case1_defect",
-    stem: "Case 1: 10-year-old girl with absent thumbs, widely split fixed S2, and family history of radial anomalies/conduction disease. What is the most likely cardiac defect?",
-    options: [
-      "ASD",
-      "VSD",
-      "PDA",
-      "Tetralogy of Fallot",
-      "Dextrocardia, TGA, and IAA",
-    ],
-    correctIndex: 0,
-    explanation: "Holt-Oram is strongly linked to secundum ASD and conduction disease; the fixed split S2 points to ASD.",
-  },
   {
     id: "q_case1_syndrome",
     stem: "Case 1: Which genetic syndrome best fits the radial ray anomalies and atrial septal defect?",
@@ -781,7 +854,6 @@ export const defaultQuestions: Question[] = [
       "PDA",
       "Pulmonary stenosis",
       "Aortic stenosis",
-      "Innocent murmur",
     ],
     correctIndex: 4,
     explanation: "Williams syndrome commonly causes supravalvar aortic stenosis producing a loud URSB murmur.",

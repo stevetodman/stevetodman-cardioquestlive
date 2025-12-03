@@ -110,38 +110,63 @@ export default function PresenterSession() {
   }
 
   return (
-    <div className="h-screen bg-slate-950 text-slate-50 overflow-hidden relative">
-      <div className="absolute top-3 left-3 text-xs uppercase tracking-[0.25em] text-slate-500 font-bold">
-        {session.title}
-      </div>
-      <div className="absolute top-3 right-3 text-xs text-slate-400 font-mono bg-slate-900/80 border border-slate-700 rounded px-3 py-1">
-        Join: {session.joinCode}
+    <div className="h-screen bg-slate-950 text-slate-50 overflow-hidden relative flex flex-col">
+      <div className="flex items-center justify-between px-3 md:px-5 py-2">
+        <div className="text-[10px] uppercase tracking-[0.22em] text-slate-500 font-semibold">
+          {session.title}
+        </div>
+        <div className="text-[10px] text-slate-400 font-mono bg-slate-900/80 border border-slate-700 rounded px-2 py-1">
+          Join: {session.joinCode}
+        </div>
       </div>
 
-      <div className="flex items-start justify-center h-full px-4 md:px-8 pt-12 pb-24">
-        <div
-          className="w-full max-w-[1800px] aspect-video rounded-2xl shadow-2xl overflow-hidden animate-fade-in relative"
-          dangerouslySetInnerHTML={{ __html: sanitizedSlideHtml }}
-        />
+      <div className="flex-1 flex flex-col items-center px-4 md:px-8 pb-4 gap-2">
+        <div className="w-full max-w-[1800px] aspect-video relative">
+          <div
+            className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
+            dangerouslySetInnerHTML={{ __html: sanitizedSlideHtml }}
+            style={{ paddingBottom: "80px" }}
+          />
 
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-slate-900/80 border border-slate-700 rounded-full px-4 py-2 shadow-xl">
-          <button
-            onClick={() => goToSlide(-1)}
-            disabled={session.currentSlideIndex === 0}
-            className="cq-btn text-sm px-3 disabled:opacity-50"
-          >
-            ← Prev
-          </button>
-          <span className="text-xs text-slate-400">
-            {session.currentSlideIndex + 1} / {slides.length}
-          </span>
-          <button
-            onClick={() => goToSlide(1)}
-            disabled={session.currentSlideIndex === slides.length - 1}
-            className="cq-btn cq-btnPrimary text-sm px-3 disabled:opacity-50"
-          >
-            Next →
-          </button>
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-slate-900/85 border border-slate-700 rounded-full px-4 py-2 shadow-xl flex-wrap md:flex-nowrap justify-center">
+            {currentQuestion ? (
+              <div className="flex items-center gap-2 flex-wrap md:flex-nowrap">
+                <button
+                  onClick={openQuestion}
+                  className={`cq-btn text-sm px-3 ${
+                    session.currentQuestionId === currentQuestion.id ? "cq-btnPrimary" : ""
+                  }`}
+                >
+                  {session.currentQuestionId === currentQuestion.id ? "Question Open" : "Open Question"}
+                </button>
+                <button
+                  onClick={toggleResults}
+                  disabled={session.currentQuestionId !== currentQuestion.id}
+                  className="cq-btn text-sm px-3 disabled:opacity-50"
+                >
+                  {session.showResults ? "Hide Results" : "Show Results"}
+                </button>
+                <span className="h-6 w-px bg-slate-700 mx-1 hidden md:inline" aria-hidden="true"></span>
+              </div>
+            ) : null}
+            <button
+              onClick={() => goToSlide(-1)}
+              disabled={session.currentSlideIndex === 0}
+              className="cq-btn text-sm px-3 disabled:opacity-50"
+            >
+              ← Prev
+            </button>
+            <span className="text-xs text-slate-400">
+              {session.currentSlideIndex + 1} / {slides.length}
+            </span>
+            <button
+              onClick={() => goToSlide(1)}
+              disabled={session.currentSlideIndex === slides.length - 1}
+              className="cq-btn cq-btnPrimary text-sm px-3 disabled:opacity-50"
+            >
+              Next →
+            </button>
+          </div>
         </div>
       </div>
     </div>

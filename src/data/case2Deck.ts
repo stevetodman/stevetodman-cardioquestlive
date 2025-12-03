@@ -162,14 +162,16 @@ export const case2Deck: Slide[] = [
           <div class="grid md:grid-cols-2 gap-4 h-full">
             <div class="cq-card cq-hoverable flex flex-col gap-2">
               <div class="cq-cardLabel"><span>Elfin facies</span><span class="cq-chip">Williams</span></div>
-              <div class="flex-1 flex items-center justify-center">
-                <img src="/images/genetic/img-021.png" alt="Williams syndrome child" class="max-h-[360px] w-auto rounded-xl border border-slate-700/70 shadow-2xl" />
+              <div class="flex-1 grid grid-cols-1 gap-2">
+                <img src="/images/genetic/img-020.png" alt="Facial features labeled" class="w-full rounded-xl border border-slate-700/70 shadow-2xl" />
+                <img src="/images/genetic/img-021.png" alt="Williams syndrome child" class="w-full rounded-xl border border-slate-700/70 shadow-2xl" />
               </div>
             </div>
             <div class="cq-card cq-hoverable flex flex-col gap-2">
-              <div class="cq-cardLabel"><span>Supravalvar AS</span><span class="cq-chip">Angiogram</span></div>
-              <div class="flex-1 flex items-center justify-center">
-                <img src="/images/genetic/img-014.png" alt="Supravalvar aortic stenosis angiogram" class="max-h-[360px] w-auto rounded-xl border border-slate-700/70 shadow-2xl" />
+              <div class="cq-cardLabel"><span>Cardiac imaging</span><span class="cq-chip">Flow</span></div>
+              <div class="flex-1 grid grid-cols-1 gap-2">
+                <img src="/images/genetic/img-014.png" alt="Supravalvar aortic stenosis angiogram" class="w-full rounded-xl border border-slate-700/70 shadow-2xl" />
+                <img src="/images/genetic/img-011.png" alt="Supravalvar AS EKG pattern" class="w-full rounded-xl border border-slate-700/70 shadow-2xl" />
               </div>
             </div>
           </div>
@@ -180,13 +182,67 @@ export const case2Deck: Slide[] = [
 
   // Poll (genetic syndrome)
   {
-    id: "case2_poll",
+    id: "case2_cardiac_poll",
     index: 3,
+    type: "question",
+    questionId: "q_case2_defect",
+    html: geminiSlide({
+      slideNumber: 4,
+      totalSlides: 6,
+      body: `
+        <div class="cq-twoCol">
+          <div class="space-y-4">
+            <div class="cq-chip">Poll · Cardiac Diagnosis</div>
+            <h2 class="cq-h2">What is the most likely cardiac diagnosis?</h2>
+            <div class="cq-card">
+              <div class="cq-cardLabel"><span>Murmur</span></div>
+              <p class="cq-mute">Harsh 5/6 systolic ejection murmur at the URSB.</p>
+            </div>
+            <div class="cq-card">
+              <div class="cq-cardLabel"><span>Exam/Labs</span></div>
+              <ul class="cq-list">
+                <li>Hypercalcemia (Ca 12 mg/dL).</li>
+                <li>Normal BP 107/60 mmHg.</li>
+                <li>Facial features suggestive of Williams.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="cq-tiles">
+            <div class="cq-option" data-state="idle">
+              <span style="font-weight:900; margin-right:8px; color:rgba(148,163,184,0.9);">A.</span>
+              ASD
+            </div>
+            <div class="cq-option" data-state="idle">
+              <span style="font-weight:900; margin-right:8px; color:rgba(148,163,184,0.9);">B.</span>
+              VSD
+            </div>
+            <div class="cq-option" data-state="idle">
+              <span style="font-weight:900; margin-right:8px; color:rgba(148,163,184,0.9);">C.</span>
+              PDA
+            </div>
+            <div class="cq-option" data-state="idle">
+              <span style="font-weight:900; margin-right:8px; color:rgba(148,163,184,0.9);">D.</span>
+              Pulmonary stenosis
+            </div>
+            <div class="cq-option" data-state="idle">
+              <span style="font-weight:900; margin-right:8px; color:rgba(148,163,184,0.9);">E.</span>
+              Aortic stenosis
+            </div>
+          </div>
+        </div>
+      `,
+    }),
+  },
+
+  // Poll (genetic syndrome)
+  {
+    id: "case2_poll",
+    index: 4,
     type: "question",
     questionId: "q_case2_syndrome",
     html: geminiSlide({
-      slideNumber: 4,
-      totalSlides: 5,
+      slideNumber: 5,
+      totalSlides: 6,
       body: `
         <div class="cq-twoCol">
           <div class="space-y-4">
@@ -231,11 +287,11 @@ export const case2Deck: Slide[] = [
   // Diagnosis reveal
   {
     id: "case2_diagnosis",
-    index: 4,
+    index: 6,
     type: "content",
     html: geminiSlide({
-      slideNumber: 5,
-      totalSlides: 5,
+      slideNumber: 6,
+      totalSlides: 6,
       body: `
         <div class="grid md:grid-cols-[1.05fr_0.95fr] gap-4 h-full">
           <div class="cq-card cq-hoverable h-full bg-gradient-to-b from-slate-900/85 to-slate-950">
