@@ -278,9 +278,11 @@ export default function AdminDeckEditor() {
     const file = imageItem.getAsFile();
     if (!file) return;
 
+    // Capture selection state before any async work to avoid stale references.
+    const { selectionStart, selectionEnd, value } = e.currentTarget;
+
     try {
       const dataUrl = await fileToDataUrl(file);
-      const { selectionStart, selectionEnd, value } = e.currentTarget;
       const imgTag = `<img src="${dataUrl}" alt="" />`;
       const nextValue = value.slice(0, selectionStart) + imgTag + value.slice(selectionEnd);
       updateSlide(selectedSlide.id, "html", nextValue);
