@@ -26,6 +26,11 @@ View your app in AI Studio: https://ai.studio/apps/drive/1MhhV-tJNaEOnpggBaha68l
 
 Tailwind is built locally (no CDN). The build pipeline uses `tailwind.config.js`, `postcss.config.js`, and the `@tailwind` imports in `src/index.css`. Just run `npm run dev` or `npm run build`; no extra steps needed.
 
+### Decks
+
+- Default deck uses the Gemini shell for intro/goals and Cases 1–11 (each follows: presentation → phenotype/features → images/notes → poll(s) → diagnosis).
+- Presenter bottom bar holds poll controls; keyboard arrows/space advance slides.
+
 ### Deploy
 
 - Build: `npm run build`
