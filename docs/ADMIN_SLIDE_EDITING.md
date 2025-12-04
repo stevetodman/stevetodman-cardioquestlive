@@ -37,6 +37,14 @@ This app stores each slide as a raw HTML string (`slide.html`). The admin editor
 - `.cq-slide-image` is styled globally (centered, max-width, rounded, subtle border/shadow). You can edit `alt` text manually after insertion.
 - Normal text paste is unchanged when no image is on the clipboard.
 
+## Tips and best practices (quick checklist)
+
+- Use templates first, then tweak with snippets to stay consistent.
+- Keep headings concise; prefer `h1` for slide title, `h2` for sections.
+- Add brief `alt` text when you paste an image; avoid multi-megabyte assets when possible.
+- For clue grids, aim for 2–4 items; keep option text short on poll slides.
+- Live preview is your friend—scan spacing and readability before saving.
+
 ## Live preview
 
 - The right pane shows a presenter-style preview of the current `slide.html`, updated on every edit.
