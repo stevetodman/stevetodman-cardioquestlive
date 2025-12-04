@@ -67,6 +67,13 @@ The callable function needs the secret set server-side (see above) and billing e
   - **Paste images**: copy an image, click in the editor, Cmd/Ctrl+V to insert a styled `<img>` with a data URL (soft warning on large images; optional alt text prompt).
 - A live presenter-style preview sits next to the editor so you can see changes immediately.
 - For step-by-step details, see [docs/ADMIN_SLIDE_EDITING.md](docs/ADMIN_SLIDE_EDITING.md).
+
+## Architecture overview
+
+- **Deck content**: Gemini-styled decks live under `src/data` (`case1Deck.ts`–`case11Deck.ts`, `ductalDeck.ts`) and are consumed by sessions.
+- **Admin editor**: `/#/admin` (`src/pages/AdminDeckEditor.tsx`) edits `slide.html` strings with templates, snippets, paste-to-image, and a live preview.
+- **Presenter**: `/#/presenter/:sessionId` (`src/pages/PresenterSession.tsx`) renders the current session slide and in-slide poll overlay; nav uses arrows/Space.
+- **Data model**: Firestore `sessions/{sessionId}` hold slide/question state; `responses/{uid_questionId}` subcollection stores poll answers; `configs/**` holds deck config (admin writes only). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and `firestore.rules`.
 - Slide editing comforts:
   - Templates to scaffold common slides (phenotype grids, polls, image + caption, teaching summary).
   - Quick-insert snippets (headings, clue boxes, teaching pearls).

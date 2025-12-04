@@ -1,9 +1,10 @@
-type ClueTile = {
-  id: string;
-  title: string;
-  description: string;
-  imageUrl?: string;
-};
+/**
+ * renderInteractiveTiles
+ * Generates a presenter-focused interactive clue grid with an image reveal pane.
+ * Presenter mode wires click handlers; participant mode renders static tiles.
+ * Uses data attributes + inline script to keep behavior working inside slide HTML strings.
+ */
+import { ClueTile } from "../types";
 
 interface InteractiveTilesOpts {
   heading?: string;

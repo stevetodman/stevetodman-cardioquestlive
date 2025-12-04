@@ -1,3 +1,9 @@
+/**
+ * AdminDeckEditor:
+ * - Lists slides/questions, gates access by admin code.
+ * - Edits slide.html as raw HTML with templates, snippets, paste-to-image (data URL) and a live preview.
+ * - Slides remain plain HTML strings; persistence goes to Firestore configs/deck.
+ */
 import React, { useEffect, useMemo, useState } from "react";
 import type { DeckData, Question, Slide } from "../types";
 import { defaultDeck } from "../data/ductalDeck";

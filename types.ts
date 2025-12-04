@@ -27,7 +27,7 @@ export interface SessionData {
   id?: string;        // Firestore doc id
   title: string;
   joinCode: string;
-  createdBy?: string;
+  createdBy?: string; // required in Firestore; optional until set client-side
   currentSlideIndex: number;
   currentQuestionId: string | null;
   showResults: boolean;
@@ -43,4 +43,12 @@ export interface ResponseDoc {
   questionId: string;
   choiceIndex: number;
   createdAt: string;
+}
+
+// Shared tile data for interactive clue grids / phenotype slides
+export interface ClueTile {
+  id: string;
+  title: string;
+  description: string;
+  imageUrl?: string;
 }

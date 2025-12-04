@@ -1,3 +1,10 @@
+/**
+ * PresenterSession renders a session's slides for the presenter:
+ * - Top bar with title/join code and poll controls.
+ * - Slide container that renders raw slide HTML (trusted) with Gemini chrome.
+ * - In-slide poll results overlay, gated by showResults and responseTotal > 0 to avoid empty overlays.
+ * Keyboard nav (arrows/Space) and in-slide nav buttons drive slide changes.
+ */
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { doc, onSnapshot, updateDoc, db, collection, query, where } from "../utils/firestore"; // Updated import
