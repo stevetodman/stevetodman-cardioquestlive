@@ -260,6 +260,36 @@ export default function AdminDeckEditor() {
     );
   }
 
+  const fileToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handleHtmlPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!selectedSlide) return;
+    const items = Array.from(e.clipboardData?.items ?? []);
+    const imageItem = items.find((item) => item.kind === "file" && item.type.startsWith("image/"));
+    if (!imageItem) return; // allow normal paste for non-images
+
+    e.preventDefault();
+    const file = imageItem.getAsFile();
+    if (!file) return;
+
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const { selectionStart, selectionEnd, value } = e.currentTarget;
+      const imgTag = `<img src="${dataUrl}" alt="" />`;
+      const nextValue = value.slice(0, selectionStart) + imgTag + value.slice(selectionEnd);
+      updateSlide(selectedSlide.id, "html", nextValue);
+    } catch (err) {
+      console.error("Failed to paste image", err);
+      setStatus("Failed to insert image from clipboard.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 p-4">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -464,10 +494,16 @@ export default function AdminDeckEditor() {
                     </button>
                   </div>
 
-                  <label className="text-xs uppercase text-slate-500">
-                    Slide HTML
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs uppercase text-slate-500">
+                      Slide HTML
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Tip: copy an image, click in this editor, and press <span className="font-semibold">Cmd/Ctrl + V</span> to insert an <code className="text-rose-200">&lt;img&gt;</code> tag with a data URL.
+                    </p>
                     <textarea
                       value={selectedSlide.html}
+                      onPaste={handleHtmlPaste}
                       onChange={(event) =>
                         updateSlide(
                           selectedSlide.id,
@@ -478,7 +514,7 @@ export default function AdminDeckEditor() {
                       rows={12}
                       className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs font-mono leading-relaxed"
                     />
-                  </label>
+                  </div>
 
                   {linkedQuestion && (
                     <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-1">
