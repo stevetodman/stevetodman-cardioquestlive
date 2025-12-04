@@ -6,6 +6,7 @@ export interface Question {
   options: string[];
   correctIndex: number;
   explanation?: string;
+  difficulty?: "easy" | "medium" | "hard";
 }
 
 export interface Slide {
@@ -42,6 +43,18 @@ export interface ResponseDoc {
   userId: string;
   questionId: string;
   choiceIndex: number;
+  createdAt: string;
+}
+
+export interface ParticipantDoc {
+  userId: string;
+  sessionId: string;
+  teamId: string;
+  teamName: string;
+  points: number;
+  streak: number;
+  correctCount: number;
+  incorrectCount: number;
   createdAt: string;
 }
 

@@ -5,14 +5,16 @@ import {
   collection,
   doc,
   getDocs,
+  getDoc,
   limit,
   onSnapshot,
   query,
   where,
   setDoc,
-  db
+  db,
+  runTransaction
 } from "../utils/firestore"; // Updated import
-import { SessionData, Question } from "../types";
+import { SessionData, Question, ParticipantDoc } from "../types";
 import { SlidePreview } from "../components/SlidePreview";
 import { auth, ensureSignedIn, isConfigured } from "../firebase";
 
@@ -23,6 +25,25 @@ function getLocalUserId(): string {
   const id = crypto.randomUUID();
   localStorage.setItem(key, id);
   return id;
+}
+
+const TEAM_OPTIONS = [
+  { id: "team_ductus", name: "Team Ductus" },
+  { id: "team_cyanosis", name: "Team Cyanosis" },
+  { id: "team_qpqs", name: "Team QpQs" },
+];
+
+function getDifficultyMultiplier(difficulty?: Question["difficulty"]) {
+  if (difficulty === "medium") return 1.3;
+  if (difficulty === "hard") return 1.6;
+  return 1.0;
+}
+
+function getStreakMultiplier(currentStreak: number) {
+  if (currentStreak >= 4) return 1.5;
+  if (currentStreak === 3) return 1.2;
+  if (currentStreak === 2) return 1.1;
+  return 1.0;
 }
 
 export default function JoinSession() {
@@ -94,6 +115,63 @@ export default function JoinSession() {
     setSelectedChoice(null);
   }, [session?.currentQuestionId]);
 
+  // Ensure participant doc exists and assign a team
+  useEffect(() => {
+    async function ensureParticipantDoc() {
+      if (!sessionId || !userId) return;
+      try {
+        const participantRef = doc(db, "sessions", sessionId, "participants", userId);
+        const existing = await getDoc(participantRef);
+        if (existing.exists && existing.exists()) return;
+
+        // Fetch current counts to do simple round-robin/least-loaded assignment
+        let chosenTeam = TEAM_OPTIONS[0];
+        try {
+          const snap = await getDocs(collection(db, "sessions", sessionId, "participants"));
+          const counts = TEAM_OPTIONS.reduce<Record<string, number>>((acc, t) => {
+            acc[t.id] = 0;
+            return acc;
+          }, {});
+          const docsArray = Array.isArray((snap as any)?.docs) ? (snap as any).docs : [];
+          const iterate = (fn: (docSnap: any) => void) => {
+            if (typeof (snap as any)?.forEach === "function") {
+              (snap as any).forEach(fn);
+            } else {
+              docsArray.forEach(fn);
+            }
+          };
+          iterate((docSnap: any) => {
+            const rawData = typeof docSnap.data === "function" ? docSnap.data() : docSnap.data;
+            const teamId = rawData?.teamId;
+            if (teamId && counts[teamId] !== undefined) {
+              counts[teamId] += 1;
+            }
+          });
+          const sortedByLoad = [...TEAM_OPTIONS].sort((a, b) => (counts[a.id] ?? 0) - (counts[b.id] ?? 0));
+          chosenTeam = sortedByLoad[0] ?? chosenTeam;
+        } catch (err) {
+          console.warn("Failed to compute team load; using default team", err);
+        }
+
+        const participantDoc: ParticipantDoc = {
+          userId,
+          sessionId,
+          teamId: chosenTeam.id,
+          teamName: chosenTeam.name,
+          points: 0,
+          streak: 0,
+          correctCount: 0,
+          incorrectCount: 0,
+          createdAt: new Date().toISOString(),
+        };
+        await setDoc(participantRef, participantDoc);
+      } catch (err) {
+        console.error("Failed to ensure participant doc", err);
+      }
+    }
+    ensureParticipantDoc();
+  }, [sessionId, userId]);
+
   if (!joinCode) return <div className="p-8 text-center text-slate-400">No join code provided.</div>;
 
   if (loading && !session) {
@@ -138,21 +216,65 @@ export default function JoinSession() {
   const isQuestionActive = currentQuestion && session.currentQuestionId === currentQuestion.id;
 
   const handleChoice = async (choiceIndex: number) => {
-    if (!currentQuestion || !isQuestionActive || !userId) return;
+    if (!currentQuestion || !isQuestionActive || !userId || !sessionId) return;
     if (submitting) return;
     setSubmitting(true);
     try {
       const responseId = `${userId}_${currentQuestion.id}`;
-      await setDoc(
-        doc(db, "sessions", sessionId, "responses", responseId),
-        {
-          sessionId,
-          userId,
-          questionId: currentQuestion.id,
-          choiceIndex,
-          createdAt: new Date().toISOString(),
-        }
-      );
+      const responseRef = doc(db, "sessions", sessionId, "responses", responseId);
+      const participantRef = doc(db, "sessions", sessionId, "participants", userId);
+      const isCorrect = choiceIndex === currentQuestion.correctIndex;
+      const difficultyMultiplier = getDifficultyMultiplier(currentQuestion.difficulty);
+
+      const existingResponse = await getDoc(responseRef);
+      const isFirstResponse =
+        !existingResponse ||
+        (typeof existingResponse.exists === "function" ? !existingResponse.exists() : !existingResponse.exists);
+
+      await setDoc(responseRef, {
+        sessionId,
+        userId,
+        questionId: currentQuestion.id,
+        choiceIndex,
+        createdAt: new Date().toISOString(),
+      });
+
+      // Update participant score & streak in a transaction to avoid race conditions
+      if (isFirstResponse) {
+        await runTransaction(db, async (transaction: any) => {
+          const participantSnap = await transaction.get(participantRef);
+          const snapHasData =
+            typeof participantSnap?.exists === "function"
+              ? participantSnap.exists()
+              : Boolean(participantSnap?.exists);
+          const data = participantSnap?.data ? participantSnap.data() : participantSnap?.data?.();
+          const existing: Partial<ParticipantDoc> = snapHasData ? data ?? {} : {};
+
+          const currentStreak = existing.streak ?? 0;
+          const streakMultiplier = getStreakMultiplier(currentStreak);
+          const questionScore = isCorrect ? Math.round(100 * difficultyMultiplier * streakMultiplier) : 0;
+          const nextStreak = isCorrect ? currentStreak + 1 : 0;
+
+          const payload: ParticipantDoc = {
+            userId,
+            sessionId,
+            teamId: existing.teamId ?? TEAM_OPTIONS[0].id,
+            teamName: existing.teamName ?? TEAM_OPTIONS[0].name,
+            points: (existing.points ?? 0) + questionScore,
+            streak: nextStreak,
+            correctCount: (existing.correctCount ?? 0) + (isCorrect ? 1 : 0),
+            incorrectCount: (existing.incorrectCount ?? 0) + (isCorrect ? 0 : 1),
+            createdAt: existing.createdAt ?? new Date().toISOString(),
+          };
+
+          if (snapHasData) {
+            transaction.update(participantRef, payload);
+          } else {
+            transaction.set(participantRef, payload);
+          }
+        });
+      }
+
       setSelectedChoice(choiceIndex);
     } catch (err) {
         console.error("Failed to submit answer", err);

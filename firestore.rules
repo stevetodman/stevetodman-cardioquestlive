@@ -75,6 +75,32 @@ service cloud.firestore {
 
         allow delete: if false;
       }
+
+      match /participants/{userId} {
+        function isValidParticipant(data) {
+          return data.userId is string &&
+            data.sessionId == sessionId &&
+            data.teamId is string &&
+            data.teamName is string &&
+            data.points is number &&
+            data.streak is number &&
+            data.correctCount is number &&
+            data.incorrectCount is number &&
+            (data.createdAt is timestamp || data.createdAt is string);
+        }
+
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() &&
+          request.auth.uid == userId &&
+          request.resource.data.userId == request.auth.uid &&
+          isValidParticipant(request.resource.data);
+        allow update: if isAuthenticated() &&
+          request.auth.uid == userId &&
+          request.resource.data.userId == resource.data.userId &&
+          request.resource.data.sessionId == resource.data.sessionId &&
+          isValidParticipant(request.resource.data);
+        allow delete: if false;
+      }
     }
 
     match /configs/{document=**} {

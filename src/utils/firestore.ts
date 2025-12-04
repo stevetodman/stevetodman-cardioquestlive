@@ -11,6 +11,7 @@ import {
   getDocs as fGetDocs,
   getDoc as fGetDoc,
   setDoc as fSetDoc,
+  runTransaction as fRunTransaction,
   DocumentSnapshot,
   QuerySnapshot,
   DocumentData
@@ -34,14 +35,14 @@ function getStore() {
   
   try {
     const item = localStorage.getItem(STORAGE_KEY);
-    const data = item ? JSON.parse(item) : { sessions: {}, responses: {} };
+    const data = item ? JSON.parse(item) : { sessions: {}, responses: {}, participants: {} };
     // Sync memory store to disk state
     memoryStore = data;
     return data;
   } catch (e) {
     console.warn("LocalStorage access failed, using memory store", e);
     // Return empty store or existing memory store
-    if (!memoryStore) memoryStore = { sessions: {}, responses: {} };
+    if (!memoryStore) memoryStore = { sessions: {}, responses: {}, participants: {} };
     return memoryStore;
   }
 }
@@ -67,31 +68,51 @@ function generateId() {
 
 const mockCollection = (_db: any, path: string, ...pathSegments: string[]) => {
   const fullPath = [path, ...pathSegments].join('/');
-  // Simplified: we only handle 'sessions' and 'responses' as top level "tables" in our mock
-  // If path is "sessions/ID/responses", we map it to "responses" table with a sessionId property logic
+  // Simplified: map subcollections to top-level stores
   if (fullPath.includes('/responses')) {
       return { type: 'collection', path: 'responses', parentId: fullPath.split('/')[1] };
+  }
+  if (fullPath.includes('/participants')) {
+      return { type: 'collection', path: 'participants', parentId: fullPath.split('/')[1] };
   }
   return { type: 'collection', path: fullPath };
 };
 
-const mockDoc = (_db: any, pathOrColl: string | MockCollection, id?: string) => {
-    let collectionPath = '';
-    let docId = id;
-    
-    if (typeof pathOrColl === 'string') {
-        // Assume format "collection/id"
-        const parts = pathOrColl.split('/');
-        collectionPath = parts[0];
-        docId = parts[1];
-    } else {
-        collectionPath = pathOrColl.path;
+const mockDoc = (_db: any, ...segments: any[]) => {
+    // Handle doc(collectionRef, id)
+    if (segments.length === 2 && segments[0]?.type === 'collection') {
+        const coll = segments[0] as MockCollection;
+        const docId = segments[1] ?? generateId();
+        return { type: 'doc', path: `${coll.path}/${docId}`, id: docId, collectionPath: coll.path, parentId: coll.parentId };
     }
-    
-    // Safety check for undefined ID
+
+    // Handle doc(db, ...pathSegments)
+    if (segments.length >= 2) {
+        const pathSegments = segments.slice(0, segments.length - 1);
+        const docId = segments[segments.length - 1] ?? generateId();
+        const coll = mockCollection(_db, ...(pathSegments as string[]));
+        return { type: 'doc', path: `${coll.path}/${docId}`, id: docId, collectionPath: coll.path, parentId: coll.parentId };
+    }
+
+    // Fallback for direct path string or collection
+    const pathOrColl = segments[0];
+    let collectionPath = '';
+    let docId = undefined;
+    let parentId;
+
+    if (typeof pathOrColl === 'string') {
+        const parts = pathOrColl.split('/');
+        docId = parts.pop();
+        const collPath = parts.join('/');
+        collectionPath = collPath.includes('/responses') ? 'responses' : collPath.includes('/participants') ? 'participants' : collPath;
+        parentId = parts.length > 1 ? parts[1] : undefined;
+    } else if (pathOrColl?.path) {
+        collectionPath = pathOrColl.path;
+        parentId = (pathOrColl as any).parentId;
+    }
+
     if (!docId) docId = generateId();
-    
-    return { type: 'doc', path: `${collectionPath}/${docId}`, id: docId, collectionPath };
+    return { type: 'doc', path: `${collectionPath}/${docId}`, id: docId, collectionPath, parentId };
 };
 
 const mockAddDoc = async (coll: any, data: any) => {
@@ -103,7 +124,7 @@ const mockAddDoc = async (coll: any, data: any) => {
     
     const docData = { ...data, id };
     // If this is a subcollection mapping (like responses), ensure we link it
-    if (coll.parentId && tableName === 'responses') {
+    if (coll.parentId && (tableName === 'responses' || tableName === 'participants')) {
         docData.sessionId = coll.parentId;
     }
     
@@ -230,9 +251,27 @@ const mockSetDoc = async (docRef: any, data: any) => {
     const store = getStore();
     const tableName = docRef.collectionPath;
     if (!store[tableName]) store[tableName] = {};
-    store[tableName][docRef.id] = { ...data, id: docRef.id };
+    store[tableName][docRef.id] = { ...data, id: docRef.id, sessionId: docRef.parentId ?? data.sessionId };
     setStore(store);
 };
+
+const mockRunTransaction = async (_db: any, updateFunction: any) => {
+    return updateFunction({
+        get: async (docRef: any) => mockGetDoc(docRef),
+        set: (docRef: any, data: any, options?: any) => {
+            if (options?.merge && storeHas(docRef.collectionPath, docRef.id)) {
+                return mockUpdateDoc(docRef, data);
+            }
+            return mockSetDoc(docRef, data);
+        },
+        update: (docRef: any, data: any) => mockUpdateDoc(docRef, data),
+    });
+};
+
+function storeHas(collectionPath: string, id: string) {
+    const store = getStore();
+    return Boolean(store[collectionPath]?.[id]);
+}
 
 // --- Export Logic ---
 
@@ -251,3 +290,4 @@ export const limit = isConfigured ? fLimit : (mockLimit as any);
 export const getDocs = isConfigured ? fGetDocs : (mockGetDocs as any);
 export const getDoc = isConfigured ? fGetDoc : (mockGetDoc as any);
 export const setDoc = isConfigured ? fSetDoc : (mockSetDoc as any);
+export const runTransaction = isConfigured ? fRunTransaction : (mockRunTransaction as any);

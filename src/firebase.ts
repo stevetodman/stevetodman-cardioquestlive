@@ -1,10 +1,11 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore } from "firebase/firestore";
-import { getFunctions, type Functions } from "firebase/functions";
+import { getFirestore, type Firestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getFunctions, type Functions, connectFunctionsEmulator } from "firebase/functions";
 import {
   getAuth,
   signInAnonymously,
   type Auth,
+  connectAuthEmulator,
 } from "firebase/auth";
 
 function envValue(key: string): string | undefined {
@@ -61,6 +62,12 @@ export const isConfigured =
   Boolean(envConfig.projectId) &&
   Boolean(envConfig.appId);
 
+const useEmulators = (envValue("VITE_USE_EMULATORS") ?? "").toLowerCase() === "true";
+const emulatorHost = envValue("VITE_EMULATOR_HOST") ?? "127.0.0.1";
+const firestoreEmulatorPort = Number(envValue("VITE_FIRESTORE_EMULATOR_PORT") ?? 8088);
+const authEmulatorPort = Number(envValue("VITE_AUTH_EMULATOR_PORT") ?? 9099);
+const functionsEmulatorPort = Number(envValue("VITE_FUNCTIONS_EMULATOR_PORT") ?? 5001);
+
 let app: FirebaseApp | undefined;
 let db: Firestore | undefined;
 let functions: Functions | undefined;
@@ -71,6 +78,12 @@ if (isConfigured) {
   db = getFirestore(app);
   functions = getFunctions(app);
   auth = getAuth(app);
+
+  if (useEmulators) {
+    if (db) connectFirestoreEmulator(db, emulatorHost, firestoreEmulatorPort);
+    if (functions) connectFunctionsEmulator(functions, emulatorHost, functionsEmulatorPort);
+    if (auth) connectAuthEmulator(auth, `http://${emulatorHost}:${authEmulatorPort}`, { disableWarnings: true });
+  }
 }
 
 let authInitPromise: Promise<void> | null = null;

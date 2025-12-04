@@ -103,7 +103,6 @@ export const case7Deck: Slide[] = [
             imageUrl: "/images/genetic/img-059.png",
           },
         ],
-        helperText: "Click a clue to reveal an image",
         role: "presenter",
       }),
     }),

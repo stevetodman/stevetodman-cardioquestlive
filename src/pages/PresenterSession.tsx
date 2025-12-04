@@ -10,13 +10,21 @@ import { useParams, Link } from "react-router-dom";
 import { doc, onSnapshot, updateDoc, db, collection, query, where } from "../utils/firestore"; // Updated import
 import { SessionData, Question } from "../types";
 import { ResponsesChart } from "../components/ResponsesChart";
+import { useTeamScores } from "../hooks/useTeamScores";
+import { useIndividualScores } from "../hooks/useIndividualScores";
+import { TeamScoreboard } from "../components/TeamScoreboard";
+import { IndividualScoreboard } from "../components/IndividualScoreboard";
 
 export default function PresenterSession() {
   const { sessionId } = useParams();
   const [session, setSession] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [responseTotal, setResponseTotal] = useState(0);
+  const [showTeamScores, setShowTeamScores] = useState(true);
+  const [showIndividualScores, setShowIndividualScores] = useState(false);
   const slideRef = useRef<HTMLDivElement>(null);
+  const teams = useTeamScores(sessionId);
+  const players = useIndividualScores(sessionId);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -178,6 +186,30 @@ export default function PresenterSession() {
           {session.title}
         </div>
         <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowTeamScores((v) => !v)}
+              className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
+                showTeamScores
+                  ? "border-sky-500/70 bg-sky-500/15 text-sky-100"
+                  : "border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700"
+              }`}
+            >
+              Team scores
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowIndividualScores((v) => !v)}
+              className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
+                showIndividualScores
+                  ? "border-emerald-500/70 bg-emerald-500/15 text-emerald-100"
+                  : "border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700"
+              }`}
+            >
+              Players
+            </button>
+          </div>
           {isQuestionSlide && (
             <div className="hidden md:flex items-center gap-1.5 text-[11px]">
               <button
@@ -233,6 +265,18 @@ export default function PresenterSession() {
               ref={slideRef}
               dangerouslySetInnerHTML={{ __html: currentSlide?.html ?? "" }}
             />
+
+            {showTeamScores && (teams?.length ?? 0) > 0 && (
+              <div className="absolute top-3 right-3 z-30 pointer-events-none">
+                <TeamScoreboard teams={teams} />
+              </div>
+            )}
+
+            {showIndividualScores && (players?.length ?? 0) > 0 && (
+              <div className="absolute bottom-3 right-3 z-30 pointer-events-none">
+                <IndividualScoreboard players={players} />
+              </div>
+            )}
 
             {showResultsOverlay && currentQuestion && (
               <div className="absolute inset-x-3 bottom-3 pointer-events-none">

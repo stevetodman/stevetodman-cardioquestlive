@@ -83,6 +83,8 @@ The callable function needs the secret set server-side (see above) and billing e
 ### Testing
 
 - The project uses Jest + Testing Library for unit tests. Run `npm test` to execute the suite (see `src/pages/__tests__/AdminDeckEditor.test.tsx` for an example).
+- Firestore security rules have Jest coverage; run them with the emulator via  
+  `FIRESTORE_EMULATOR_HOST=127.0.0.1:8088 firebase emulators:exec --only firestore --project cardioquest-live-test "npm test -- --runInBand"` (ports are set in `firebase.json` to avoid busy 8080).
 - Jest is configured via `jest.config.ts`, and global helpers live under `test/`.
 
 Looking for a full explanation of how the Firebase project, Google AI Studio, and Gemini API key work together? Read [docs/GOOGLE_AI_STUDIO.md](docs/GOOGLE_AI_STUDIO.md).
