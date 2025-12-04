@@ -609,53 +609,70 @@ export default function AdminDeckEditor() {
                     </button>
                   </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs uppercase text-slate-500">
-                      Slide HTML
-                    </label>
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <label className="text-slate-500">Template:</label>
-                      <select
-                        value={templateChoice}
-                        onChange={(event) => applyTemplate(event.target.value as TemplateKey)}
-                        className="rounded-md bg-slate-900 border border-slate-700 px-2 py-1 text-[11px]"
-                      >
-                        <option value="none">Choose…</option>
-                        <option value="phenotype">Phenotype / Clue Grid</option>
-                        <option value="poll">Poll (MCQ)</option>
-                        <option value="image">Image + Caption</option>
-                        <option value="teaching">Teaching Pearl / Summary</option>
-                      </select>
-                      <div className="flex items-center gap-2">
-                        {snippetButtons.map((btn) => (
-                          <button
-                            key={btn.label}
-                            type="button"
-                            onClick={() => insertSnippet(btn.snippet)}
-                            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] hover:bg-slate-800"
-                          >
-                            {btn.label}
-                          </button>
-                        ))}
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs uppercase text-slate-500">
+                        Slide HTML
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <label className="text-slate-500">Template:</label>
+                        <select
+                          value={templateChoice}
+                          onChange={(event) => applyTemplate(event.target.value as TemplateKey)}
+                          className="rounded-md bg-slate-900 border border-slate-700 px-2 py-1 text-[11px]"
+                        >
+                          <option value="none">Choose…</option>
+                          <option value="phenotype">Phenotype / Clue Grid</option>
+                          <option value="poll">Poll (MCQ)</option>
+                          <option value="image">Image + Caption</option>
+                          <option value="teaching">Teaching Pearl / Summary</option>
+                        </select>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {snippetButtons.map((btn) => (
+                            <button
+                              key={btn.label}
+                              type="button"
+                              onClick={() => insertSnippet(btn.snippet)}
+                              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] hover:bg-slate-800"
+                            >
+                              {btn.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Tip: copy an image, click in this editor, and press <span className="font-semibold">Cmd/Ctrl + V</span> to insert an <code className="text-rose-200">&lt;img&gt;</code> tag with a data URL.
+                      </p>
+                      <textarea
+                        value={selectedSlide.html}
+                        id="slide-html-editor"
+                        onPaste={handleHtmlPaste}
+                        onChange={(event) =>
+                          updateSlide(
+                            selectedSlide.id,
+                            "html",
+                            event.target.value
+                          )
+                        }
+                        rows={16}
+                        className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs font-mono leading-relaxed min-h-[320px]"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Live Preview</span>
+                        <span className="text-[11px] text-slate-500">Presenter styling</span>
+                      </div>
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/60 shadow-lg shadow-black/20 p-3">
+                        <div className="aspect-video w-full overflow-auto rounded-lg bg-slate-950/80 border border-slate-800">
+                          <div
+                            className="h-full w-full"
+                            dangerouslySetInnerHTML={{ __html: selectedSlide.html }}
+                          />
+                        </div>
                       </div>
                     </div>
-                    <p className="text-[11px] text-slate-500">
-                      Tip: copy an image, click in this editor, and press <span className="font-semibold">Cmd/Ctrl + V</span> to insert an <code className="text-rose-200">&lt;img&gt;</code> tag with a data URL.
-                    </p>
-                    <textarea
-                      value={selectedSlide.html}
-                      id="slide-html-editor"
-                      onPaste={handleHtmlPaste}
-                      onChange={(event) =>
-                        updateSlide(
-                          selectedSlide.id,
-                          "html",
-                          event.target.value
-                        )
-                      }
-                      rows={12}
-                      className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs font-mono leading-relaxed"
-                    />
                   </div>
 
                   {linkedQuestion && (
