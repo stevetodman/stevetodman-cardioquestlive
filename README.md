@@ -55,6 +55,22 @@ The callable function needs the secret set server-side (see above) and billing e
   - Templates to scaffold common slides (phenotype grids, polls, image + caption, teaching summary).
   - Quick-insert snippets (headings, clue boxes, teaching pearls).
   - Paste images directly into the HTML editor (inserts a styled `cq-slide-image` data-URL tag).
+  - Live presenter-style preview updates as you type. See [docs/ADMIN_SLIDE_EDITING.md](docs/ADMIN_SLIDE_EDITING.md) for a quick guide.
+
+## How to build a slide (Admin)
+
+- Go to `/#/admin` (requires `VITE_ADMIN_ACCESS_CODE` if set), select a slide from the list.
+- Slides are plain HTML strings rendered as-is in the presenter.
+- The editor supports:
+  - **Templates**: Phenotype / Clue Grid, Poll (MCQ), Image + Caption, Teaching Pearl.
+  - **Snippets**: one-click inserts for headings, clue boxes, teaching pearls.
+  - **Paste images**: copy an image, click in the editor, Cmd/Ctrl+V to insert a styled `<img>` with a data URL (soft warning on large images; optional alt text prompt).
+- A live presenter-style preview sits next to the editor so you can see changes immediately.
+- For step-by-step details, see [docs/ADMIN_SLIDE_EDITING.md](docs/ADMIN_SLIDE_EDITING.md).
+- Slide editing comforts:
+  - Templates to scaffold common slides (phenotype grids, polls, image + caption, teaching summary).
+  - Quick-insert snippets (headings, clue boxes, teaching pearls).
+  - Paste images directly into the HTML editor (inserts a styled `cq-slide-image` data-URL tag).
   - Live presenter-style preview updates as you type. See `docs/ADMIN_SLIDE_EDITING.md` for a quick guide.
 
 ### Testing
@@ -63,3 +79,14 @@ The callable function needs the secret set server-side (see above) and billing e
 - Jest is configured via `jest.config.ts`, and global helpers live under `test/`.
 
 Looking for a full explanation of how the Firebase project, Google AI Studio, and Gemini API key work together? Read [docs/GOOGLE_AI_STUDIO.md](docs/GOOGLE_AI_STUDIO.md).
+
+### Firebase emulators (for future uploads)
+
+If we later add Firebase Storage–based uploads (e.g., for images instead of data URLs), we will use the Firebase emulators in development.
+
+When that happens, you’ll likely need something like:
+
+- `VITE_USE_EMULATORS=true` in `.env.local`
+- Storage emulator running (e.g., `localhost:9199`)
+
+We’ll update this section with concrete instructions once uploads are wired in.

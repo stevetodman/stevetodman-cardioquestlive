@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AdminDeckEditor from "../AdminDeckEditor";
 
@@ -43,10 +43,16 @@ jest.mock("../../data/ductalDeck", () => ({
 describe("AdminDeckEditor", () => {
   const { fetchDeck, persistDeck } = require("../../utils/deckService");
   const originalEnv = process.env.VITE_ADMIN_ACCESS_CODE;
+  const originalPrompt = window.prompt;
+  const originalConfirm = window.confirm;
+  const originalFileReader = (global as any).FileReader;
 
   beforeEach(() => {
     process.env.VITE_ADMIN_ACCESS_CODE = "TEST_CODE";
     jest.clearAllMocks();
+    window.prompt = originalPrompt;
+    window.confirm = originalConfirm;
+    (global as any).FileReader = originalFileReader;
   });
 
   afterAll(() => {
@@ -146,5 +152,108 @@ describe("AdminDeckEditor", () => {
     const savedDeck = (persistDeck as jest.Mock).mock.calls[0][0];
     expect(savedDeck.slides[0].index).toBe(0);
     expect(savedDeck.slides[1].index).toBe(1);
+  });
+
+  test("pastes image data URLs with optional alt and prevents default", async () => {
+    (fetchDeck as jest.Mock).mockResolvedValue({
+      slides: [{ id: "s1", index: 0, type: "content", html: "" }],
+      questions: [],
+    });
+
+    const mockReadAsDataURL = jest.fn(function (this: any) {
+      this.result = "data:image/png;base64,TEST";
+      setTimeout(() => this.onload && this.onload(), 0);
+    });
+    (global as any).FileReader = jest.fn(() => ({
+      onload: null,
+      onerror: null,
+      readAsDataURL: mockReadAsDataURL,
+      result: "",
+    }));
+    window.prompt = jest.fn().mockReturnValue("Alt Text");
+
+    render(<AdminDeckEditor />);
+    await userEvent.type(screen.getByPlaceholderText(/access code/i), "TEST_CODE");
+    await userEvent.click(screen.getByRole("button", { name: /unlock editor/i }));
+    await waitFor(() => expect(screen.getByText(/deck admin/i)).toBeInTheDocument());
+
+    const textarea = screen.getByLabelText(/slide html/i) as HTMLTextAreaElement;
+    textarea.focus();
+    textarea.setSelectionRange(0, 0);
+
+    const preventDefault = jest.fn();
+    const file = new File(["data"], "test.png", { type: "image/png" });
+    const imageItem = { kind: "file", type: "image/png", getAsFile: () => file };
+    const pasteEvent = new Event("paste", { bubbles: true, cancelable: true });
+    Object.assign(pasteEvent, {
+      clipboardData: { items: [imageItem] },
+      preventDefault,
+    });
+
+    fireEvent(textarea, pasteEvent);
+
+    await waitFor(() => expect(preventDefault).toHaveBeenCalled());
+    await waitFor(() => expect(textarea.value).toMatch(/<img/));
+    expect(textarea.value).toMatch(/Alt Text/);
+  });
+
+  test("paste does nothing special when no image is present", async () => {
+    (fetchDeck as jest.Mock).mockResolvedValue({
+      slides: [{ id: "s1", index: 0, type: "content", html: "" }],
+      questions: [],
+    });
+
+    render(<AdminDeckEditor />);
+    await userEvent.type(screen.getByPlaceholderText(/access code/i), "TEST_CODE");
+    await userEvent.click(screen.getByRole("button", { name: /unlock editor/i }));
+    await waitFor(() => expect(screen.getByText(/deck admin/i)).toBeInTheDocument());
+
+    const textarea = screen.getByLabelText(/slide html/i) as HTMLTextAreaElement;
+    textarea.focus();
+    textarea.setSelectionRange(0, 0);
+    const preventDefault = jest.fn();
+    const pasteEvent = new Event("paste", { bubbles: true, cancelable: true });
+    Object.assign(pasteEvent, {
+      clipboardData: { items: [] },
+      preventDefault,
+    });
+    textarea.dispatchEvent(pasteEvent);
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("");
+  });
+
+  test("applies template to empty slide", async () => {
+    (fetchDeck as jest.Mock).mockResolvedValue({
+      slides: [{ id: "s1", index: 0, type: "content", html: "" }],
+      questions: [],
+    });
+
+    render(<AdminDeckEditor />);
+    await userEvent.type(screen.getByPlaceholderText(/access code/i), "TEST_CODE");
+    await userEvent.click(screen.getByRole("button", { name: /unlock editor/i }));
+    await waitFor(() => expect(screen.getByText(/deck admin/i)).toBeInTheDocument());
+
+    await userEvent.selectOptions(screen.getByLabelText(/template/i), "phenotype");
+    const textarea = screen.getByLabelText(/slide html/i) as HTMLTextAreaElement;
+    expect(textarea.value).toMatch(/Phenotype/);
+    expect(textarea.value).toMatch(/cq-tiles/);
+  });
+
+  test("inserts snippet at caret", async () => {
+    (fetchDeck as jest.Mock).mockResolvedValue({
+      slides: [{ id: "s1", index: 0, type: "content", html: "Start" }],
+      questions: [],
+    });
+
+    render(<AdminDeckEditor />);
+    await userEvent.type(screen.getByPlaceholderText(/access code/i), "TEST_CODE");
+    await userEvent.click(screen.getByRole("button", { name: /unlock editor/i }));
+    await waitFor(() => expect(screen.getByText(/deck admin/i)).toBeInTheDocument());
+
+    const textarea = screen.getByLabelText(/slide html/i) as HTMLTextAreaElement;
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    await userEvent.click(screen.getByRole("button", { name: /\+ heading/i }));
+    expect(textarea.value).toMatch(/<h1>Slide Title<\/h1>/);
   });
 });

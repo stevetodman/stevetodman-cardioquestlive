@@ -31,7 +31,9 @@ This app stores each slide as a raw HTML string (`slide.html`). The admin editor
 ## Pasting images (data URLs)
 
 - Copy an image (Cmd/Ctrl+C), click in the HTML editor, press Cmd/Ctrl+V.
-- The editor inserts `<img class="cq-slide-image" src="data:image/...;base64,..." alt="" />` at the cursor.
+- If the image is large (> ~2 MB), you’ll see a soft warning before inserting.
+- You’ll be prompted for optional `alt` text (for accessibility). Leave blank to keep `alt=""`.
+- The editor inserts `<img class="cq-slide-image" src="data:image/...;base64,..." alt="..."/>` at the cursor.
 - `.cq-slide-image` is styled globally (centered, max-width, rounded, subtle border/shadow). You can edit `alt` text manually after insertion.
 - Normal text paste is unchanged when no image is on the clipboard.
 
