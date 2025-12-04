@@ -177,20 +177,7 @@
 }
 
 .cq-nav {
-  position: sticky;
-  left: 18px;
-  right: 18px;
-  bottom: 18px;
-  margin-top: auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 10px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(51, 65, 85, 0.8);
-  background: rgba(15, 23, 42, 0.72);
-  backdrop-filter: blur(6px);
+  display: none;
 }
 
 .cq-btn {
