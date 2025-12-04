@@ -5,42 +5,58 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
     match /sessions/{sessionId} {
+      function isValidSessionCreate() {
+        return request.resource.data.keys().hasAll(["createdBy", "joinCode", "slides"]) &&
+          request.resource.data.createdBy == request.auth.uid &&
+          request.resource.data.joinCode is string &&
+          request.resource.data.slides is list;
+      }
+
+      function isValidSessionUpdate() {
+        return request.resource.data.createdBy == resource.data.createdBy &&
+          request.resource.data.joinCode is string &&
+          request.resource.data.slides is list;
+      }
+
       allow read: if isAuthenticated();
 
-      allow create: if isAuthenticated()
-        && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.joinCode is string
-        && request.resource.data.slides is list
-        && request.resource.data.questions is list;
+      allow create: if isAuthenticated() && isValidSessionCreate();
 
       allow update: if isAuthenticated()
-        && (
-          resource.data.createdBy == request.auth.uid
-          || !('createdBy' in resource.data)
-        );
+        && (resource.data.createdBy == request.auth.uid || isAdmin())
+        && isValidSessionUpdate();
 
-      allow delete: if false;
+      allow delete: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAdmin());
 
       match /responses/{responseId} {
+        function isValidResponseCreate() {
+          return request.resource.data.userId == request.auth.uid &&
+            request.resource.data.questionId is string &&
+            request.resource.data.choiceIndex is number &&
+            responseId == request.auth.uid + "_" + request.resource.data.questionId &&
+            !exists(/databases/$(database)/documents/sessions/$(sessionId)/responses/$(responseId));
+        }
+
+        function isValidResponseUpdate() {
+          return resource.data.userId == request.auth.uid &&
+            request.resource.data.questionId == resource.data.questionId &&
+            request.resource.data.choiceIndex is number &&
+            responseId == request.auth.uid + "_" + resource.data.questionId;
+        }
+
         allow read: if isAuthenticated();
 
         // One response per user per question
         allow create: if isAuthenticated()
-          && request.resource.data.sessionId == sessionId
-          && request.resource.data.userId == request.auth.uid
-          && request.resource.data.questionId is string
-          && request.resource.data.choiceIndex is number
-          && !exists(/databases/$(database)/documents/sessions/$(sessionId)/responses/$(responseId));
+          && isValidResponseCreate();
 
         allow update: if isAuthenticated()
-          && request.resource.data.sessionId == sessionId
-          && request.resource.data.userId == request.auth.uid
-          && request.resource.data.questionId is string
-          && request.resource.data.choiceIndex is number
-          && request.resource.data.questionId == resource.data.questionId
-          && request.resource.data.userId == resource.data.userId
-          && request.resource.data.sessionId == resource.data.sessionId;
+          && isValidResponseUpdate();
 
         allow delete: if false;
       }
@@ -48,7 +64,7 @@ service cloud.firestore {
 
     match /configs/{document=**} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow write: if isAdmin();
     }
   }
 }
