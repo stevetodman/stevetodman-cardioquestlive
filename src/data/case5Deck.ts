@@ -2,6 +2,7 @@
 
 import type { Slide } from "../types";
 import { slideWrapper } from "../utils/slideWrapper";
+import { renderInteractiveTiles } from "../utils/interactiveTiles";
 
 const buildDots = (slideNumber: number, totalSlides: number) =>
   Array.from({ length: totalSlides })
@@ -88,31 +89,31 @@ export const case5Deck: Slide[] = [
     html: geminiSlide({
       slideNumber: 2,
       totalSlides: 5,
-      body: `
-        <div class="flex flex-col gap-6 h-full justify-center">
-          <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
-            <span class="cq-chip">Phenotype</span>
-          </div>
-
-          <div class="cq-tiles grid md:grid-cols-3 gap-4 max-w-5xl mx-auto w-full">
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Skeletal</span></div>
-              <div class="text-lg font-semibold">Pectus + long bones</div>
-              <p class="cq-mute">Pectus carinatum, flat feet, reduced elbow extension, long limbs.</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Ocular</span></div>
-              <div class="text-lg font-semibold">Ectopia lentis</div>
-              <p class="cq-mute">Lens subluxation history.</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Cardiac</span></div>
-              <div class="text-lg font-semibold">Click + murmur</div>
-              <p class="cq-mute">Mid-systolic click with apical systolic murmur (think MVP).</p>
-            </div>
-          </div>
-        </div>
-      `,
+      body: renderInteractiveTiles({
+        heading: "Phenotype",
+        helperText: "Click a clue to reveal an image",
+        tiles: [
+          {
+            id: "skeletal",
+            title: "Pectus + long bones",
+            description: "Pectus carinatum, flat feet, reduced elbow extension, long limbs.",
+            imageUrl: "/images/genetic/img-012.png",
+          },
+          {
+            id: "ocular",
+            title: "Ectopia lentis",
+            description: "Lens subluxation history.",
+            imageUrl: "/images/genetic/img-013.png",
+          },
+          {
+            id: "cardiac",
+            title: "Click + murmur",
+            description: "Mid-systolic click with apical systolic murmur (think MVP).",
+            imageUrl: "/images/genetic/img-011.png",
+          },
+        ],
+        role: "presenter",
+      }),
     }),
   },
 

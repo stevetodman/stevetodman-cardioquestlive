@@ -2,6 +2,7 @@
 
 import type { Slide } from "../types";
 import { slideWrapper } from "../utils/slideWrapper";
+import { renderInteractiveTiles } from "../utils/interactiveTiles";
 
 const buildDots = (slideNumber: number, totalSlides: number) =>
   Array.from({ length: totalSlides })
@@ -78,31 +79,31 @@ export const case6Deck: Slide[] = [
     html: geminiSlide({
       slideNumber: 2,
       totalSlides: 5,
-      body: `
-        <div class="flex flex-col gap-6 h-full justify-center">
-          <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
-            <span class="cq-chip">Phenotype</span>
-          </div>
-
-          <div class="cq-tiles grid md:grid-cols-3 gap-4 max-w-5xl mx-auto w-full">
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Cardiac</span></div>
-              <div class="text-lg font-semibold">AV canal pattern</div>
-              <p class="cq-mute">Holosystolic murmur LLSB with mid-diastolic rumble; EKG shows AV canal.</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Facies</span></div>
-              <div class="text-lg font-semibold">Dysmorphic features</div>
-              <p class="cq-mute">Classic Down syndrome facies; hypotonia; growth delay.</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>GI/Other</span></div>
-              <div class="text-lg font-semibold">Associated conditions</div>
-              <p class="cq-mute">GI anomalies (duodenal atresia, Hirschsprung), endocrine (hypothyroid), leukemia risk.</p>
-            </div>
-          </div>
-        </div>
-      `,
+      body: renderInteractiveTiles({
+        heading: "Phenotype",
+        helperText: "Click a clue to reveal an image",
+        tiles: [
+          {
+            id: "cardiac",
+            title: "AV canal pattern",
+            description: "Holosystolic murmur LLSB with mid-diastolic rumble; EKG shows AV canal.",
+            imageUrl: "/images/genetic/img-009.png",
+          },
+          {
+            id: "facies",
+            title: "Dysmorphic features",
+            description: "Classic Down syndrome facies; hypotonia; growth delay.",
+            imageUrl: "/images/genetic/img-017.png",
+          },
+          {
+            id: "gi",
+            title: "Associated conditions",
+            description: "GI anomalies (duodenal atresia, Hirschsprung), endocrine (hypothyroid), leukemia risk.",
+            imageUrl: "/images/genetic/img-018.png",
+          },
+        ],
+        role: "presenter",
+      }),
     }),
   },
 

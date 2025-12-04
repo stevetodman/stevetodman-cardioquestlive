@@ -2,6 +2,7 @@
 
 import type { Slide } from "../types";
 import { slideWrapper } from "../utils/slideWrapper";
+import { renderInteractiveTiles } from "../utils/interactiveTiles";
 
 const buildDots = (slideNumber: number, totalSlides: number) =>
   Array.from({ length: totalSlides })
@@ -106,34 +107,37 @@ export const case2Deck: Slide[] = [
       slideNumber: 2,
       totalSlides: 5,
       body: `
-        <div class="flex flex-col gap-6 h-full justify-center">
-          <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
-            <span class="cq-chip">Phenotype</span>
-          </div>
-
+        <div class="flex flex-col gap-4 h-full justify-center">
           <div class="text-center space-y-3">
             <div class="cq-emo mx-auto text-3xl">👨‍👩‍👦</div>
             <h2 class="cq-h1 text-3xl md:text-4xl">Facial / Clinical Pattern</h2>
             <p class="cq-p max-w-3xl mx-auto">Characteristic features to link the exam findings with the underlying syndrome.</p>
           </div>
-
-          <div class="cq-tiles grid md:grid-cols-3 gap-4 max-w-5xl mx-auto w-full">
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Face</span></div>
-              <div class="text-lg font-semibold">Elfin facies</div>
-              <p class="cq-mute">Stellate iris, short/bulbous nasal tip, flat nasal bridge, long philtrum, wide mouth.</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Build</span></div>
-              <div class="text-lg font-semibold">Prominent cheeks</div>
-              <p class="cq-mute">Mild micrognathia, triangular facies, full cheeks.</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Behavior / Labs</span></div>
-              <div class="text-lg font-semibold">Hypercalcemia + “cocktail party” vibe</div>
-              <p class="cq-mute">Overfriendly behavior, ADHD/anxiety tendencies; elevated calcium.</p>
-            </div>
-          </div>
+          ${renderInteractiveTiles({
+            heading: "Phenotype",
+            helperText: "Click a clue to reveal an image",
+            tiles: [
+              {
+                id: "face",
+                title: "Elfin facies",
+                description: "Stellate iris, bulbous nasal tip, flat bridge, long philtrum, wide mouth.",
+                imageUrl: "/images/genetic/img-020.png",
+              },
+              {
+                id: "build",
+                title: "Prominent cheeks",
+                description: "Mild micrognathia, triangular facies, full cheeks.",
+                imageUrl: "/images/genetic/img-021.png",
+              },
+              {
+                id: "behavior",
+                title: "Hypercalcemia + behavior",
+                description: "Overfriendly affect, ADHD/anxiety tendencies; elevated calcium.",
+                imageUrl: "/images/genetic/img-017.png",
+              },
+            ],
+            role: "presenter",
+          })}
         </div>
       `,
     }),

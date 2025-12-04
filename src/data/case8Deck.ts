@@ -2,6 +2,7 @@
 
 import type { Slide } from "../types";
 import { slideWrapper } from "../utils/slideWrapper";
+import { renderInteractiveTiles } from "../utils/interactiveTiles";
 
 const buildDots = (slideNumber: number, totalSlides: number) =>
   Array.from({ length: totalSlides })
@@ -78,31 +79,31 @@ export const case8Deck: Slide[] = [
     html: geminiSlide({
       slideNumber: 2,
       totalSlides: 5,
-      body: `
-        <div class="flex flex-col gap-6 h-full justify-center">
-          <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
-            <span class="cq-chip">Phenotype</span>
-          </div>
-
-          <div class="cq-tiles grid md:grid-cols-3 gap-4 max-w-5xl mx-auto w-full">
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Growth</span></div>
-              <div class="text-lg font-semibold">Short stature</div>
-              <p class="cq-mute">Height below peers; may have webbed neck or hypertelorism (Noonan pattern).</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Cardiac</span></div>
-              <div class="text-lg font-semibold">Pulmonic stenosis</div>
-              <p class="cq-mute">Early systolic click + LUSB SEM suggests PS; HCM also seen in Noonan.</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Genetics</span></div>
-              <div class="text-lg font-semibold">RASopathy</div>
-              <p class="cq-mute">PTPN11 (~50%) or SOS1 (~13%) common in Noonan.</p>
-            </div>
-          </div>
-        </div>
-      `,
+      body: renderInteractiveTiles({
+        heading: "Phenotype",
+        helperText: "Click a clue to reveal an image",
+        tiles: [
+          {
+            id: "growth",
+            title: "Short stature",
+            description: "Height below peers; may have webbed neck or hypertelorism (Noonan pattern).",
+            imageUrl: "/images/genetic/img-016.png",
+          },
+          {
+            id: "cardiac",
+            title: "Pulmonic stenosis",
+            description: "Early systolic click + LUSB SEM suggests PS; HCM also seen in Noonan.",
+            imageUrl: "/images/genetic/img-014.png",
+          },
+          {
+            id: "genetics",
+            title: "RASopathy",
+            description: "PTPN11 (~50%) or SOS1 (~13%) common in Noonan.",
+            imageUrl: "/images/genetic/img-015.png",
+          },
+        ],
+        role: "presenter",
+      }),
     }),
   },
 
