@@ -371,10 +371,20 @@ export default function AdminDeckEditor() {
 
     // Capture selection state before any async work to avoid stale references.
     const { selectionStart, selectionEnd, value } = e.currentTarget;
+    const sizeMB = file.size / (1024 * 1024);
+    const MAX_PASTE_IMAGE_MB = 2;
+    if (sizeMB > MAX_PASTE_IMAGE_MB) {
+      const ok = window.confirm(
+        `This image is about ${sizeMB.toFixed(1)} MB. Large images can bloat slide size and slow loading. Insert anyway?`
+      );
+      if (!ok) return;
+    }
 
     try {
       const dataUrl = await fileToDataUrl(file);
-      const imgTag = `\n<img class="cq-slide-image" src="${dataUrl}" alt="" />\n`;
+      const altInput = window.prompt("Optional alt text for this image (for accessibility):", "");
+      const escapedAlt = altInput && altInput.trim().length > 0 ? altInput.trim().replace(/"/g, "&quot;") : "";
+      const imgTag = `\n<img class="cq-slide-image" src="${dataUrl}" alt="${escapedAlt}" />\n`;
       const nextValue = value.slice(0, selectionStart) + imgTag + value.slice(selectionEnd);
       updateSlide(selectedSlide.id, "html", nextValue);
     } catch (err) {
