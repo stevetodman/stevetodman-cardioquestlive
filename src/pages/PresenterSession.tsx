@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { doc, onSnapshot, updateDoc, db } from "../utils/firestore"; // Updated import
+import { doc, onSnapshot, updateDoc, db, collection, query, where } from "../utils/firestore"; // Updated import
 import { SessionData, Question } from "../types";
 import { ResponsesChart } from "../components/ResponsesChart";
 
@@ -8,6 +8,8 @@ export default function PresenterSession() {
   const { sessionId } = useParams();
   const [session, setSession] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [responseTotal, setResponseTotal] = useState(0);
+  const slideRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -28,10 +30,15 @@ export default function PresenterSession() {
     session ? session.questions.map((q) => [q.id, q]) : []
   );
 
-    const currentQuestion =
+  const currentQuestion =
     currentSlide?.type === "question" && currentSlide.questionId
       ? questionsMap.get(currentSlide.questionId)
       : null;
+  const isQuestionOpen =
+    session && currentQuestion ? session.currentQuestionId === currentQuestion.id : false;
+  const isShowingResults = session?.showResults ?? false;
+  const isQuestionSlide = Boolean(currentQuestion);
+  const showResultsOverlay = isQuestionSlide && isShowingResults && responseTotal > 0;
 
   const goToSlide = useCallback(
     async (delta: number) => {
@@ -67,6 +74,47 @@ export default function PresenterSession() {
     return () => window.removeEventListener("keydown", handler);
   }, [session, goToSlide]);
 
+  // Wire in-slide nav buttons to presenter navigation
+  useEffect(() => {
+    if (!slideRef.current) return;
+    const root = slideRef.current;
+    const prevBtn = root.querySelector(".cq-nav .cq-btn:not(.cq-btnPrimary)");
+    const nextBtn = root.querySelector(".cq-nav .cq-btnPrimary");
+
+    const handlePrev = (e: Event) => {
+      e.preventDefault();
+      goToSlide(-1);
+    };
+    const handleNext = (e: Event) => {
+      e.preventDefault();
+      goToSlide(1);
+    };
+
+    prevBtn?.addEventListener("click", handlePrev);
+    nextBtn?.addEventListener("click", handleNext);
+
+    return () => {
+      prevBtn?.removeEventListener("click", handlePrev);
+      nextBtn?.removeEventListener("click", handleNext);
+    };
+  }, [currentSlide, goToSlide]);
+
+  // Track responses for current question to know when to show overlay
+  useEffect(() => {
+    if (!sessionId || !currentQuestion) {
+      setResponseTotal(0);
+      return;
+    }
+    const q = query(
+      collection(db, "sessions", sessionId, "responses"),
+      where("questionId", "==", currentQuestion.id)
+    );
+    const unsub = onSnapshot(q, (snapshot: any) => {
+      setResponseTotal(snapshot?.size ?? 0);
+    });
+    return () => unsub();
+  }, [sessionId, currentQuestion?.id]);
+
   const openQuestion = async () => {
     if (!currentQuestion) return;
     await updateDoc(doc(db, "sessions", sessionId), {
@@ -76,8 +124,17 @@ export default function PresenterSession() {
   };
 
   const toggleResults = async () => {
+    if (!session) return;
     await updateDoc(doc(db, "sessions", sessionId), {
       showResults: !session.showResults,
+    });
+  };
+
+  const closeQuestion = async () => {
+    if (!session) return;
+    await updateDoc(doc(db, "sessions", sessionId), {
+      currentQuestionId: null,
+      showResults: false,
     });
   };
 
@@ -109,21 +166,88 @@ export default function PresenterSession() {
 
   return (
     <div className="h-screen bg-slate-950 text-slate-50 overflow-hidden relative flex flex-col">
-      <div className="flex items-center justify-between px-3 md:px-5 py-2">
+      <div className="flex items-center justify-between px-3 md:px-4 py-1.5">
         <div className="text-[10px] uppercase tracking-[0.22em] text-slate-500 font-semibold">
           {session.title}
         </div>
-        <div className="text-[10px] text-slate-400 font-mono bg-slate-900/80 border border-slate-700 rounded px-2 py-1">
-          Join: {session.joinCode}
+        <div className="flex items-center gap-2">
+          {isQuestionSlide && (
+            <div className="hidden md:flex items-center gap-1.5 text-[11px]">
+              <button
+                type="button"
+                onClick={openQuestion}
+                disabled={isQuestionOpen}
+                className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${
+                  isQuestionOpen
+                    ? "border-slate-800 bg-slate-900/60 text-slate-500 cursor-not-allowed"
+                    : "border-emerald-500/70 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25"
+                }`}
+              >
+                Open
+              </button>
+              <button
+                type="button"
+                onClick={toggleResults}
+                disabled={!isQuestionOpen && !isShowingResults}
+                className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${
+                  !isQuestionOpen && !isShowingResults
+                    ? "border-slate-800 bg-slate-900/60 text-slate-500 cursor-not-allowed"
+                    : "border-amber-500/70 bg-amber-500/15 text-amber-100 hover:bg-amber-500/25"
+                }`}
+              >
+                {isShowingResults ? "Hide" : "Show"}
+              </button>
+              <button
+                type="button"
+                onClick={closeQuestion}
+                disabled={!isQuestionOpen && !isShowingResults}
+                className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${
+                  !isQuestionOpen && !isShowingResults
+                    ? "border-slate-800 bg-slate-900/60 text-slate-500 cursor-not-allowed"
+                    : "border-slate-700 bg-slate-800/70 text-slate-100 hover:bg-slate-800"
+                }`}
+              >
+                Close
+              </button>
+            </div>
+          )}
+          <div className="text-[10px] text-slate-400 font-mono bg-slate-900/80 border border-slate-700 rounded px-2 py-1">
+            Join: {session.joinCode}
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center px-4 md:px-8 pb-4 gap-2">
-        <div className="w-full max-w-[1800px] aspect-video relative">
-          <div
-            className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
-            dangerouslySetInnerHTML={{ __html: currentSlide?.html ?? "" }}
-          />
+      <div className="flex-1 flex flex-col items-center px-4 md:px-6 pb-2 gap-1">
+        <div className="w-full max-w-[1800px] flex flex-col flex-1 gap-1.5">
+          {/* Presenter layout: bias height toward the slide; chart overlays inside the slide for polls */}
+          <div className="relative flex-1 min-h-[62vh] max-h-[78vh]">
+            <div
+              className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
+              ref={slideRef}
+              dangerouslySetInnerHTML={{ __html: currentSlide?.html ?? "" }}
+            />
+
+            {showResultsOverlay && currentQuestion && (
+              <div className="absolute inset-x-3 bottom-3 pointer-events-none">
+                <div className="bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 shadow-lg shadow-black/30 pointer-events-auto">
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
+                    <span className="uppercase tracking-[0.12em] text-slate-300">Poll Results</span>
+                    <span className="font-mono text-[10px]">
+                      {isQuestionOpen ? "Open" : "Closed"} {isShowingResults ? "· Showing results" : ""}
+                    </span>
+                  </div>
+                  <ResponsesChart
+                    sessionId={sessionId}
+                    questionId={currentQuestion.id}
+                    options={currentQuestion.options}
+                    correctIndex={currentQuestion.correctIndex ?? 0}
+                    showResults={isShowingResults}
+                    mode="presenter"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

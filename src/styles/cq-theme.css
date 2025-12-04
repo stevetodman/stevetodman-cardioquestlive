@@ -62,7 +62,7 @@
 
 .cq-viewport {
   position: relative;
-  padding: 18px 18px 70px;
+  padding: 12px 14px 52px;
   min-height: 100%;
 }
 
@@ -105,7 +105,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 10px 12px;
   border-bottom: 1px solid rgba(51, 65, 85, 0.55);
   background:
     radial-gradient(900px 140px at 25% 40%, rgba(59, 130, 246, 0.2), transparent 60%),
@@ -170,7 +170,7 @@
 .cq-body {
   position: relative;
   flex: 1;
-  padding: 14px 18px 18px;
+  padding: 12px 14px 14px;
   height: 100%;
   overflow: auto;
   box-sizing: border-box;
@@ -178,28 +178,30 @@
 
 .cq-nav {
   position: sticky;
-  left: 18px;
-  right: 18px;
-  bottom: 18px;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
   margin-top: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid rgba(51, 65, 85, 0.8);
   background: rgba(15, 23, 42, 0.72);
   backdrop-filter: blur(6px);
+  font-size: 13px;
 }
 
 .cq-btn {
   border: 1px solid rgba(51, 65, 85, 0.85);
   background: rgba(2, 6, 23, 0.35);
   color: var(--cq-text);
-  padding: 9px 12px;
+  padding: 7px 10px;
   border-radius: 999px;
   font-weight: 800;
+  font-size: 13px;
   cursor: pointer;
   transition: transform var(--cq-fast) ease, border-color var(--cq-fast) ease, background var(--cq-fast) ease;
 }
@@ -377,6 +379,27 @@
   padding: 14px;
 }
 
+.cq-phenotype-tile {
+  text-align: left;
+  transition: border-color var(--cq-fast), background var(--cq-fast), transform var(--cq-fast);
+}
+
+.cq-phenotype-tile.is-active {
+  border-color: rgba(59, 130, 246, 0.65);
+  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.15);
+  transform: translateY(-2px);
+}
+
+.cq-phenotype-img {
+  max-height: 280px;
+  width: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(51, 65, 85, 0.65);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .cq-emo {
   display: inline-flex;
   align-items: center;
@@ -402,18 +425,14 @@
 .cq-navHint {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: var(--cq-muted);
-  font-size: 12px;
-}
-
-.cq-navHint span {
-  background: rgba(59, 130, 246, 0.12);
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 12px;
   border: 1px solid rgba(59, 130, 246, 0.35);
-  border-radius: 8px;
-  padding: 2px 8px;
-  font-weight: 700;
+  background: rgba(59, 130, 246, 0.12);
   color: rgba(191, 219, 254, 0.9);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .cq-option:focus-visible,

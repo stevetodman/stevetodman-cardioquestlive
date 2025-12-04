@@ -7,7 +7,10 @@ interface Props {
   options: string[];
   correctIndex: number;
   showResults: boolean;
+  mode?: "presenter" | "participant";
 }
+
+export type ResponsesMode = 'presenter' | 'participant';
 
 export function ResponsesChart({
   sessionId,
@@ -15,6 +18,7 @@ export function ResponsesChart({
   options,
   correctIndex,
   showResults,
+  mode = "participant",
 }: Props) {
   const [counts, setCounts] = useState<number[]>(() =>
     Array(options.length).fill(0)
@@ -65,12 +69,34 @@ export function ResponsesChart({
         const pct = Math.round((counts[i] / total) * 100);
         const isCorrect = showResults && i === correctIndex;
         const color = barColors[i % barColors.length];
+        const label = String.fromCharCode(65 + i);
+
+        if (mode === "presenter") {
+          return (
+            <div key={i} className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-800 border border-slate-700 text-[11px]">
+                {label}
+              </span>
+              <div className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-500 ease-out ${color} ${isCorrect ? "ring-1 ring-emerald-300" : ""}`}
+                  style={{ width: `${pct}%` }}
+                  role="progressbar"
+                  aria-valuenow={pct}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                />
+              </div>
+              <span className={`text-[11px] ${isCorrect ? "text-emerald-400" : "text-slate-400"}`}>{pct}%</span>
+            </div>
+          );
+        }
 
         return (
           <div key={i} className="space-y-1">
             <div className={`flex items-center gap-2 text-sm font-semibold ${isCorrect ? "text-emerald-400" : "text-slate-200"}`}>
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-800 border border-slate-700 text-[11px]">
-                {String.fromCharCode(65 + i)}
+                {label}
               </span>
               <span className="truncate">{opt}</span>
               <span className="ml-auto text-slate-400 text-xs">{pct}%</span>

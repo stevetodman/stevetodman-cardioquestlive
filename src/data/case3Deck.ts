@@ -2,6 +2,8 @@
 
 import type { Slide } from "../types";
 import { slideWrapper } from "../utils/slideWrapper";
+import { geminiHeader } from "../utils/geminiHeader";
+import { renderInteractiveTiles } from "../utils/interactiveTiles";
 
 const buildDots = (slideNumber: number, totalSlides: number) =>
   Array.from({ length: totalSlides })
@@ -35,13 +37,9 @@ const geminiSlide = (opts: { slideNumber: number; totalSlides: number; body: str
       </div>
 
       <div class="cq-nav" aria-hidden="true">
-        <div class="cq-btn">← Previous</div>
-        <div class="cq-navHint">
-          <span>←</span>
-          <span>→</span>
-          <span>Space</span>
-        </div>
-        <div class="cq-btn cq-btnPrimary">Next →</div>
+        <div class="cq-btn">←</div>
+        <div class="cq-navHint">Space = Next</div>
+        <div class="cq-btn cq-btnPrimary">→</div>
       </div>
     </div>
   `);
@@ -59,7 +57,6 @@ export const case3Deck: Slide[] = [
         <div class="flex flex-col gap-4 h-full">
           <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
             <span class="cq-chip">Case #3 · Presentation</span>
-            <span>Slide 1 / 5</span>
           </div>
 
           <div class="cq-card cq-hoverable h-full bg-gradient-to-b from-slate-900/85 to-slate-950/90 space-y-4">
@@ -102,35 +99,42 @@ export const case3Deck: Slide[] = [
       slideNumber: 2,
       totalSlides: 5,
       body: `
-        <div class="flex flex-col gap-6 h-full justify-center">
-          <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
-            <span class="cq-chip">Phenotype</span>
-            <span>Case 3 · Slide 2 / 5</span>
-          </div>
-
-          <div class="text-center space-y-3">
+        <div class="flex flex-col gap-4 h-full justify-center">
+          <div class="max-w-4xl mx-auto w-full space-y-1">
             <div class="cq-emo mx-auto text-3xl">👧</div>
-            <h2 class="cq-h1 text-3xl md:text-4xl">Facies + Hepatic Clues</h2>
-            <p class="cq-p max-w-3xl mx-auto">Link the vertebral findings, facies, and cholestasis to the right syndrome.</p>
+            ${geminiHeader({
+              subtitle: "Genetic Syndromes · Interactive Case Series",
+              title: "Facies + Hepatic Clues",
+              meta: "Case 3 · Slide 2/5",
+              variant: "dense",
+            })}
+            <p class="cq-p max-w-3xl mx-auto text-center text-sm md:text-base">Link the vertebral findings, facies, and cholestasis to the right syndrome.</p>
           </div>
-
-          <div class="cq-tiles grid md:grid-cols-3 gap-4 max-w-5xl mx-auto w-full">
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Face</span></div>
-              <div class="text-lg font-semibold">Characteristic facies</div>
-              <p class="cq-mute">Broad forehead, deep-set widely spaced eyes, long straight nose, micrognathia.</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Hepatic</span></div>
-              <div class="text-lg font-semibold">Cholestasis</div>
-              <p class="cq-mute">Bile duct paucity on biopsy; neonatal jaundice/cholestasis common.</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Spine</span></div>
-              <div class="text-lg font-semibold">Butterfly vertebrae</div>
-              <p class="cq-mute">Vertebral arch defects on imaging.</p>
-            </div>
-          </div>
+          ${renderInteractiveTiles({
+            heading: "Phenotype",
+            helperText: "Click a clue to reveal an image",
+            tiles: [
+              {
+                id: "face",
+                title: "Characteristic facies",
+                description: "Broad forehead, deep-set widely spaced eyes, long straight nose, micrognathia.",
+                imageUrl: "/images/genetic/img-023.png",
+              },
+              {
+                id: "hepatic",
+                title: "Cholestasis",
+                description: "Bile duct paucity on biopsy; neonatal jaundice/cholestasis common.",
+                imageUrl: "/images/genetic/img-025.png",
+              },
+              {
+                id: "spine",
+                title: "Butterfly vertebrae",
+                description: "Vertebral arch defects on imaging.",
+                imageUrl: "/images/genetic/img-022.png",
+              },
+            ],
+            role: "presenter",
+          })}
         </div>
       `,
     }),
@@ -148,7 +152,6 @@ export const case3Deck: Slide[] = [
         <div class="flex flex-col gap-4 h-full">
           <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
             <span class="cq-chip">Images</span>
-            <span>Slide 3 / 5</span>
           </div>
           <div class="grid md:grid-cols-2 gap-4 h-full">
             <div class="cq-card cq-hoverable flex flex-col gap-2">

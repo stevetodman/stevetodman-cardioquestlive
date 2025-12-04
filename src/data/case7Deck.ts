@@ -2,6 +2,7 @@
 
 import type { Slide } from "../types";
 import { slideWrapper } from "../utils/slideWrapper";
+import { renderInteractiveTiles } from "../utils/interactiveTiles";
 
 const buildDots = (slideNumber: number, totalSlides: number) =>
   Array.from({ length: totalSlides })
@@ -33,9 +34,9 @@ const geminiSlide = (opts: { slideNumber: number; totalSlides: number; body: str
       </div>
 
       <div class="cq-nav" aria-hidden="true">
-        <div class="cq-btn">← Previous</div>
-        <div class="cq-navHint"><span>←</span><span>→</span><span>Space</span></div>
-        <div class="cq-btn cq-btnPrimary">Next →</div>
+        <div class="cq-btn">←</div>
+        <div class="cq-navHint">Space = Next</div>
+        <div class="cq-btn cq-btnPrimary">→</div>
       </div>
     </div>
   `);
@@ -53,7 +54,6 @@ export const case7Deck: Slide[] = [
         <div class="flex flex-col gap-4 h-full">
           <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
             <span class="cq-chip">Case #7 · Presentation</span>
-            <span>Slide 1 / 5</span>
           </div>
 
           <div class="cq-card cq-hoverable h-full bg-gradient-to-b from-slate-900/85 to-slate-950/90 space-y-4">
@@ -80,32 +80,32 @@ export const case7Deck: Slide[] = [
     html: geminiSlide({
       slideNumber: 2,
       totalSlides: 5,
-      body: `
-        <div class="flex flex-col gap-6 h-full justify-center">
-          <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
-            <span class="cq-chip">Phenotype</span>
-            <span>Case 7 · Slide 2 / 5</span>
-          </div>
-
-          <div class="cq-tiles grid md:grid-cols-3 gap-4 max-w-5xl mx-auto w-full">
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Hands</span></div>
-              <div class="text-lg font-semibold">Overlapping fingers</div>
-              <p class="cq-mute">Closed fists with overlapping fingers; single umbilical artery.</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Growth</span></div>
-              <div class="text-lg font-semibold">IUGR + microcephaly</div>
-              <p class="cq-mute">Low birth weight, microcephaly, short sternum, micrognathia.</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Neuro</span></div>
-              <div class="text-lg font-semibold">Seizures + delay</div>
-              <p class="cq-mute">Profound psychomotor delay, hypotonia, seizures.</p>
-            </div>
-          </div>
-        </div>
-      `,
+      body: renderInteractiveTiles({
+        heading: "Phenotype",
+        helperText: "Click a clue to reveal an image",
+        tiles: [
+          {
+            id: "hands",
+            title: "Overlapping fingers",
+            description: "Closed fists with overlapping fingers; single umbilical artery.",
+            imageUrl: "/images/genetic/img-054.png",
+          },
+          {
+            id: "growth",
+            title: "IUGR + microcephaly",
+            description: "Low birth weight, microcephaly, short sternum, micrognathia.",
+            imageUrl: "/images/genetic/img-033.png",
+          },
+          {
+            id: "neuro",
+            title: "Seizures + delay",
+            description: "Profound psychomotor delay, hypotonia, seizures.",
+            imageUrl: "/images/genetic/img-059.png",
+          },
+        ],
+        helperText: "Click a clue to reveal an image",
+        role: "presenter",
+      }),
     }),
   },
 

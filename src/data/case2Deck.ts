@@ -35,13 +35,9 @@ const geminiSlide = (opts: { slideNumber: number; totalSlides: number; body: str
       </div>
 
       <div class="cq-nav" aria-hidden="true">
-        <div class="cq-btn">← Previous</div>
-        <div class="cq-navHint">
-          <span>←</span>
-          <span>→</span>
-          <span>Space</span>
-        </div>
-        <div class="cq-btn cq-btnPrimary">Next →</div>
+        <div class="cq-btn">←</div>
+        <div class="cq-navHint">Space = Next</div>
+        <div class="cq-btn cq-btnPrimary">→</div>
       </div>
     </div>
   `);
@@ -59,7 +55,6 @@ export const case2Deck: Slide[] = [
         <div class="flex flex-col gap-4 h-full">
           <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
             <span class="cq-chip">Case #2 · Presentation</span>
-            <span>Slide 1 / 5</span>
           </div>
 
           <div class="grid md:grid-cols-[1.05fr_0.95fr] gap-4 h-full">
@@ -114,7 +109,6 @@ export const case2Deck: Slide[] = [
         <div class="flex flex-col gap-6 h-full justify-center">
           <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
             <span class="cq-chip">Phenotype</span>
-            <span>Case 2 · Slide 2 / 5</span>
           </div>
 
           <div class="text-center space-y-3">
@@ -157,7 +151,6 @@ export const case2Deck: Slide[] = [
         <div class="flex flex-col gap-4 h-full">
           <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
             <span class="cq-chip">Images</span>
-            <span>Slide 3 / 5</span>
           </div>
           <div class="grid md:grid-cols-2 gap-4 h-full">
             <div class="cq-card cq-hoverable flex flex-col gap-2">

@@ -33,9 +33,9 @@ const geminiSlide = (opts: { slideNumber: number; totalSlides: number; body: str
       </div>
 
       <div class="cq-nav" aria-hidden="true">
-        <div class="cq-btn">← Previous</div>
-        <div class="cq-navHint"><span>←</span><span>→</span><span>Space</span></div>
-        <div class="cq-btn cq-btnPrimary">Next →</div>
+        <div class="cq-btn">←</div>
+        <div class="cq-navHint">Space = Next</div>
+        <div class="cq-btn cq-btnPrimary">→</div>
       </div>
     </div>
   `);
@@ -53,7 +53,6 @@ export const case10Deck: Slide[] = [
         <div class="flex flex-col gap-4 h-full">
           <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
             <span class="cq-chip">Case #10 · Presentation</span>
-            <span>Slide 1 / 4</span>
           </div>
 
           <div class="cq-card cq-hoverable h-full bg-gradient-to-b from-slate-900/85 to-slate-950/90 space-y-4">
@@ -82,7 +81,6 @@ export const case10Deck: Slide[] = [
         <div class="flex flex-col gap-4 h-full">
           <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
             <span class="cq-chip">Key Clues</span>
-            <span>Slide 2 / 4</span>
           </div>
           <div class="cq-card cq-hoverable space-y-2">
             <div class="cq-cardLabel"><span>Long QT pattern</span></div>

@@ -29,7 +29,10 @@ Tailwind is built locally (no CDN). The build pipeline uses `tailwind.config.js`
 ### Decks
 
 - Default deck uses the Gemini shell for intro/goals and Cases 1–11 (each follows: presentation → phenotype/features → images/notes → poll(s) → diagnosis).
-- Presenter bottom bar holds poll controls; keyboard arrows/space advance slides.
+- Presenter UX:
+  - Polls render once in the slide; results overlay inside the slide when you click **Show results** (no separate tray). Poll controls now sit in the top bar.
+  - Navigation is streamlined to a single left/right arrow with a passive `Space = Next` hint; keyboard arrows/space still advance slides.
+  - “Grid of clues” slides (e.g., Case 3 phenotype, Case 7 phenotype) are interactive on presenter: click a tile to reveal its image, click again to clear. Participant view stays static.
 
 ### Deploy
 
