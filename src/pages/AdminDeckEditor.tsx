@@ -4,6 +4,8 @@ import { defaultDeck } from "../data/ductalDeck";
 import { fetchDeck, persistDeck } from "../utils/deckService";
 import { SlidePreview } from "../components/SlidePreview";
 
+type TemplateKey = "none" | "phenotype" | "poll" | "image" | "teaching";
+
 function getAdminCode(): string {
   // Vite injects env vars onto process.env via define() in vite.config.ts
   return (process.env.VITE_ADMIN_ACCESS_CODE ?? "").trim();
@@ -43,6 +45,7 @@ export default function AdminDeckEditor() {
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
   const [accessGranted, setAccessGranted] = useState(false);
   const [codeInput, setCodeInput] = useState("");
+  const [templateChoice, setTemplateChoice] = useState<TemplateKey>("none");
   const adminCode = useMemo(getAdminCode, []);
   const hasAdminCode = adminCode.length > 0;
 
@@ -168,6 +171,94 @@ export default function AdminDeckEditor() {
       setSaving(false);
     }
   }
+
+  const templates: Record<TemplateKey, string> = {
+    none: "",
+    phenotype: `
+<div class="flex flex-col gap-4 h-full justify-center">
+  <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
+    <span class="cq-chip">Phenotype</span>
+    <span class="text-[11px] text-slate-500">Click a clue to reveal an image</span>
+  </div>
+  <div class="cq-tiles grid md:grid-cols-3 gap-4 max-w-5xl mx-auto w-full">
+    <div class="cq-tile cq-hoverable">
+      <div class="cq-cardLabel"><span>Clue 1</span></div>
+      <div class="text-lg font-semibold">Phenotype clue</div>
+      <p class="cq-mute">Short description of the first phenotype clue.</p>
+    </div>
+    <div class="cq-tile cq-hoverable">
+      <div class="cq-cardLabel"><span>Clue 2</span></div>
+      <div class="text-lg font-semibold">Phenotype clue</div>
+      <p class="cq-mute">Short description of the second phenotype clue.</p>
+    </div>
+    <div class="cq-tile cq-hoverable">
+      <div class="cq-cardLabel"><span>Clue 3</span></div>
+      <div class="text-lg font-semibold">Phenotype clue</div>
+      <p class="cq-mute">Short description of the third phenotype clue.</p>
+    </div>
+  </div>
+</div>`.trim(),
+    poll: `
+<div class="cq-twoCol">
+  <div class="space-y-4">
+    <div class="cq-chip">Poll · Diagnosis</div>
+    <h2 class="cq-h2">What is the most likely diagnosis?</h2>
+    <div class="cq-card">
+      <div class="cq-cardLabel"><span>Clue</span></div>
+      <p class="cq-mute">Add a brief clue or context for this question.</p>
+    </div>
+  </div>
+  <div class="cq-tiles">
+    <div class="cq-option" data-state="idle"><span style="font-weight:900; margin-right:8px; color:rgba(148,163,184,0.9);">A.</span>Option A</div>
+    <div class="cq-option" data-state="idle"><span style="font-weight:900; margin-right:8px; color:rgba(148,163,184,0.9);">B.</span>Option B</div>
+    <div class="cq-option" data-state="idle"><span style="font-weight:900; margin-right:8px; color:rgba(148,163,184,0.9);">C.</span>Option C</div>
+    <div class="cq-option" data-state="idle"><span style="font-weight:900; margin-right:8px; color:rgba(148,163,184,0.9);">D.</span>Option D</div>
+    <div class="cq-option" data-state="idle"><span style="font-weight:900; margin-right:8px; color:rgba(148,163,184,0.9);">E.</span>Option E</div>
+  </div>
+</div>`.trim(),
+    image: `
+<div class="flex flex-col gap-4 h-full justify-center">
+  <div class="text-center space-y-2">
+    <h2 class="cq-h1 text-3xl md:text-4xl">Image Title</h2>
+    <p class="cq-p max-w-3xl mx-auto">Brief description or context for this image.</p>
+  </div>
+  <img class="cq-slide-image" src="" alt="" />
+  <p class="cq-mute text-center">Add a short caption for this image, including key teaching points.</p>
+</div>`.trim(),
+    teaching: `
+<div class="flex flex-col gap-4 h-full justify-center">
+  <div class="text-center space-y-2">
+    <h2 class="cq-h1 text-3xl md:text-4xl">Teaching Points</h2>
+    <p class="cq-p max-w-3xl mx-auto">Summarize the highest-yield pearls for this case.</p>
+  </div>
+  <div class="cq-card cq-hoverable space-y-2">
+    <div class="cq-cardLabel"><span>Key pearl</span></div>
+    <ul class="cq-list">
+      <li>High-yield teaching point #1</li>
+      <li>High-yield teaching point #2</li>
+      <li>High-yield teaching point #3</li>
+    </ul>
+  </div>
+</div>`.trim(),
+  };
+
+  const applyTemplate = (key: TemplateKey) => {
+    if (!selectedSlide || key === "none") return;
+    const templateHtml = templates[key];
+    if (!templateHtml) return;
+    const current = selectedSlide.html ?? "";
+    const isEmpty = current.trim().length === 0;
+    if (!isEmpty) {
+      const ok = window.confirm("Replace existing HTML with the selected template?");
+      if (!ok) {
+        setTemplateChoice("none");
+        return;
+      }
+    }
+    updateSlide(selectedSlide.id, "html", templateHtml);
+    setTemplateChoice("none");
+  };
+
 
   const validationMessages = useMemo(() => {
     const messages: string[] = [];
@@ -500,6 +591,20 @@ export default function AdminDeckEditor() {
                     <label className="text-xs uppercase text-slate-500">
                       Slide HTML
                     </label>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <label className="text-slate-500">Template:</label>
+                      <select
+                        value={templateChoice}
+                        onChange={(event) => applyTemplate(event.target.value as TemplateKey)}
+                        className="rounded-md bg-slate-900 border border-slate-700 px-2 py-1 text-[11px]"
+                      >
+                        <option value="none">Choose…</option>
+                        <option value="phenotype">Phenotype / Clue Grid</option>
+                        <option value="poll">Poll (MCQ)</option>
+                        <option value="image">Image + Caption</option>
+                        <option value="teaching">Teaching Pearl / Summary</option>
+                      </select>
+                    </div>
                     <p className="text-[11px] text-slate-500">
                       Tip: copy an image, click in this editor, and press <span className="font-semibold">Cmd/Ctrl + V</span> to insert an <code className="text-rose-200">&lt;img&gt;</code> tag with a data URL.
                     </p>
