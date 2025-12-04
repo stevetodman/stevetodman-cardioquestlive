@@ -627,12 +627,13 @@ export default function AdminDeckEditor() {
 
                   <div className="grid gap-4 lg:grid-cols-2">
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs uppercase text-slate-500">
+                      <label className="text-xs uppercase text-slate-500" htmlFor="slide-html-editor">
                         Slide HTML
                       </label>
                       <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <label className="text-slate-500">Template:</label>
+                        <label className="text-slate-500" htmlFor="slide-template">Template:</label>
                         <select
+                          id="slide-template"
                           value={templateChoice}
                           onChange={(event) => applyTemplate(event.target.value as TemplateKey)}
                           className="rounded-md bg-slate-900 border border-slate-700 px-2 py-1 text-[11px]"

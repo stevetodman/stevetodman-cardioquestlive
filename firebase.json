@@ -18,5 +18,20 @@
   },
   "firestore": {
     "rules": "firestore.rules"
+  },
+  "emulators": {
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8088,
+      "websocketPort": 9188
+    },
+    "hub": {
+      "host": "127.0.0.1",
+      "port": 4402
+    },
+    "logging": {
+      "host": "127.0.0.1",
+      "port": 4502
+    }
   }
 }
