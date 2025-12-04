@@ -2,6 +2,7 @@
 
 import type { Slide } from "../types";
 import { slideWrapper } from "../utils/slideWrapper";
+import { renderInteractiveTiles } from "../utils/interactiveTiles";
 
 const buildDots = (slideNumber: number, totalSlides: number) =>
   Array.from({ length: totalSlides })
@@ -112,35 +113,37 @@ export const case1Deck: Slide[] = [
       slideNumber: 2,
       totalSlides: 5,
       body: `
-        <div class="flex flex-col gap-6 h-full justify-center">
-          <div class="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-300">
-            <span class="cq-chip">Family History</span>
-          </div>
-
+        <div class="flex flex-col gap-4 h-full justify-center">
           <div class="text-center space-y-3">
             <div class="cq-emo mx-auto text-3xl">👨‍👩‍👧</div>
             <h2 class="cq-h1 text-4xl">Relevant Family History</h2>
             <p class="cq-p max-w-2xl mx-auto">Different members of the family have presented with a constellation of:</p>
           </div>
-
-          <div class="cq-tiles grid md:grid-cols-3 gap-4 max-w-5xl mx-auto w-full">
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Heart</span></div>
-              <div class="text-lg font-semibold">Heart Murmurs</div>
-              <p class="cq-mute">Multiple relatives with structural heart disease or “murmurs.”</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Limb</span></div>
-              <div class="text-lg font-semibold">Radial Anomalies</div>
-              <p class="cq-mute">Radial ray abnormalities of the upper limbs in family members.</p>
-            </div>
-            <div class="cq-tile cq-hoverable">
-              <div class="cq-cardLabel"><span>Conduction</span></div>
-              <div class="text-lg font-semibold">Conduction Defects</div>
-              <p class="cq-mute">Documented conduction disease (heart block, bradycardia).</p>
-            </div>
-          </div>
-
+          ${renderInteractiveTiles({
+            heading: "Family History",
+            helperText: "Click a clue to reveal an image",
+            tiles: [
+              {
+                id: "heart",
+                title: "Heart murmurs",
+                description: "Multiple relatives with structural heart disease or murmurs.",
+                imageUrl: "/images/genetic/img-019.png",
+              },
+              {
+                id: "limb",
+                title: "Radial anomalies",
+                description: "Radial ray abnormalities of the upper limbs in family members.",
+                imageUrl: "/images/genetic/img-004.png",
+              },
+              {
+                id: "conduction",
+                title: "Conduction defects",
+                description: "Documented conduction disease (heart block, bradycardia).",
+                imageUrl: "/images/genetic/img-005.png",
+              },
+            ],
+            role: "presenter",
+          })}
           <p class="cq-mute text-center">Heart + hand pattern → think Holt–Oram.</p>
         </div>
       `,
