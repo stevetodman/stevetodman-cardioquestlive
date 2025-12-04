@@ -16,6 +16,11 @@ This guide is a quick map for developers joining the project. It highlights wher
 - **Decks**: `src/data/case1Deck.ts`–`case11Deck.ts`, `src/data/ductalDeck.ts`
   - Gemini-styled slides + questions. Sessions pull from these to seed data.
 
+- **Gamification**:
+  - Participants tracked in `sessions/{sessionId}/participants/{userId}` with team, points, streak, correctness counts.
+  - Presenter overlays (team + individual scoreboards) subscribe to participants.
+  - Scoring is session-only and first-answer-only per question.
+
 - **Shared helpers**:
   - `src/utils/interactiveTiles.ts`: presenter-only interactive clue tiles; participant tiles remain static.
   - `src/utils/geminiHeader.ts`: compact header for Gemini slides.
@@ -33,6 +38,9 @@ This guide is a quick map for developers joining the project. It highlights wher
   - `responseId = "{uid}_{questionId}"` to enforce one response per user/question.
   - Fields: `userId`, `questionId`, `choiceIndex`, `createdAt`, `sessionId`.
   - Security: user can create/update their own deterministic doc; reads require auth.
+- `sessions/{sessionId}/participants/{userId}`: participant state for gamification
+  - Fields: `userId`, `sessionId`, `teamId`, `teamName`, `points`, `streak`, `correctCount`, `incorrectCount`, `createdAt`.
+  - Security: any authenticated user can read; only the user can write their own doc with validated shape.
 - `configs/{...}`: deck/config documents
   - Admin-only writes; reads require auth.
 
@@ -43,6 +51,8 @@ This guide is a quick map for developers joining the project. It highlights wher
 3. Session is created (`CreateDemoSession`) from the deck: writes `sessions/{sessionId}` with slides/questions and state fields.
 4. Presenter (`/#/presenter/:sessionId`) reads the session and renders slides; polls are opened/shown via top-bar controls.
 5. Participants submit responses; responses are stored under `sessions/{sessionId}/responses/{uid_questionId}` and streamed to presenter/participants.
+6. Scoring: on first submission per user/question, participant doc is updated (points/streak/correct/incorrect). Team scores derive from participant points.
+7. Presenter overlays subscribe to participants to show team standings and top individuals.
 
 ## Notes
 

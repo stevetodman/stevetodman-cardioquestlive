@@ -1,101 +1,100 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+  <img width="1200" height="475" alt="CardioQuest Live" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# CardioQuest Live
 
-This contains everything you need to run your app locally.
+Interactive pediatric cardiology teaching with presenter + student modes, Gemini-styled decks, and live-session gamification (team + individual scoring for residents).
 
-View your app in AI Studio: https://ai.studio/apps/drive/1MhhV-tJNaEOnpggBaha68lSiB7C4k3x0
+## Overview
 
-## Run Locally
+- **Presenter** runs a live session, opens questions, and shows live poll results and scoreboards.
+- **Students** join with a code, answer MCQs/interactive tiles on their own device.
+- **Gamified live sessions**: session-only points, streaks, automatic team assignment, team/individual score overlays in the presenter view.
 
-**Prerequisites:** Node.js, Firebase project with **Anonymous Auth enabled**.
+## Features
 
-1. Install dependencies:  
-   `npm install`
-2. Copy `.env.example` to `.env.local` and set your Firebase keys (`VITE_FIREBASE_*`). Keep this file out of source control.
-3. Start dev server:  
-   `npm run dev`
-4. Open `http://localhost:3000` (default Vite port) and use:
-   - Presenter: `/#/create-demo` (gets the join code)
-   - Student: `/#/join/CODE` (same network; anonymous auth required)
-   - Admin: `/#/admin` (guarded by `VITE_ADMIN_ACCESS_CODE` if set)
+- **Presenter mode**: start a session, advance slides, open/close questions, show poll results inside the slide.
+- **Student mode**: join by code, answer MCQs, view static interactive tiles.
+- **Gamification (session-only)**:
+  - Per-participant points/streaks; first answer per question counts for scoring.
+  - Auto team assignment; team scores are sums of member points.
+  - Presenter HUD overlays: team ranking and top players, with toggles.
+- **Deck admin**: edit slides/questions with templates, snippets, paste-to-image, live preview.
+- **Local dev with emulators**: Firestore/Auth emulators supported via `VITE_USE_EMULATORS=true`.
 
-### Styling
+## Data & Architecture (brief)
 
-Tailwind is built locally (no CDN). The build pipeline uses `tailwind.config.js`, `postcss.config.js`, and the `@tailwind` imports in `src/index.css`. Just run `npm run dev` or `npm run build`; no extra steps needed.
+- `sessions/{sessionId}`: `title`, `joinCode`, `slides[]`, `questions[]`, `currentSlideIndex`, `currentQuestionId`, `showResults`, `createdAt`, `createdBy`.
+- `sessions/{sessionId}/responses/{userId}_{questionId}`: one answer per user/question (`userId`, `questionId`, `choiceIndex`, `createdAt`, `sessionId`).
+- `sessions/{sessionId}/participants/{userId}`: `teamId`, `teamName`, `points`, `streak`, `correctCount`, `incorrectCount`, `createdAt`.
+- `configs/deck`: deck configuration loaded by `deckService`.
 
-### Decks
+Deeper dive: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-- Default deck uses the Gemini shell for intro/goals and Cases 1–11 (each follows: presentation → phenotype/features → images/notes → poll(s) → diagnosis).
-- Presenter UX:
-  - Polls render once in the slide; results overlay inside the slide when you click **Show results** (no separate tray). Poll controls now sit in the top bar.
-  - Navigation is streamlined to a single left/right arrow with a passive `Space = Next` hint; keyboard arrows/space still advance slides.
-  - “Grid of clues” slides (e.g., Case 3 phenotype, Case 7 phenotype) are interactive on presenter: click a tile to reveal its image, click again to clear. Participant view stays static.
+## Gamification Details
 
-### Deploy
+- **Individual scoring**
+  - Base 100 points for correct answers.
+  - Difficulty multiplier: `easy 1.0`, `medium 1.3`, `hard 1.6` (default 1.0 if unset).
+  - Streak multiplier: grows with correct streak, capped at `1.5`.
+  - Incorrect: `0` points, streak resets, `incorrectCount++`.
+  - **First-answer-only**: only the first submission per user/question affects points/streak; later edits update the response doc without changing score.
+- **Teams**
+  - Automatic least-loaded assignment on join (Team Ductus, Team Cyanosis, Team QpQs).
+  - Team score = sum of member points.
+- **Presenter overlays**
+  - Team scoreboard (rank + points) and individual scoreboard (top N players).
+  - Toggles in presenter controls to show/hide each overlay; overlays sit over the slide without blocking interactions.
 
-- Build: `npm run build`
-- Deploy hosting + rules: `firebase deploy --only hosting,firestore:rules`
-- Functions are optional and require billing + secret if you use Gemini:
-  - Set secret: `firebase functions:secrets:set GEMINI_API_KEY`
-  - Deploy with functions: `firebase deploy --only hosting,firestore:rules,functions`
+## Local Development & Emulators
 
-### Gemini (optional)
+**Prereqs:** Node.js, Firebase CLI, a Firebase project with Anonymous Auth enabled.
 
-The callable function needs the secret set server-side (see above) and billing enabled on your Firebase project.
+**Env flags**
 
-### Deck Admin
+- `VITE_FIREBASE_*` → your Firebase keys (set in `.env.local`).
+- `VITE_USE_EMULATORS=true` → route Firestore/Auth/Functions to local emulators.
+- Optional ports/host overrides: `VITE_FIRESTORE_EMULATOR_PORT` (default 8088), `VITE_AUTH_EMULATOR_PORT` (9099), `VITE_FUNCTIONS_EMULATOR_PORT` (5001), `VITE_EMULATOR_HOST` (127.0.0.1).
 
-- Set an optional `VITE_ADMIN_ACCESS_CODE` in `.env.local` (and hosting secrets) to gate the deck editor UI.
-- Visit `/#/admin` after running `npm run dev` (or on production) to edit slides/questions via the UI.
-- Changes are saved to Firestore (`configs/deck`) and used automatically when creating new sessions.
-- Slide editing comforts:
-  - Templates to scaffold common slides (phenotype grids, polls, image + caption, teaching summary).
-  - Quick-insert snippets (headings, clue boxes, teaching pearls).
-  - Paste images directly into the HTML editor (inserts a styled `cq-slide-image` data-URL tag).
-  - Live presenter-style preview updates as you type. See [docs/ADMIN_SLIDE_EDITING.md](docs/ADMIN_SLIDE_EDITING.md) for a quick guide.
+**Typical workflow**
 
-## How to build a slide (Admin)
+```bash
+# Terminal 1: Firestore + Auth (and Functions if needed) emulators
+firebase emulators:start --only firestore,auth --project cardioquest-live-test
 
-- Go to `/#/admin` (requires `VITE_ADMIN_ACCESS_CODE` if set), select a slide from the list.
-- Slides are plain HTML strings rendered as-is in the presenter.
-- The editor supports:
-  - **Templates**: Phenotype / Clue Grid, Poll (MCQ), Image + Caption, Teaching Pearl.
-  - **Snippets**: one-click inserts for headings, clue boxes, teaching pearls.
-  - **Paste images**: copy an image, click in the editor, Cmd/Ctrl+V to insert a styled `<img>` with a data URL (soft warning on large images; optional alt text prompt).
-- A live presenter-style preview sits next to the editor so you can see changes immediately.
-- For step-by-step details, see [docs/ADMIN_SLIDE_EDITING.md](docs/ADMIN_SLIDE_EDITING.md).
+# Terminal 2: Vite dev server using emulators
+VITE_USE_EMULATORS=true npm run dev
+# Open http://localhost:3000 (or your Vite port)
+```
 
-## Architecture overview
+**App entry points**
+- Presenter: `/#/create-demo` (creates a session) → `/#/presenter/:sessionId`
+- Student: `/#/join/CODE`
+- Admin: `/#/admin` (guarded by optional `VITE_ADMIN_ACCESS_CODE`)
 
-- **Deck content**: Gemini-styled decks live under `src/data` (`case1Deck.ts`–`case11Deck.ts`, `ductalDeck.ts`) and are consumed by sessions.
-- **Admin editor**: `/#/admin` (`src/pages/AdminDeckEditor.tsx`) edits `slide.html` strings with templates, snippets, paste-to-image, and a live preview.
-- **Presenter**: `/#/presenter/:sessionId` (`src/pages/PresenterSession.tsx`) renders the current session slide and in-slide poll overlay; nav uses arrows/Space.
-- **Data model**: Firestore `sessions/{sessionId}` hold slide/question state; `responses/{uid_questionId}` subcollection stores poll answers; `configs/**` holds deck config (admin writes only). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and `firestore.rules`.
-- Slide editing comforts:
-  - Templates to scaffold common slides (phenotype grids, polls, image + caption, teaching summary).
-  - Quick-insert snippets (headings, clue boxes, teaching pearls).
-  - Paste images directly into the HTML editor (inserts a styled `cq-slide-image` data-URL tag).
-  - Live presenter-style preview updates as you type. See `docs/ADMIN_SLIDE_EDITING.md` for a quick guide.
+## Testing
 
-### Testing
+- Unit/UI/rules tests: `npm test -- --runInBand`
+- To run rules tests against the emulator, you can wrap with:
 
-- The project uses Jest + Testing Library for unit tests. Run `npm test` to execute the suite (see `src/pages/__tests__/AdminDeckEditor.test.tsx` for an example).
-- Firestore security rules have Jest coverage; run them with the emulator via  
-  `FIRESTORE_EMULATOR_HOST=127.0.0.1:8088 firebase emulators:exec --only firestore --project cardioquest-live-test "npm test -- --runInBand"` (ports are set in `firebase.json` to avoid busy 8080).
-- Jest is configured via `jest.config.ts`, and global helpers live under `test/`.
+```bash
+firebase emulators:exec --only firestore --project cardioquest-live-test "npm test -- --runInBand"
+```
 
-Looking for a full explanation of how the Firebase project, Google AI Studio, and Gemini API key work together? Read [docs/GOOGLE_AI_STUDIO.md](docs/GOOGLE_AI_STUDIO.md).
+Emulator ports are set in `firebase.json` (Firestore 8088/9188). The test suite skips rules tests if it cannot reach the emulator.
 
-### Firebase emulators (for future uploads)
+## Deck Authoring & Admin
 
-If we later add Firebase Storage–based uploads (e.g., for images instead of data URLs), we will use the Firebase emulators in development.
+- Deck source: `src/data/case1Deck.ts`–`case11Deck.ts`, `src/data/ductalDeck.ts`.
+- Admin editor (`/#/admin`): templates (Phenotype grid, Poll, Image+Caption, Teaching Pearl), snippets, paste-to-image (data URL), live preview. Writes to `configs/deck` via `deckService`.
+- Creating sessions: `CreateDemoSession` seeds Firestore `sessions/{sessionId}` from the deck.
 
-When that happens, you’ll likely need something like:
+## Additional Notes
 
-- `VITE_USE_EMULATORS=true` in `.env.local`
-- Storage emulator running (e.g., `localhost:9199`)
+- Slides are trusted HTML strings rendered in presenter mode; keep content trusted.
+- Poll responses are deterministic IDs `uid_questionId` to enforce one answer per user/question.
+- Participants subcollection powers scores/teams; presenter overlays listen to participants in real time.
 
-We’ll update this section with concrete instructions once uploads are wired in.
+For admin editing tips: [docs/ADMIN_SLIDE_EDITING.md](docs/ADMIN_SLIDE_EDITING.md).  
+For architecture details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

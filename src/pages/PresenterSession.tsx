@@ -93,24 +93,22 @@ export default function PresenterSession() {
   useEffect(() => {
     if (!slideRef.current) return;
     const root = slideRef.current;
-    const prevBtn = root.querySelector(".cq-nav .cq-btn:not(.cq-btnPrimary)");
-    const nextBtn = root.querySelector(".cq-nav .cq-btnPrimary");
+    const nav = root.querySelector(".cq-nav");
+    if (!nav) return;
 
-    const handlePrev = (e: Event) => {
+    const handleClick = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      const btn = target?.closest(".cq-btn") as HTMLElement | null;
+      if (!btn) return;
       e.preventDefault();
-      goToSlide(-1);
-    };
-    const handleNext = (e: Event) => {
-      e.preventDefault();
-      goToSlide(1);
+      const isNext = btn.classList.contains("cq-btnPrimary");
+      goToSlide(isNext ? 1 : -1);
     };
 
-    prevBtn?.addEventListener("click", handlePrev);
-    nextBtn?.addEventListener("click", handleNext);
+    nav.addEventListener("click", handleClick);
 
     return () => {
-      prevBtn?.removeEventListener("click", handlePrev);
-      nextBtn?.removeEventListener("click", handleNext);
+      nav.removeEventListener("click", handleClick);
     };
   }, [currentSlide, goToSlide]);
 
@@ -185,30 +183,35 @@ export default function PresenterSession() {
         <div className="text-[10px] uppercase tracking-[0.22em] text-slate-500 font-semibold">
           {session.title}
         </div>
-        <div className="flex items-center gap-2">
-          <div className="hidden md:flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setShowTeamScores((v) => !v)}
-              className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
-                showTeamScores
-                  ? "border-sky-500/70 bg-sky-500/15 text-sky-100"
-                  : "border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700"
-              }`}
-            >
-              Team scores
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowIndividualScores((v) => !v)}
-              className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
-                showIndividualScores
-                  ? "border-emerald-500/70 bg-emerald-500/15 text-emerald-100"
-                  : "border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700"
-              }`}
-            >
-              Players
-            </button>
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          <div className="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-sm shadow-black/20">
+            <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+              Gamification
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setShowTeamScores((v) => !v)}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
+                  showTeamScores
+                    ? "bg-sky-600/20 border-sky-500/60 text-sky-100 shadow-sm shadow-sky-900/30"
+                    : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+                }`}
+              >
+                Team scores
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowIndividualScores((v) => !v)}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
+                  showIndividualScores
+                    ? "bg-emerald-600/15 border-emerald-500/60 text-emerald-100 shadow-sm shadow-emerald-900/30"
+                    : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+                }`}
+              >
+                Top players
+              </button>
+            </div>
           </div>
           {isQuestionSlide && (
             <div className="hidden md:flex items-center gap-1.5 text-[11px]">
@@ -267,13 +270,13 @@ export default function PresenterSession() {
             />
 
             {showTeamScores && (teams?.length ?? 0) > 0 && (
-              <div className="absolute top-3 right-3 z-30 pointer-events-none">
+              <div className="absolute top-4 right-4 z-30 pointer-events-none">
                 <TeamScoreboard teams={teams} />
               </div>
             )}
 
             {showIndividualScores && (players?.length ?? 0) > 0 && (
-              <div className="absolute bottom-3 right-3 z-30 pointer-events-none">
+              <div className="absolute bottom-4 right-4 z-30 pointer-events-none">
                 <IndividualScoreboard players={players} />
               </div>
             )}
