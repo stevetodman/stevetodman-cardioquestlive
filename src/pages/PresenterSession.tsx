@@ -123,48 +123,7 @@ export default function PresenterSession() {
           <div
             className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
             dangerouslySetInnerHTML={{ __html: currentSlide?.html ?? "" }}
-            style={{ paddingBottom: "80px" }}
           />
-
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-slate-900/85 border border-slate-700 rounded-full px-4 py-2 shadow-xl flex-wrap md:flex-nowrap justify-center">
-            {currentQuestion ? (
-              <div className="flex items-center gap-2 flex-wrap md:flex-nowrap">
-                <button
-                  onClick={openQuestion}
-                  className={`cq-btn text-sm px-3 ${
-                    session.currentQuestionId === currentQuestion.id ? "cq-btnPrimary" : ""
-                  }`}
-                >
-                  {session.currentQuestionId === currentQuestion.id ? "Question Open" : "Open Question"}
-                </button>
-                <button
-                  onClick={toggleResults}
-                  disabled={session.currentQuestionId !== currentQuestion.id}
-                  className="cq-btn text-sm px-3 disabled:opacity-50"
-                >
-                  {session.showResults ? "Hide Results" : "Show Results"}
-                </button>
-                <span className="h-6 w-px bg-slate-700 mx-1 hidden md:inline" aria-hidden="true"></span>
-              </div>
-            ) : null}
-            <button
-              onClick={() => goToSlide(-1)}
-              disabled={session.currentSlideIndex === 0}
-              className="cq-btn text-sm px-3 disabled:opacity-50"
-            >
-              ← Prev
-            </button>
-            <span className="text-xs text-slate-400">
-              {session.currentSlideIndex + 1} / {slides.length}
-            </span>
-            <button
-              onClick={() => goToSlide(1)}
-              disabled={session.currentSlideIndex === slides.length - 1}
-              className="cq-btn cq-btnPrimary text-sm px-3 disabled:opacity-50"
-            >
-              Next →
-            </button>
-          </div>
         </div>
       </div>
     </div>
