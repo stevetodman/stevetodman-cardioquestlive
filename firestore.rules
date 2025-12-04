@@ -17,17 +17,25 @@ service cloud.firestore {
     }
 
     match /sessions/{sessionId} {
+      function hasSessionShape(data) {
+        return data.keys().hasAll(["createdBy", "joinCode", "slides", "questions", "currentSlideIndex", "currentQuestionId", "showResults"]) &&
+          data.createdBy is string &&
+          data.joinCode is string &&
+          data.slides is list &&
+          data.questions is list &&
+          data.currentSlideIndex is number &&
+          (data.currentQuestionId == null || data.currentQuestionId is string) &&
+          data.showResults is bool;
+      }
+
       function isValidSessionCreate() {
-        return request.resource.data.keys().hasAll(["createdBy", "joinCode", "slides"]) &&
-          request.resource.data.createdBy == request.auth.uid &&
-          request.resource.data.joinCode is string &&
-          request.resource.data.slides is list;
+        return hasSessionShape(request.resource.data) &&
+          request.resource.data.createdBy == request.auth.uid;
       }
 
       function isValidSessionUpdate() {
-        return request.resource.data.createdBy == resource.data.createdBy &&
-          request.resource.data.joinCode is string &&
-          request.resource.data.slides is list;
+        return hasSessionShape(request.resource.data) &&
+          request.resource.data.createdBy == resource.data.createdBy;
       }
 
       allow read: if isAuthenticated();
