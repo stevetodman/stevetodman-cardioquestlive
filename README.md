@@ -51,6 +51,11 @@ The callable function needs the secret set server-side (see above) and billing e
 - Set an optional `VITE_ADMIN_ACCESS_CODE` in `.env.local` (and hosting secrets) to gate the deck editor UI.
 - Visit `/#/admin` after running `npm run dev` (or on production) to edit slides/questions via the UI.
 - Changes are saved to Firestore (`configs/deck`) and used automatically when creating new sessions.
+- Slide editing comforts:
+  - Templates to scaffold common slides (phenotype grids, polls, image + caption, teaching summary).
+  - Quick-insert snippets (headings, clue boxes, teaching pearls).
+  - Paste images directly into the HTML editor (inserts a styled `cq-slide-image` data-URL tag).
+  - Live presenter-style preview updates as you type. See `docs/ADMIN_SLIDE_EDITING.md` for a quick guide.
 
 ### Testing
 
