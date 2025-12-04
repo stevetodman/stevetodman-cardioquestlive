@@ -1,5 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
+  /* Permission model:
+   * - Sessions: any authed user can read. Only creator (or admin) can update/delete.
+   *   createdBy is immutable; joinCode/slides validated on create/update.
+   * - Responses: one doc per (user, question) using responseId = uid + "_" + questionId.
+   *   Users can read; create/update only their own deterministic doc.
+   * - Configs: reads allowed to authed users; writes restricted to admins (custom claim admin=true).
+   */
   match /databases/{database}/documents {
     function isAuthenticated() {
       return request.auth != null;
