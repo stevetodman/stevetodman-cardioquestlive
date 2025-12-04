@@ -232,9 +232,18 @@ export const case4Deck: Slide[] = [
 
           <div class="cq-card cq-hoverable h-full relative overflow-hidden bg-gradient-to-br from-slate-900/90 to-slate-950/90">
             <div class="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.3),transparent_40%),radial-gradient(circle_at_80%_40%,rgba(236,72,153,0.25),transparent_35%)]"></div>
-            <div class="relative h-full w-full flex items-center justify-center">
-              <div class="cq-mute text-center px-4">
-                Multisystem hamartomas: skin, heart (rhabdomyomas), CNS, eyes.
+            <div class="relative h-full w-full grid md:grid-cols-2 gap-3 p-3">
+              <div class="cq-card bg-slate-900/80 border border-slate-700/70 cursor-pointer hover:border-indigo-300/80 hover:shadow-indigo-500/30 transition">
+                <div class="cq-cardLabel"><span>Skin clues</span><span class="cq-chip">ash-leaf / shagreen / angiofibromas</span></div>
+                <div class="cq-mute text-sm">
+                  Ash-leaf hypopigmented macules; rough “shagreen” patch; facial angiofibromas along the malar area; periungual fibromas. Hover to highlight; imagine revealing each lesion in a gallery.
+                </div>
+              </div>
+              <div class="cq-card bg-slate-900/80 border border-slate-700/70 cursor-pointer hover:border-indigo-300/80 hover:shadow-indigo-500/30 transition">
+                <div class="cq-cardLabel"><span>Cardiac</span><span class="cq-chip">Rhabdomyomas</span></div>
+                <div class="cq-mute text-sm">
+                  Intracardiac rhabdomyomas often detected prenatally; they tend to regress. Pair this with the skin/CNS findings to lock in tuberous sclerosis. Hover for focus.
+                </div>
               </div>
             </div>
           </div>

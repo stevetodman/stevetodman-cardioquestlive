@@ -3,7 +3,6 @@ import { useParams, Link } from "react-router-dom";
 import { doc, onSnapshot, updateDoc, db } from "../utils/firestore"; // Updated import
 import { SessionData, Question } from "../types";
 import { ResponsesChart } from "../components/ResponsesChart";
-import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 export default function PresenterSession() {
   const { sessionId } = useParams();
@@ -29,8 +28,7 @@ export default function PresenterSession() {
     session ? session.questions.map((q) => [q.id, q]) : []
   );
 
-  const sanitizedSlideHtml = sanitizeHtml(currentSlide?.html ?? "");
-  const currentQuestion =
+    const currentQuestion =
     currentSlide?.type === "question" && currentSlide.questionId
       ? questionsMap.get(currentSlide.questionId)
       : null;
@@ -124,7 +122,7 @@ export default function PresenterSession() {
         <div className="w-full max-w-[1800px] aspect-video relative">
           <div
             className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
-            dangerouslySetInnerHTML={{ __html: sanitizedSlideHtml }}
+            dangerouslySetInnerHTML={{ __html: currentSlide?.html ?? "" }}
             style={{ paddingBottom: "80px" }}
           />
 
