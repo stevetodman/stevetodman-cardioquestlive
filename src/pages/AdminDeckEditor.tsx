@@ -383,6 +383,28 @@ export default function AdminDeckEditor() {
     }
   };
 
+  const insertSnippet = (snippet: string) => {
+    if (!selectedSlide) return;
+    const textarea = document.getElementById("slide-html-editor") as HTMLTextAreaElement | null;
+    if (!textarea) return;
+    const { selectionStart, selectionEnd, value } = textarea;
+    const nextValue = value.slice(0, selectionStart) + snippet + value.slice(selectionEnd);
+    updateSlide(selectedSlide.id, "html", nextValue);
+  };
+
+  const snippetButtons = [
+    { label: "+ Heading", snippet: "\n<h1>Slide Title</h1>\n" },
+    { label: "+ Subheading", snippet: "\n<h2>Section Heading</h2>\n" },
+    {
+      label: "+ Clue box",
+      snippet: `\n<div class="cq-card cq-hoverable space-y-2">\n  <div class="cq-cardLabel"><span>Clue Title</span></div>\n  <p class="cq-mute">Short description of this clue.</p>\n</div>\n`,
+    },
+    {
+      label: "+ Teaching pearl",
+      snippet: `\n<div class="cq-card cq-hoverable space-y-2">\n  <div class="cq-cardLabel"><span>Teaching Pearl</span></div>\n  <ul class="cq-list">\n    <li>High-yield point #1</li>\n    <li>High-yield point #2</li>\n  </ul>\n</div>\n`,
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 p-4">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -604,12 +626,25 @@ export default function AdminDeckEditor() {
                         <option value="image">Image + Caption</option>
                         <option value="teaching">Teaching Pearl / Summary</option>
                       </select>
+                      <div className="flex items-center gap-2">
+                        {snippetButtons.map((btn) => (
+                          <button
+                            key={btn.label}
+                            type="button"
+                            onClick={() => insertSnippet(btn.snippet)}
+                            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] hover:bg-slate-800"
+                          >
+                            {btn.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <p className="text-[11px] text-slate-500">
                       Tip: copy an image, click in this editor, and press <span className="font-semibold">Cmd/Ctrl + V</span> to insert an <code className="text-rose-200">&lt;img&gt;</code> tag with a data URL.
                     </p>
                     <textarea
                       value={selectedSlide.html}
+                      id="slide-html-editor"
                       onPaste={handleHtmlPaste}
                       onChange={(event) =>
                         updateSlide(
