@@ -283,7 +283,7 @@ export default function AdminDeckEditor() {
 
     try {
       const dataUrl = await fileToDataUrl(file);
-      const imgTag = `<img src="${dataUrl}" alt="" />`;
+      const imgTag = `\n<img class="cq-slide-image" src="${dataUrl}" alt="" />\n`;
       const nextValue = value.slice(0, selectionStart) + imgTag + value.slice(selectionEnd);
       updateSlide(selectedSlide.id, "html", nextValue);
     } catch (err) {

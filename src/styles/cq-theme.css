@@ -400,6 +400,17 @@
   margin-right: auto;
 }
 
+.cq-slide-image {
+  display: block;
+  max-width: min(100%, 720px);
+  height: auto;
+  margin: 1.5rem auto;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.3);
+  object-fit: contain;
+}
+
 .cq-emo {
   display: inline-flex;
   align-items: center;
