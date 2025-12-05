@@ -5,7 +5,13 @@ import { SessionManager } from "./sessionManager";
 import { ClientToServerMessage, ServerToClientMessage } from "./messageTypes";
 import { log, logError } from "./logger";
 import { getOpenAIClient, MODEL } from "./openaiClient";
-import { getOrCreatePatientEngine } from "./patientEngine";
+import { getOrCreatePatientEngine, setScenarioForSession, getScenarioForSession } from "./patientEngine";
+import { synthesizePatientAudio } from "./ttsClient";
+import { transcribeDoctorAudio } from "./sttClient";
+import { Buffer } from "buffer";
+import { PatientScenarioId } from "./patientCase";
+import { analyzeTranscript } from "./debriefAnalyzer";
+import { DebriefTurn } from "./messageTypes";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
@@ -70,10 +76,26 @@ function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.RawData
       });
       break;
     }
+    case "doctor_audio": {
+      handleDoctorAudio(ctx.sessionId, parsed.userId, parsed.audioBase64, parsed.contentType);
+      break;
+    }
+    case "set_scenario": {
+      handleScenarioChange(ctx.sessionId, parsed.scenarioId);
+      break;
+    }
+    case "analyze_transcript": {
+      handleAnalyzeTranscript(ctx.sessionId, parsed.turns);
+      break;
+    }
     case "voice_command": {
       log("Voice command", parsed.commandType, "by", parsed.userId, "session", ctx.sessionId);
       if (parsed.commandType === "force_reply") {
-        handleForceReply(ctx.sessionId, parsed.userId);
+        const doctorUtterance =
+          typeof parsed.payload?.doctorUtterance === "string"
+            ? parsed.payload.doctorUtterance.trim()
+            : undefined;
+        handleForceReply(ctx.sessionId, parsed.userId, doctorUtterance);
       } else if (parsed.commandType === "pause_ai") {
         sessionManager.broadcastToSession(ctx.sessionId, {
           type: "patient_state",
@@ -132,7 +154,7 @@ function main() {
   });
 }
 
-async function handleForceReply(sessionId: string, userId: string) {
+async function handleForceReply(sessionId: string, userId: string, doctorUtterance?: string) {
   const openai = getOpenAIClient();
   if (!openai) {
     log("OPENAI_API_KEY not set; using stub patient response");
@@ -156,9 +178,16 @@ async function handleForceReply(sessionId: string, userId: string) {
 
   const engine = getOrCreatePatientEngine(sessionId);
   const doctorPrompt =
-    "The doctor has just asked you a follow-up question about your chest pain and palpitations. Answer naturally in character.";
+    doctorUtterance && doctorUtterance.length > 0
+      ? doctorUtterance
+      : "The doctor has just asked you a follow-up question about your chest pain and palpitations. Answer naturally in character.";
 
   engine.appendDoctorTurn(doctorPrompt);
+  log(
+    "force_reply received",
+    sessionId,
+    doctorUtterance && doctorUtterance.length > 0 ? "with doctorUtterance" : "no doctorUtterance"
+  );
 
   try {
     sessionManager.broadcastToSession(sessionId, {
@@ -167,7 +196,7 @@ async function handleForceReply(sessionId: string, userId: string) {
       state: "speaking",
     });
 
-    const messages = engine.getHistory().concat({ role: "user", content: doctorPrompt });
+    const messages = engine.getHistory();
     let fullText = "";
 
     const stream = await openai.chat.completions.create({
@@ -187,7 +216,17 @@ async function handleForceReply(sessionId: string, userId: string) {
       });
     }
 
-    engine.appendPatientTurn(fullText.trim());
+    const finalText = fullText.trim();
+    engine.appendPatientTurn(finalText);
+
+    const audioBuffer = await synthesizePatientAudio(finalText);
+    if (audioBuffer) {
+      sessionManager.broadcastToPresenters(sessionId, {
+        type: "patient_audio",
+        sessionId,
+        audioBase64: audioBuffer.toString("base64"),
+      });
+    }
 
     sessionManager.broadcastToSession(sessionId, {
       type: "patient_state",
@@ -207,6 +246,65 @@ async function handleForceReply(sessionId: string, userId: string) {
       sessionId,
       text: "I'm sorry, I'm having trouble answering right now.",
     });
+  }
+}
+
+function handleScenarioChange(sessionId: string, scenarioId: PatientScenarioId) {
+  const allowed: PatientScenarioId[] = [
+    "exertional_chest_pain",
+    "syncope",
+    "palpitations_svt",
+  ];
+  if (!allowed.includes(scenarioId)) {
+    log("Ignoring invalid scenarioId", scenarioId);
+    return;
+  }
+  setScenarioForSession(sessionId, scenarioId);
+  log("Scenario changed", sessionId, scenarioId);
+  sessionManager.broadcastToPresenters(sessionId, {
+    type: "scenario_changed",
+    sessionId,
+    scenarioId,
+  });
+}
+
+async function handleDoctorAudio(
+  sessionId: string,
+  userId: string,
+  audioBase64: string,
+  contentType: string
+) {
+  try {
+    const audioBuffer = Buffer.from(audioBase64, "base64");
+    const text = await transcribeDoctorAudio(audioBuffer, contentType);
+    if (text && text.trim().length > 0) {
+      log("Doctor utterance transcribed", sessionId);
+      sessionManager.broadcastToPresenters(sessionId, {
+        type: "doctor_utterance",
+        sessionId,
+        userId,
+        text,
+      });
+    }
+  } catch (err) {
+    logError("doctor_audio handling failed", err);
+  }
+}
+
+async function handleAnalyzeTranscript(sessionId: string, turns: DebriefTurn[]) {
+  if (!Array.isArray(turns) || turns.length === 0) return;
+  try {
+    const result = await analyzeTranscript(turns);
+    sessionManager.broadcastToPresenters(sessionId, {
+      type: "analysis_result",
+      sessionId,
+      summary: result.summary,
+      strengths: result.strengths,
+      opportunities: result.opportunities,
+      teachingPoints: result.teachingPoints,
+    });
+  } catch (err) {
+    logError("Debrief analysis error", err);
   }
 }
 

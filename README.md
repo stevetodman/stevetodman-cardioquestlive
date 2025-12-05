@@ -22,6 +22,11 @@ Interactive pediatric cardiology teaching with presenter + student modes, Gemini
   - Presenter HUD overlays: team ranking and top players, with toggles.
 - **Deck admin**: edit slides/questions with templates, snippets, paste-to-image, live preview.
 - **Local dev with emulators**: Firestore/Auth emulators supported via `VITE_USE_EMULATORS=true`.
+- **Virtual patient voice (presenter)**:
+  - Text answers stream into the overlay; a transcript panel logs doctor ↔ patient turns with copy/download.
+  - Optional TTS audio plays on the presenter side when OpenAI TTS is configured in `voice-gateway/.env`.
+  - Push-to-talk resident questions are transcribed via OpenAI STT to auto-fill the doctor question box; optional auto Force Reply toggle.
+  - Presenter can switch between predefined patient cases (exertional chest pain, syncope, SVT).
 
 ## Data & Architecture (brief)
 
@@ -67,6 +72,23 @@ firebase emulators:start --only firestore,auth --project cardioquest-live-test
 VITE_USE_EMULATORS=true npm run dev
 # Open http://localhost:3000 (or your Vite port)
 ```
+
+**Voice gateway / AI patient**
+
+```bash
+# Terminal: voice gateway (WebSocket + patient brain + optional TTS)
+cd voice-gateway
+npm install
+npm run build
+npm start   # ws://localhost:8081/ws/voice
+```
+
+Env for gateway (in `voice-gateway/.env`):
+- `OPENAI_API_KEY` (required for real replies / TTS; otherwise stub text only)
+- `OPENAI_MODEL` (default `gpt-4.1-mini`)
+- `OPENAI_TTS_MODEL` (default `gpt-4o-mini-tts`)
+- `OPENAI_TTS_VOICE` (default `alloy`)
+- `PORT` (default `8081`)
 
 **App entry points**
 - Presenter: `/#/create-demo` (creates a session) → `/#/presenter/:sessionId`

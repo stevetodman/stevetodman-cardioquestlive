@@ -1,4 +1,4 @@
-import { PatientCase, createDefaultPatientCase } from "./patientCase";
+import { PatientCase, PatientScenarioId, createDefaultPatientCase } from "./patientCase";
 import { buildPatientSystemPrompt } from "./patientPersona";
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -9,6 +9,7 @@ type EngineState = {
 };
 
 const engines = new Map<string, EngineState>();
+const sessionScenarios = new Map<string, PatientScenarioId>();
 const MAX_HISTORY = 12;
 
 function trimHistory(history: ChatMessage[]): ChatMessage[] {
@@ -20,9 +21,19 @@ function trimHistory(history: ChatMessage[]): ChatMessage[] {
   return system ? [system, ...trimmed] : trimmed;
 }
 
+export function setScenarioForSession(sessionId: string, scenarioId: PatientScenarioId) {
+  sessionScenarios.set(sessionId, scenarioId);
+  engines.delete(sessionId);
+}
+
+export function getScenarioForSession(sessionId: string): PatientScenarioId {
+  return sessionScenarios.get(sessionId) ?? "exertional_chest_pain";
+}
+
 export function getOrCreatePatientEngine(sessionId: string) {
   if (!engines.has(sessionId)) {
-    const caseData = createDefaultPatientCase(sessionId);
+    const scenario = getScenarioForSession(sessionId);
+    const caseData = createDefaultPatientCase(sessionId, scenario);
     const systemPrompt = buildPatientSystemPrompt(caseData);
     engines.set(sessionId, {
       caseData,

@@ -63,7 +63,9 @@ export default function JoinSession() {
   );
   const [voiceActionPending, setVoiceActionPending] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
+  const [transcribing, setTranscribing] = useState(false);
   const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus>("disconnected");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const voice = useVoiceState(sessionId);
   const userDisplayName = auth?.currentUser?.displayName ?? "Resident";
 
@@ -124,6 +126,22 @@ export default function JoinSession() {
     const unsub = voicePatientService.onLevel((level) => setMicLevel(level));
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    const unsub = voicePatientService.onTurnComplete(async (blob) => {
+      if (!sessionId || !userId) return;
+      if (!blob || blob.size === 0) return;
+      try {
+        setTranscribing(true);
+        await voiceGatewayClient.sendDoctorAudio(blob);
+      } catch (err) {
+        console.error("Failed to send doctor audio", err);
+      } finally {
+        setTranscribing(false);
+      }
+    });
+    return () => unsub();
+  }, [sessionId, userId]);
 
   useEffect(() => {
     const unsub = voiceGatewayClient.onStatus((status) => setGatewayStatus(status));
@@ -250,10 +268,16 @@ export default function JoinSession() {
   const handleTakeFloor = async () => {
     if (!sessionId || !userId) return;
     setVoiceActionPending(true);
+    setVoiceError(null);
+    console.log("[voice] takeFloor tapped", { sessionId, userId });
     try {
       await takeFloorTx(sessionId, { uid: userId, displayName: userDisplayName });
+      console.log("[voice] takeFloor success", { sessionId, userId });
     } catch (err) {
       console.error("Failed to take floor", err);
+      setVoiceError(
+        "Could not take the floor. Ask the presenter to check voice settings/permissions."
+      );
     } finally {
       setVoiceActionPending(false);
     }
@@ -431,6 +455,7 @@ export default function JoinSession() {
               labelIdle="Hold to speak"
               labelDisabled={voice.enabled ? "You don't have the floor" : "Voice off"}
             />
+            {voiceError && <div className="text-[11px] text-rose-300">{voiceError}</div>}
             <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
               Mic level
             </div>
@@ -440,6 +465,9 @@ export default function JoinSession() {
                 style={{ width: `${Math.min(100, Math.round(micLevel * 140))}%` }}
               ></div>
             </div>
+            {transcribing && (
+              <div className="text-[11px] text-slate-400">Transcribing your question...</div>
+            )}
           </div>
         </section>
 

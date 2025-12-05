@@ -63,7 +63,7 @@ service cloud.firestore {
             && isValidSessionUpdate()
           ) ||
           (
-            isVoiceOnlyChange() && isValidSessionUpdate()
+            isVoiceOnlyChange() && hasValidVoice(request.resource.data.voice)
           )
         );
 

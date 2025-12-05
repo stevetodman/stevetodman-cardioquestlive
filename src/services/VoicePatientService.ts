@@ -1,4 +1,5 @@
 type LevelSubscriber = (level: number) => void;
+type TurnCompleteSubscriber = (blob: Blob) => void;
 
 const AudioContextCtor: typeof AudioContext | undefined =
   typeof window !== "undefined"
@@ -12,8 +13,11 @@ export class VoicePatientService {
   private analyser: AnalyserNode | null = null;
   private rafId: number | null = null;
   private subscribers = new Set<LevelSubscriber>();
+  private turnSubscribers = new Set<TurnCompleteSubscriber>();
   private capturing = false;
   private visibilityHandlerBound: (() => void) | null = null;
+  private mediaRecorder: MediaRecorder | null = null;
+  private recordedChunks: Blob[] = [];
 
   constructor() {
     if (typeof document !== "undefined") {
@@ -55,6 +59,26 @@ export class VoicePatientService {
     this.analyser.fftSize = 1024;
     this.source.connect(this.analyser);
 
+    this.recordedChunks = [];
+    if (typeof MediaRecorder !== "undefined") {
+      this.mediaRecorder = new MediaRecorder(this.stream, { mimeType: "audio/webm" });
+      this.mediaRecorder.ondataavailable = (evt: BlobEvent) => {
+        if (evt.data && evt.data.size > 0) {
+          this.recordedChunks.push(evt.data);
+        }
+      };
+      this.mediaRecorder.onstop = () => {
+        if (this.recordedChunks.length > 0) {
+          const blob = new Blob(this.recordedChunks, { type: this.mediaRecorder?.mimeType || "audio/webm" });
+          this.emitTurnComplete(blob);
+        }
+        this.recordedChunks = [];
+      };
+      this.mediaRecorder.start();
+    } else {
+      console.warn("MediaRecorder not available; audio capture will be RMS-only.");
+    }
+
     const dataArray = new Uint8Array(this.analyser.fftSize);
     this.capturing = true;
 
@@ -79,6 +103,14 @@ export class VoicePatientService {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
+    if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+      try {
+        this.mediaRecorder.stop();
+      } catch {
+        // ignore
+      }
+    }
+    this.mediaRecorder = null;
     if (this.source && this.analyser) {
       try {
         this.source.disconnect(this.analyser);
@@ -103,12 +135,27 @@ export class VoicePatientService {
     };
   }
 
+  onTurnComplete(callback: TurnCompleteSubscriber): () => void {
+    this.turnSubscribers.add(callback);
+    return () => this.turnSubscribers.delete(callback);
+  }
+
   private emitLevel(level: number) {
     this.subscribers.forEach((cb) => {
       try {
         cb(level);
       } catch (err) {
         console.error("Level subscriber error", err);
+      }
+    });
+  }
+
+  private emitTurnComplete(blob: Blob) {
+    this.turnSubscribers.forEach((cb) => {
+      try {
+        cb(blob);
+      } catch (err) {
+        console.error("Turn complete subscriber error", err);
       }
     });
   }

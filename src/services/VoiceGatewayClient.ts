@@ -1,9 +1,22 @@
-import { ClientRole, ClientToServerMessage, ServerToClientMessage, PatientState, GatewayStatus } from "../types/voiceGateway";
+import {
+  ClientRole,
+  ClientToServerMessage,
+  ServerToClientMessage,
+  PatientState,
+  GatewayStatus,
+  PatientScenarioId,
+  DebriefTurn,
+  AnalysisResult,
+} from "../types/voiceGateway";
 
 type PatientStateListener = (state: PatientState) => void;
 type TranscriptListener = (text: string) => void;
 type ParticipantStateListener = (info: { userId: string; speaking: boolean }) => void;
 type StatusListener = (status: GatewayStatus) => void;
+type AudioListener = (audioUrl: string) => void;
+type DoctorUtteranceListener = (text: string, userId: string) => void;
+type ScenarioListener = (scenarioId: PatientScenarioId) => void;
+type AnalysisResultListener = (result: AnalysisResult) => void;
 
 const DEFAULT_URL =
   (typeof globalThis !== "undefined" && (globalThis as any).__VITE_VOICE_GATEWAY_URL) ||
@@ -27,6 +40,11 @@ class VoiceGatewayClient {
   private transcriptListeners = new Set<TranscriptListener>();
   private participantListeners = new Set<ParticipantStateListener>();
   private statusListeners = new Set<StatusListener>();
+  private audioListeners = new Set<AudioListener>();
+  private doctorListeners = new Set<DoctorUtteranceListener>();
+  private scenarioListeners = new Set<ScenarioListener>();
+  private analysisListeners = new Set<AnalysisResultListener>();
+  private lastAudioUrl: string | null = null;
 
   private setStatus(next: GatewayStatus) {
     this.status = next;
@@ -108,6 +126,10 @@ class VoiceGatewayClient {
         // ignore
       }
     }
+    if (this.lastAudioUrl) {
+      URL.revokeObjectURL(this.lastAudioUrl);
+      this.lastAudioUrl = null;
+    }
     this.ws = null;
     this.sessionId = null;
     this.userId = null;
@@ -152,6 +174,33 @@ class VoiceGatewayClient {
     });
   }
 
+  sendSetScenario(scenarioId: PatientScenarioId) {
+    if (!this.sessionId || !this.userId) return;
+    this.send({
+      type: "set_scenario",
+      sessionId: this.sessionId,
+      userId: this.userId,
+      scenarioId,
+    });
+  }
+
+  async sendDoctorAudio(blob: Blob) {
+    if (!this.sessionId || !this.userId) return;
+    const contentType = blob.type || "audio/webm";
+    try {
+      const base64 = await this.readBlobAsBase64(blob);
+      this.send({
+        type: "doctor_audio",
+        sessionId: this.sessionId,
+        userId: this.userId,
+        audioBase64: base64,
+        contentType,
+      });
+    } catch (err) {
+      console.error("Failed to send doctor audio", err);
+    }
+  }
+
   onPatientState(cb: PatientStateListener) {
     this.patientListeners.add(cb);
     return () => this.patientListeners.delete(cb);
@@ -171,6 +220,36 @@ class VoiceGatewayClient {
     this.statusListeners.add(cb);
     cb(this.status);
     return () => this.statusListeners.delete(cb);
+  }
+
+  onPatientAudio(cb: AudioListener) {
+    this.audioListeners.add(cb);
+    return () => this.audioListeners.delete(cb);
+  }
+
+  onDoctorUtterance(cb: DoctorUtteranceListener) {
+    this.doctorListeners.add(cb);
+    return () => this.doctorListeners.delete(cb);
+  }
+
+  onScenarioChanged(cb: ScenarioListener) {
+    this.scenarioListeners.add(cb);
+    return () => this.scenarioListeners.delete(cb);
+  }
+
+  sendAnalyzeTranscript(turns: DebriefTurn[]) {
+    if (!this.sessionId || !this.userId) return;
+    this.send({
+      type: "analyze_transcript",
+      sessionId: this.sessionId,
+      userId: this.userId,
+      turns,
+    });
+  }
+
+  onAnalysisResult(cb: AnalysisResultListener) {
+    this.analysisListeners.add(cb);
+    return () => this.analysisListeners.delete(cb);
   }
 
   private handleMessage(raw: any) {
@@ -197,6 +276,25 @@ class VoiceGatewayClient {
         );
         break;
       }
+      case "patient_audio": {
+        const url = this.decodeAudio(msg.audioBase64);
+        if (url) {
+          this.audioListeners.forEach((cb) => cb(url));
+        }
+        break;
+      }
+      case "doctor_utterance": {
+        this.doctorListeners.forEach((cb) => cb(msg.text, msg.userId));
+        break;
+      }
+      case "scenario_changed": {
+        this.scenarioListeners.forEach((cb) => cb(msg.scenarioId));
+        break;
+      }
+      case "analysis_result": {
+        this.analysisListeners.forEach((cb) => cb(msg));
+        break;
+      }
       case "error": {
         console.warn("Voice gateway error", msg.message);
         break;
@@ -206,6 +304,57 @@ class VoiceGatewayClient {
       default:
         break;
     }
+  }
+
+  private decodeAudio(audioBase64: string): string | null {
+    try {
+      let binaryString: string;
+      if (typeof atob === "function") {
+        binaryString = atob(audioBase64);
+      } else if (typeof (globalThis as any).Buffer !== "undefined") {
+        binaryString = (globalThis as any).Buffer.from(audioBase64, "base64").toString("binary");
+      } else {
+        console.warn("No base64 decoder available");
+        return null;
+      }
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "audio/mpeg" });
+      if (this.lastAudioUrl) {
+        URL.revokeObjectURL(this.lastAudioUrl);
+      }
+      const url = URL.createObjectURL(blob);
+      this.lastAudioUrl = url;
+      return url;
+    } catch (err) {
+      console.error("Failed to decode patient audio", err);
+      return null;
+    }
+  }
+
+  private readBlobAsBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const arrayBuffer = reader.result as ArrayBuffer;
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = "";
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        try {
+          const base64 = btoa(binary);
+          resolve(base64);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(blob);
+    });
   }
 }
 

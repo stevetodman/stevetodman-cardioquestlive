@@ -18,10 +18,19 @@ import { SessionSummary } from "../components/SessionSummary";
 import { Question } from "../types";
 import { useVoiceState, releaseFloor, setVoiceEnabled } from "../hooks/useVoiceState";
 import { auth } from "../firebase";
-import { VoicePatientOverlay } from "../components/VoicePatientOverlay";
+import { VoicePatientOverlay, TranscriptTurn } from "../components/VoicePatientOverlay";
 import { PresenterVoiceControls } from "../components/PresenterVoiceControls";
 import { voiceGatewayClient } from "../services/VoiceGatewayClient";
-import { GatewayStatus, PatientState } from "../types/voiceGateway";
+import {
+  GatewayStatus,
+  PatientState,
+  PatientScenarioId,
+  DebriefTurn,
+  AnalysisResult,
+} from "../types/voiceGateway";
+import { SessionTranscriptPanel, TranscriptLogTurn } from "../components/SessionTranscriptPanel";
+import { sendVoiceCommand } from "../services/voiceCommands";
+import { DebriefPanel } from "../components/DebriefPanel";
 
 export default function PresenterSession() {
   const { sessionId } = useParams();
@@ -38,13 +47,45 @@ export default function PresenterSession() {
   const [questionStats, setQuestionStats] = useState<
     { questionId: string; questionIndex: number; correctCount: number; totalCount: number; accuracyPct: number }[]
   >([]);
-  const [transcriptLines, setTranscriptLines] = useState<string[]>([]);
+  const [transcriptTurns, setTranscriptTurns] = useState<TranscriptTurn[]>([]);
   const [patientState, setPatientState] = useState<PatientState>("idle");
   const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus>("disconnected");
+  const [transcriptLog, setTranscriptLog] = useState<TranscriptLogTurn[]>([]);
+  const [patientAudioUrl, setPatientAudioUrl] = useState<string | null>(null);
+  const [doctorQuestionText, setDoctorQuestionText] = useState<string>("");
+  const [autoForceReply, setAutoForceReply] = useState(false);
+  const [selectedScenario, setSelectedScenario] =
+    useState<PatientScenarioId>("exertional_chest_pain");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [debriefResult, setDebriefResult] = useState<AnalysisResult | null>(null);
   const slideRef = useRef<HTMLDivElement>(null);
+  const currentTurnIdRef = useRef<string | null>(null);
+  const lastDoctorTurnIdRef = useRef<string | null>(null);
+  const lastAutoForcedRef = useRef<string | null>(null);
   const teams = useTeamScores(sessionId);
   const players = useIndividualScores(sessionId);
   const voice = useVoiceState(sessionId ?? undefined);
+  const makeTurnId = useCallback(
+    () => `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    []
+  );
+  const scenarioOptions: { id: PatientScenarioId; label: string }[] = [
+    { id: "exertional_chest_pain", label: "Exertional chest pain & palpitations (Taylor)" },
+    { id: "syncope", label: "Syncope during exercise" },
+    { id: "palpitations_svt", label: "Recurrent palpitations (SVT)" },
+  ];
+
+  const generateDebrief = useCallback(() => {
+    if (!sessionId || transcriptLog.length === 0) return;
+    const turns: DebriefTurn[] = transcriptLog.map((t) => ({
+      role: t.role,
+      text: t.text,
+      timestamp: t.timestamp,
+    }));
+    setIsAnalyzing(true);
+    setDebriefResult(null);
+    voiceGatewayClient.sendAnalyzeTranscript(turns);
+  }, [sessionId, transcriptLog]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -57,6 +98,12 @@ export default function PresenterSession() {
     });
     return () => unsub();
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!autoForceReply) {
+      lastAutoForcedRef.current = null;
+    }
+  }, [autoForceReply]);
 
   const slides = session ? [...session.slides].sort((a, b) => a.index - b.index) : [];
   const currentSlide = session ? slides[session.currentSlideIndex] ?? slides[0] : null;
@@ -102,18 +149,102 @@ export default function PresenterSession() {
     await releaseFloor(sessionId);
   }, [sessionId]);
 
+  const handleScenarioSelect = useCallback((scenarioId: PatientScenarioId) => {
+    setSelectedScenario(scenarioId);
+    try {
+      voiceGatewayClient.sendSetScenario(scenarioId);
+    } catch (err) {
+      console.error("Failed to send scenario change", err);
+    }
+    setTranscriptTurns([]);
+    setTranscriptLog([]);
+    setPatientAudioUrl(null);
+    setDoctorQuestionText("");
+    lastDoctorTurnIdRef.current = null;
+    currentTurnIdRef.current = null;
+    lastAutoForcedRef.current = null;
+    setDebriefResult(null);
+    setIsAnalyzing(false);
+  }, []);
+
   const handleClearTranscript = useCallback(() => {
-    setTranscriptLines([]);
+    currentTurnIdRef.current = null;
+    setTranscriptTurns([]);
   }, []);
 
   const handleAddMockLine = useCallback(() => {
-    setTranscriptLines((prev) => [...prev, `Mock line ${prev.length + 1}`]);
-  }, []);
+    setTranscriptTurns((prev) => [
+      ...prev,
+      { id: makeTurnId(), role: "patient", text: `Mock line ${prev.length + 1}`, isComplete: true },
+    ]);
+  }, [makeTurnId]);
+
+  const logDoctorQuestion = useCallback(
+    (text?: string) => {
+      const questionText = text?.trim();
+      if (!questionText) return;
+      const id = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      lastDoctorTurnIdRef.current = id;
+      setTranscriptLog((prev) => [
+        ...prev,
+        { id, role: "doctor", timestamp: Date.now(), text: questionText },
+      ]);
+      // also keep question text synced
+      setDoctorQuestionText(questionText);
+    },
+    []
+  );
+
+  const forceReplyWithQuestion = useCallback(
+    (text?: string) => {
+      if (!sessionId) return;
+      const trimmed = text?.trim();
+      if (trimmed) {
+        logDoctorQuestion(trimmed);
+      }
+      lastAutoForcedRef.current = trimmed ?? null;
+      const payload = trimmed ? { doctorUtterance: trimmed } : undefined;
+      sendVoiceCommand(sessionId, { type: "force_reply", payload }).catch((err) =>
+        console.error("Failed to write voice command to Firestore", err)
+      );
+      try {
+        voiceGatewayClient.sendVoiceCommand("force_reply", payload);
+      } catch (err) {
+        console.error("Failed to send WS voice command", err);
+      }
+    },
+    [logDoctorQuestion, sessionId]
+  );
 
   // keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!session) return;
+      const active = document.activeElement as HTMLElement | null;
+      const tag = active?.tagName;
+      const isTypingTarget =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        active?.getAttribute("contenteditable") === "true";
+
+      // Ignore keyboard nav while typing in any text field
+      if (isTypingTarget) return;
+
+      const patientInteractionLock = Boolean(voice?.enabled && voice.mode && voice.mode !== "idle");
+      const isNavKey =
+        e.code === "Space" ||
+        e.key === " " ||
+        e.key === "Spacebar" ||
+        e.code === "ArrowRight" ||
+        e.code === "ArrowLeft" ||
+        e.key === "ArrowRight" ||
+        e.key === "ArrowLeft";
+
+      if (patientInteractionLock && isNavKey) {
+        e.preventDefault();
+        return;
+      }
+
       if (["ArrowRight", " "].includes(e.key)) {
         e.preventDefault();
         goToSlide(1);
@@ -125,21 +256,118 @@ export default function PresenterSession() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [session, goToSlide]);
+  }, [session, goToSlide, voice]);
 
   // Voice gateway wiring for presenter
   useEffect(() => {
     const unsubStatus = voiceGatewayClient.onStatus((status) => setGatewayStatus(status));
-    const unsubPatient = voiceGatewayClient.onPatientState((state) => setPatientState(state));
-    const unsubTranscript = voiceGatewayClient.onPatientTranscriptDelta((text) =>
-      setTranscriptLines((prev) => [...prev, text])
-    );
+    const unsubPatient = voiceGatewayClient.onPatientState((state) => {
+      setPatientState(state);
+
+      if (state === "speaking") {
+        setTranscriptTurns((prev) => {
+          const currentId = currentTurnIdRef.current;
+          if (currentId) {
+            const existing = prev.find((t) => t.id === currentId);
+            if (existing && !existing.isComplete) {
+              return prev;
+            }
+          }
+          const newId = makeTurnId();
+          currentTurnIdRef.current = newId;
+          return [...prev, { id: newId, role: "patient", text: "", isComplete: false }];
+        });
+      } else if (state === "idle" || state === "listening" || state === "error") {
+        const currentId = currentTurnIdRef.current;
+        if (currentId) {
+          let finalText = "";
+          setTranscriptTurns((prev) => {
+            const next = prev.map((t) => {
+              if (t.id === currentId) {
+                finalText = t.text;
+                return { ...t, isComplete: true };
+              }
+              return t;
+            });
+            return next;
+          });
+          if (finalText) {
+            const logId = `patient-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const related = lastDoctorTurnIdRef.current ?? undefined;
+            setTranscriptLog((prev) => [
+              ...prev,
+              {
+                id: logId,
+                role: "patient",
+                timestamp: Date.now(),
+                text: finalText,
+                relatedTurnId: related,
+              },
+            ]);
+            lastDoctorTurnIdRef.current = null;
+          }
+          currentTurnIdRef.current = null;
+        }
+      }
+    });
+    const unsubTranscript = voiceGatewayClient.onPatientTranscriptDelta((text) => {
+      setTranscriptTurns((prev) => {
+        let turnId = currentTurnIdRef.current;
+        const next = [...prev];
+        let idx = turnId ? next.findIndex((t) => t.id === turnId) : -1;
+        if (idx === -1) {
+          turnId = makeTurnId();
+          currentTurnIdRef.current = turnId;
+          next.push({ id: turnId, role: "patient", text: "", isComplete: false });
+          idx = next.length - 1;
+        }
+        const target = next[idx];
+        next[idx] = { ...target, text: `${target.text}${text}` };
+        return next;
+      });
+    });
+    const unsubDoctor = voiceGatewayClient.onDoctorUtterance((text) => {
+      setDoctorQuestionText(text);
+      if (autoForceReply) {
+        const trimmed = text.trim();
+        if (trimmed && lastAutoForcedRef.current !== trimmed) {
+          lastAutoForcedRef.current = trimmed;
+          forceReplyWithQuestion(trimmed);
+        }
+      }
+    });
+    const unsubAudio = voiceGatewayClient.onPatientAudio((url) => setPatientAudioUrl(url));
+    const unsubScenario = voiceGatewayClient.onScenarioChanged((scenarioId) => {
+      setSelectedScenario(scenarioId);
+      setTranscriptTurns([]);
+      setTranscriptLog([]);
+      setPatientAudioUrl(null);
+      setDoctorQuestionText("");
+      lastDoctorTurnIdRef.current = null;
+      currentTurnIdRef.current = null;
+      lastAutoForcedRef.current = null;
+      setDebriefResult(null);
+      setIsAnalyzing(false);
+    });
+    const unsubAnalysis = voiceGatewayClient.onAnalysisResult((res) => {
+      setIsAnalyzing(false);
+      setDebriefResult({
+        summary: res.summary,
+        strengths: res.strengths ?? [],
+        opportunities: res.opportunities ?? [],
+        teachingPoints: res.teachingPoints ?? [],
+      });
+    });
     return () => {
       unsubStatus();
       unsubPatient();
       unsubTranscript();
+      unsubDoctor();
+      unsubAudio();
+      unsubScenario();
+      unsubAnalysis();
     };
-  }, []);
+  }, [makeTurnId, autoForceReply, forceReplyWithQuestion]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -375,7 +603,18 @@ export default function PresenterSession() {
             </div>
           </div>
           {sessionId && (
-            <PresenterVoiceControls sessionId={sessionId} voice={voice} />
+            <PresenterVoiceControls
+              sessionId={sessionId}
+              voice={voice}
+              doctorQuestion={doctorQuestionText}
+              onDoctorQuestionChange={setDoctorQuestionText}
+              onForceReply={forceReplyWithQuestion}
+              autoForceReply={autoForceReply}
+              onToggleAutoForceReply={setAutoForceReply}
+              scenarioId={selectedScenario}
+              scenarioOptions={scenarioOptions}
+              onScenarioChange={handleScenarioSelect}
+            />
           )}
           <div className="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-sm shadow-black/20">
             <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
@@ -468,6 +707,17 @@ export default function PresenterSession() {
       </div>
 
       <div className="flex-1 flex flex-col items-center px-4 md:px-6 pb-2 gap-1">
+        <div className="w-full max-w-[1800px]">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <SessionTranscriptPanel turns={transcriptLog} sessionId={sessionId} />
+            <DebriefPanel
+              result={debriefResult}
+              isAnalyzing={isAnalyzing}
+              onGenerate={generateDebrief}
+              disabled={transcriptLog.length === 0}
+            />
+          </div>
+        </div>
         <div className="w-full max-w-[1800px] flex flex-col flex-1 gap-1.5">
           {/* Presenter layout: bias height toward the slide; chart overlays inside the slide for polls */}
           <div className="relative flex-1 min-h-[62vh] max-h-[78vh]">
@@ -492,7 +742,8 @@ export default function PresenterSession() {
                   voiceMode={(overlayMode as any) ?? "idle"}
                   enabled={voice.enabled}
                   floorHolderName={voice.floorHolderName}
-                  transcriptLines={transcriptLines}
+                  transcriptTurns={transcriptTurns}
+                  patientAudioUrl={patientAudioUrl ?? undefined}
                   onClearTranscript={handleClearTranscript}
                   onAddMockTranscript={handleAddMockLine}
                 />

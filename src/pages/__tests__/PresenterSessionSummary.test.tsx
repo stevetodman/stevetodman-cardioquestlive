@@ -47,10 +47,17 @@ jest.mock("../../services/VoiceGatewayClient", () => ({
     startSpeaking: jest.fn(),
     stopSpeaking: jest.fn(),
     sendVoiceCommand: jest.fn(),
+    sendDoctorAudio: jest.fn(),
+    sendSetScenario: jest.fn(),
+    sendAnalyzeTranscript: jest.fn(),
     onPatientState: () => () => {},
     onPatientTranscriptDelta: () => () => {},
     onParticipantState: () => () => {},
     onStatus: () => () => {},
+    onPatientAudio: () => () => {},
+    onDoctorUtterance: () => () => {},
+    onScenarioChanged: () => () => {},
+    onAnalysisResult: () => () => {},
   },
 }));
 

@@ -28,7 +28,37 @@ export type ClientToServerMessage =
   | {
       type: "ping";
       sessionId?: string;
+    }
+  | {
+      type: "doctor_audio";
+      sessionId: string;
+      userId: string;
+      audioBase64: string;
+      contentType: string;
+    }
+  | {
+      type: "set_scenario";
+      sessionId: string;
+      userId: string;
+      scenarioId: PatientScenarioId;
+    }
+  | {
+      type: "analyze_transcript";
+      sessionId: string;
+      userId: string;
+      turns: DebriefTurn[];
     };
+
+export type PatientScenarioId =
+  | "exertional_chest_pain"
+  | "syncope"
+  | "palpitations_svt";
+
+export type DebriefTurn = {
+  role: "doctor" | "patient";
+  text: string;
+  timestamp?: number;
+};
 
 export type ServerToClientMessage =
   | {
@@ -51,6 +81,30 @@ export type ServerToClientMessage =
       type: "patient_transcript_delta";
       sessionId: string;
       text: string;
+    }
+  | {
+      type: "patient_audio";
+      sessionId: string;
+      audioBase64: string;
+    }
+  | {
+      type: "doctor_utterance";
+      sessionId: string;
+      userId: string;
+      text: string;
+    }
+  | {
+      type: "scenario_changed";
+      sessionId: string;
+      scenarioId: PatientScenarioId;
+    }
+  | {
+      type: "analysis_result";
+      sessionId: string;
+      summary: string;
+      strengths: string[];
+      opportunities: string[];
+      teachingPoints: string[];
     }
   | {
       type: "pong";

@@ -1,5 +1,6 @@
-import React from "react";
+import React, { ChangeEvent, useEffect, useState } from "react";
 import { VoiceState, VoiceCommandType } from "../types";
+import { PatientScenarioId } from "../types/voiceGateway";
 import { setVoiceEnabled, releaseFloor, setAIMode } from "../hooks/useVoiceState";
 import { sendVoiceCommand } from "../services/voiceCommands";
 import { voiceGatewayClient } from "../services/VoiceGatewayClient";
@@ -7,21 +8,50 @@ import { voiceGatewayClient } from "../services/VoiceGatewayClient";
 interface PresenterVoiceControlsProps {
   sessionId: string;
   voice: VoiceState;
+  doctorQuestion: string;
+  onDoctorQuestionChange: (text: string) => void;
+  onForceReply?: (questionText: string) => void;
+  autoForceReply: boolean;
+  onToggleAutoForceReply: (enabled: boolean) => void;
+  scenarioId: PatientScenarioId;
+  scenarioOptions: { id: PatientScenarioId; label: string }[];
+  onScenarioChange: (id: PatientScenarioId) => void;
 }
 
-async function emitCommand(sessionId: string, type: VoiceCommandType) {
+async function emitCommand(
+  sessionId: string,
+  type: VoiceCommandType,
+  payload?: Record<string, any> | undefined
+) {
   // Fire-and-forget Firestore; always attempt WS send
-  sendVoiceCommand(sessionId, { type }).catch((err) => {
+  sendVoiceCommand(sessionId, { type, payload }).catch((err) => {
     console.error("Failed to write voice command to Firestore", err);
   });
   try {
-    voiceGatewayClient.sendVoiceCommand(type);
+    voiceGatewayClient.sendVoiceCommand(type, payload);
   } catch (err) {
     console.error("Failed to send WS voice command", err);
   }
 }
 
-export function PresenterVoiceControls({ sessionId, voice }: PresenterVoiceControlsProps) {
+export function PresenterVoiceControls({
+  sessionId,
+  voice,
+  doctorQuestion,
+  onDoctorQuestionChange,
+  onForceReply,
+  autoForceReply,
+  onToggleAutoForceReply,
+  scenarioId,
+  scenarioOptions,
+  onScenarioChange,
+}: PresenterVoiceControlsProps) {
+  const [localQuestion, setLocalQuestion] = useState(doctorQuestion);
+
+  useEffect(() => {
+    setLocalQuestion(doctorQuestion);
+  }, [doctorQuestion]);
+
   const handleToggle = async () => {
     await setVoiceEnabled(sessionId, !voice.enabled);
   };
@@ -34,35 +64,100 @@ export function PresenterVoiceControls({ sessionId, voice }: PresenterVoiceContr
     await setAIMode(sessionId);
   };
 
+  const handleQuestionChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    setLocalQuestion(e.target.value);
+    onDoctorQuestionChange(e.target.value);
+  };
+
+  const handleForceReply = () => {
+    const payload =
+      localQuestion.trim().length > 0 ? { doctorUtterance: localQuestion.trim() } : undefined;
+    if (onForceReply) {
+      onForceReply(payload?.doctorUtterance ?? "");
+    } else {
+      emitCommand(sessionId, "force_reply", payload);
+    }
+  };
+
   return (
-    <div className="flex flex-wrap gap-2 items-center bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-2 shadow-sm shadow-black/30">
-      <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">Voice Controls</div>
-      <button
-        type="button"
-        onClick={handleToggle}
-        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${
-          voice.enabled
-            ? "bg-emerald-600/15 border-emerald-500/60 text-emerald-100"
-            : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
-        }`}
-      >
-        {voice.enabled ? "Disable voice" : "Enable voice"}
-      </button>
-      <button
-        type="button"
-        onClick={handleRelease}
-        className="px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-700 bg-slate-900 hover:border-slate-600 text-slate-200"
-      >
-        Release floor
-      </button>
-      <button
-        type="button"
-        onClick={handleAIMode}
-        className="px-2.5 py-1 rounded-lg text-xs font-semibold border border-sky-600/60 bg-sky-600/10 text-sky-100 hover:border-sky-500"
-      >
-        Set AI speaking
-      </button>
-      <div className="flex items-center gap-1">
+    <div className="flex flex-col gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-2 shadow-sm shadow-black/30 min-w-[260px]">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+          Voice Controls
+        </div>
+        <div className="text-[10px] text-slate-500">Force reply uses typed question</div>
+      </div>
+      <div className="flex items-center gap-2 text-[11px] text-slate-300">
+        <label className="uppercase tracking-[0.12em] text-slate-500 font-semibold">
+          Patient case
+        </label>
+        <select
+          value={scenarioId}
+          onChange={(e) => onScenarioChange(e.target.value as PatientScenarioId)}
+          className="text-sm bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-slate-100"
+        >
+          {scenarioOptions.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="flex flex-wrap gap-2 items-center">
+        <button
+          type="button"
+          onClick={handleToggle}
+          className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${
+            voice.enabled
+              ? "bg-emerald-600/15 border-emerald-500/60 text-emerald-100"
+              : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+          }`}
+        >
+          {voice.enabled ? "Disable voice" : "Enable voice"}
+        </button>
+        <button
+          type="button"
+          onClick={handleRelease}
+          className="px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-700 bg-slate-900 hover:border-slate-600 text-slate-200"
+        >
+          Release floor
+        </button>
+        <button
+          type="button"
+          onClick={handleAIMode}
+          className="px-2.5 py-1 rounded-lg text-xs font-semibold border border-sky-600/60 bg-sky-600/10 text-sky-100 hover:border-sky-500"
+        >
+          Set AI speaking
+        </button>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] uppercase tracking-[0.12em] text-slate-500 font-semibold">
+          Doctor/Resident question
+        </label>
+        <textarea
+          value={localQuestion}
+          onChange={handleQuestionChange}
+          rows={2}
+          placeholder="Type what the resident just asked the patient..."
+          className="w-full resize-none rounded-lg border border-slate-800 bg-slate-950/70 text-slate-100 text-sm px-2.5 py-2 focus:outline-none focus:border-slate-600"
+        />
+        <div className="text-[11px] text-slate-500">
+          Optional; left blank uses a generic follow-up.
+          {autoForceReply && (
+            <span className="text-emerald-300 ml-1">Auto: will Force Reply after transcription.</span>
+          )}
+        </div>
+        <label className="flex items-center gap-2 text-[11px] text-slate-300 font-semibold">
+          <input
+            type="checkbox"
+            checked={autoForceReply}
+            onChange={(e) => onToggleAutoForceReply(e.target.checked)}
+            className="accent-emerald-500"
+          />
+          Auto Force Reply after resident question
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-1">
         <button
           type="button"
           onClick={() => emitCommand(sessionId, "pause_ai")}
@@ -79,7 +174,7 @@ export function PresenterVoiceControls({ sessionId, voice }: PresenterVoiceContr
         </button>
         <button
           type="button"
-          onClick={() => emitCommand(sessionId, "force_reply")}
+          onClick={handleForceReply}
           className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
         >
           Force reply
