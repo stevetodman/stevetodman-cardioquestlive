@@ -3,6 +3,8 @@ import WebSocket, { WebSocketServer } from "ws";
 import { SessionManager } from "./sessionManager";
 import { ClientToServerMessage, ServerToClientMessage } from "./messageTypes";
 import { log, logError } from "./logger";
+import { getOpenAIClient, MODEL } from "./openaiClient";
+import { getOrCreatePatientEngine } from "./patientEngine";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
@@ -70,16 +72,7 @@ function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.RawData
     case "voice_command": {
       log("Voice command", parsed.commandType, "by", parsed.userId, "session", ctx.sessionId);
       if (parsed.commandType === "force_reply") {
-        sessionManager.broadcastToSession(ctx.sessionId, {
-          type: "patient_state",
-          sessionId: ctx.sessionId,
-          state: "speaking",
-        });
-        sessionManager.broadcastToSession(ctx.sessionId, {
-          type: "patient_transcript_delta",
-          sessionId: ctx.sessionId,
-          text: "Hi doctor, I’m here as a test patient.",
-        });
+        handleForceReply(ctx.sessionId, parsed.userId);
       } else if (parsed.commandType === "pause_ai") {
         sessionManager.broadcastToSession(ctx.sessionId, {
           type: "patient_state",
@@ -136,6 +129,84 @@ function main() {
   server.listen(PORT, () => {
     log(`Voice gateway listening on :${PORT} (path: /ws/voice)`);
   });
+}
+
+async function handleForceReply(sessionId: string, userId: string) {
+  const openai = getOpenAIClient();
+  if (!openai) {
+    log("OPENAI_API_KEY not set; using stub patient response");
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_state",
+      sessionId,
+      state: "speaking",
+    });
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: "Hi doctor, I’m here as a test patient.",
+    });
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_state",
+      sessionId,
+      state: "idle",
+    });
+    return;
+  }
+
+  const engine = getOrCreatePatientEngine(sessionId);
+  const doctorPrompt =
+    "The doctor has just asked you a follow-up question about your chest pain and palpitations. Answer naturally in character.";
+
+  engine.appendDoctorTurn(doctorPrompt);
+
+  try {
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_state",
+      sessionId,
+      state: "speaking",
+    });
+
+    const messages = engine.getHistory().concat({ role: "user", content: doctorPrompt });
+    let fullText = "";
+
+    const stream = await openai.chat.completions.create({
+      model: MODEL,
+      messages,
+      stream: true,
+    });
+
+    for await (const part of stream) {
+      const delta = part.choices?.[0]?.delta?.content;
+      if (!delta) continue;
+      fullText += delta;
+      sessionManager.broadcastToSession(sessionId, {
+        type: "patient_transcript_delta",
+        sessionId,
+        text: delta,
+      });
+    }
+
+    engine.appendPatientTurn(fullText.trim());
+
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_state",
+      sessionId,
+      state: "idle",
+    });
+    log("Patient reply complete", sessionId, "chars:", fullText.length);
+  } catch (err) {
+    logError("OpenAI force_reply error", err);
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_state",
+      sessionId,
+      state: "error",
+    });
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: "I'm sorry, I'm having trouble answering right now.",
+    });
+  }
 }
 
 main();
