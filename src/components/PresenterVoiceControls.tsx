@@ -10,11 +10,14 @@ interface PresenterVoiceControlsProps {
 }
 
 async function emitCommand(sessionId: string, type: VoiceCommandType) {
+  // Fire-and-forget Firestore; always attempt WS send
+  sendVoiceCommand(sessionId, { type }).catch((err) => {
+    console.error("Failed to write voice command to Firestore", err);
+  });
   try {
-    await sendVoiceCommand(sessionId, { type });
     voiceGatewayClient.sendVoiceCommand(type);
   } catch (err) {
-    console.error("Failed to send command", err);
+    console.error("Failed to send WS voice command", err);
   }
 }
 

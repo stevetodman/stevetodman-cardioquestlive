@@ -1,3 +1,4 @@
+import "dotenv/config";
 import http from "http";
 import WebSocket, { WebSocketServer } from "ws";
 import { SessionManager } from "./sessionManager";

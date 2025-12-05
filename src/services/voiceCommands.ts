@@ -15,7 +15,9 @@ export async function sendVoiceCommand(
     type: cmd.type,
     createdAt: serverTimestamp(),
     createdBy,
-    payload: cmd.payload,
   };
+  if (cmd.payload !== undefined) {
+    (doc as any).payload = cmd.payload;
+  }
   await addDoc(ref, doc as any);
 }

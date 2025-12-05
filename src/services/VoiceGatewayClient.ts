@@ -34,6 +34,18 @@ class VoiceGatewayClient {
   }
 
   connect(sessionId: string, userId: string, displayName: string, role: ClientRole) {
+    // Reuse existing connection if it matches session/user and is healthy
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) &&
+      this.sessionId === sessionId &&
+      this.userId === userId &&
+      this.role === role
+    ) {
+      console.debug("[voice-gateway] Reusing existing socket", { sessionId, role });
+      return;
+    }
+
     this.disconnect();
     this.sessionId = sessionId;
     this.userId = userId;
@@ -48,6 +60,7 @@ class VoiceGatewayClient {
     }
     try {
       this.ws = new WebSocketCtor(url);
+      console.debug("[voice-gateway] Creating socket", url);
     } catch (err) {
       console.error("Failed to create WebSocket", err);
       this.setStatus("disconnected");
@@ -58,6 +71,7 @@ class VoiceGatewayClient {
 
     this.ws.onopen = () => {
       this.setStatus("connected");
+      console.debug("[voice-gateway] socket open");
       this.send({
         type: "join",
         sessionId,
@@ -75,7 +89,8 @@ class VoiceGatewayClient {
       console.error("Voice gateway socket error", err);
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (event) => {
+      console.debug("[voice-gateway] socket close", { code: event.code, reason: event.reason });
       this.setStatus("disconnected");
       this.ws = null;
     };
@@ -102,7 +117,10 @@ class VoiceGatewayClient {
   }
 
   private send(msg: ClientToServerMessage) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.debug("[voice-gateway] send skipped; socket not open", this.ws?.readyState);
+      return;
+    }
     try {
       this.ws.send(JSON.stringify(msg));
     } catch (err) {
