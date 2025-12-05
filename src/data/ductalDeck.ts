@@ -1078,5 +1078,12 @@ export function createInitialSessionData(deck: DeckData = defaultDeck): SessionD
     slides: deck.slides,
     questions: deck.questions,
     createdAt: now,
+    voice: {
+      enabled: false,
+      floorHolderId: null,
+      floorHolderName: null,
+      since: null,
+      mode: "idle",
+    },
   };
 }

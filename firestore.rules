@@ -17,6 +17,14 @@ service cloud.firestore {
     }
 
     match /sessions/{sessionId} {
+      function hasValidVoice(voice) {
+        return voice.enabled is bool &&
+          (voice.floorHolderId == null || voice.floorHolderId is string) &&
+          (voice.floorHolderName == null || voice.floorHolderName is string) &&
+          (voice.since == null || voice.since is timestamp || voice.since is string) &&
+          (voice.mode in ["idle", "resident-speaking", "ai-speaking"]);
+      }
+
       function hasSessionShape(data) {
         return data.keys().hasAll(["createdBy", "joinCode", "slides", "questions", "currentSlideIndex", "currentQuestionId", "showResults"]) &&
           data.createdBy is string &&
@@ -25,7 +33,13 @@ service cloud.firestore {
           data.questions is list &&
           data.currentSlideIndex is number &&
           (data.currentQuestionId == null || data.currentQuestionId is string) &&
-          data.showResults is bool;
+          data.showResults is bool &&
+          ( !("voice" in data) || hasValidVoice(data.voice) );
+      }
+
+      function isVoiceOnlyChange() {
+        return request.resource.data.diff(resource.data).changedKeys().hasOnly(["voice"]) &&
+          hasValidVoice(request.resource.data.voice);
       }
 
       function isValidSessionCreate() {
@@ -43,8 +57,15 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidSessionCreate();
 
       allow update: if isAuthenticated()
-        && (resource.data.createdBy == request.auth.uid || isAdmin())
-        && isValidSessionUpdate();
+        && (
+          (
+            (resource.data.createdBy == request.auth.uid || isAdmin())
+            && isValidSessionUpdate()
+          ) ||
+          (
+            isVoiceOnlyChange() && isValidSessionUpdate()
+          )
+        );
 
       allow delete: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAdmin());
 

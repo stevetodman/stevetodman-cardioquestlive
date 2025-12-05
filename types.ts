@@ -35,6 +35,7 @@ export interface SessionData {
   slides: Slide[];
   questions: Question[];
   createdAt: string;  // ISO string
+  voice?: VoiceState;
 }
 
 export interface ResponseDoc {
@@ -64,4 +65,14 @@ export interface ClueTile {
   title: string;
   description: string;
   imageUrl?: string;
+}
+
+export type VoiceMode = "idle" | "resident-speaking" | "ai-speaking";
+
+export interface VoiceState {
+  enabled: boolean;
+  floorHolderId: string | null;
+  floorHolderName: string | null;
+  since: any; // Firestore Timestamp | null; kept loose for mock compatibility
+  mode: VoiceMode;
 }

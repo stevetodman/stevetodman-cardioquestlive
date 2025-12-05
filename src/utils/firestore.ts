@@ -12,6 +12,7 @@ import {
   getDoc as fGetDoc,
   setDoc as fSetDoc,
   runTransaction as fRunTransaction,
+  serverTimestamp as fServerTimestamp,
   DocumentSnapshot,
   QuerySnapshot,
   DocumentData
@@ -229,6 +230,7 @@ const mockQuery = (coll: any, ...constraints: any[]) => {
 
 const mockWhere = (field: string, op: string, value: any) => ({ type: 'where', field, op, value });
 const mockLimit = (_n: number) => ({ type: 'limit' }); // Ignored in mock for simplicity
+const mockServerTimestamp = () => new Date();
 
 const mockGetDocs = async (q: any) => {
     return new Promise<any>((resolve) => {
@@ -292,3 +294,4 @@ export const getDocs = isConfigured ? fGetDocs : (mockGetDocs as any);
 export const getDoc = isConfigured ? fGetDoc : (mockGetDoc as any);
 export const setDoc = isConfigured ? fSetDoc : (mockSetDoc as any);
 export const runTransaction = isConfigured ? fRunTransaction : (mockRunTransaction as any);
+export const serverTimestamp = isConfigured ? fServerTimestamp : (mockServerTimestamp as any);

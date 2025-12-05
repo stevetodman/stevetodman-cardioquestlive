@@ -16,6 +16,8 @@ import { TeamScoreboard } from "../components/TeamScoreboard";
 import { IndividualScoreboard } from "../components/IndividualScoreboard";
 import { SessionSummary } from "../components/SessionSummary";
 import { Question } from "../types";
+import { useVoiceState, releaseFloor, setVoiceEnabled } from "../hooks/useVoiceState";
+import { auth } from "../firebase";
 
 export default function PresenterSession() {
   const { sessionId } = useParams();
@@ -35,6 +37,7 @@ export default function PresenterSession() {
   const slideRef = useRef<HTMLDivElement>(null);
   const teams = useTeamScores(sessionId);
   const players = useIndividualScores(sessionId);
+  const voice = useVoiceState(sessionId ?? undefined);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -81,6 +84,16 @@ export default function PresenterSession() {
     },
     [session, sessionId]
   );
+
+  const toggleVoice = useCallback(async () => {
+    if (!sessionId) return;
+    await setVoiceEnabled(sessionId, !voice.enabled);
+  }, [sessionId, voice.enabled]);
+
+  const handleReleaseFloor = useCallback(async () => {
+    if (!sessionId) return;
+    await releaseFloor(sessionId);
+  }, [sessionId]);
 
   // keyboard navigation
   useEffect(() => {
@@ -310,6 +323,39 @@ export default function PresenterSession() {
               >
                 Top players
               </button>
+            </div>
+          </div>
+          <div className="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-sm shadow-black/20">
+            <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+              Voice
+            </span>
+            <div className="flex items-center gap-1.5">
+              <div className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${
+                voice.enabled ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-100" : "border-slate-800 bg-slate-900 text-slate-400"
+              }`}>
+                {voice.enabled ? "Enabled" : "Disabled"}
+              </div>
+              {voice.enabled && (
+                <div className="text-[11px] text-slate-400">
+                  {voice.floorHolderName ? `Floor: ${voice.floorHolderName}` : "Floor open"}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={toggleVoice}
+                className="px-2.5 py-1 rounded-lg border border-slate-700 text-[11px] font-semibold bg-slate-900 hover:border-slate-600"
+              >
+                {voice.enabled ? "Turn off" : "Turn on"}
+              </button>
+              {voice.enabled && voice.floorHolderId && (
+                <button
+                  type="button"
+                  onClick={handleReleaseFloor}
+                  className="px-2 py-1 rounded-lg border border-slate-700 text-[11px] font-semibold bg-slate-900 hover:border-slate-600"
+                >
+                  Release floor
+                </button>
+              )}
             </div>
           </div>
           {isQuestionSlide && (
