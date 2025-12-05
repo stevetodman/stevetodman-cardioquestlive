@@ -13,6 +13,14 @@ export class VoicePatientService {
   private rafId: number | null = null;
   private subscribers = new Set<LevelSubscriber>();
   private capturing = false;
+  private visibilityHandlerBound: (() => void) | null = null;
+
+  constructor() {
+    if (typeof document !== "undefined") {
+      this.visibilityHandlerBound = this.handleVisibilityChange.bind(this);
+      document.addEventListener("visibilitychange", this.visibilityHandlerBound);
+    }
+  }
 
   async ensureMic(): Promise<void> {
     if (this.stream && this.stream.active) return;
@@ -103,6 +111,12 @@ export class VoicePatientService {
         console.error("Level subscriber error", err);
       }
     });
+  }
+
+  private handleVisibilityChange() {
+    if (document.visibilityState === "hidden") {
+      this.stopCapture();
+    }
   }
 }
 

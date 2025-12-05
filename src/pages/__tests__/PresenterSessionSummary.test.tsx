@@ -30,6 +30,10 @@ jest.mock("../../hooks/useIndividualScores", () => ({
   useIndividualScores: () => [{ userId: "u1", teamId: "a", teamName: "Team A", points: 80 }],
 }));
 
+jest.mock("../../services/voiceCommands", () => ({
+  sendVoiceCommand: jest.fn(),
+}));
+
 describe("PresenterSession summary toggle", () => {
   beforeEach(() => {
     jest.clearAllMocks();

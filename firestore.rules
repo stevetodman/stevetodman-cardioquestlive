@@ -122,6 +122,24 @@ service cloud.firestore {
           isValidParticipant(request.resource.data);
         allow delete: if false;
       }
+
+      match /voiceCommands/{commandId} {
+        function isValidVoiceCommand(data) {
+          return data.type in ["pause_ai", "resume_ai", "force_reply", "end_turn", "mute_user"] &&
+            (data.createdAt is timestamp || data.createdAt is string) &&
+            data.createdBy is string;
+        }
+
+        function sessionOwner() {
+          return get(/databases/$(database)/documents/sessions/$(sessionId)).data.createdBy;
+        }
+
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() &&
+          (sessionOwner() == request.auth.uid || isAdmin()) &&
+          isValidVoiceCommand(request.resource.data);
+        allow update, delete: if false;
+      }
     }
 
     match /configs/{document=**} {

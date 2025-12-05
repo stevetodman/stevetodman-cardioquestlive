@@ -76,3 +76,17 @@ export interface VoiceState {
   since: any; // Firestore Timestamp | null; kept loose for mock compatibility
   mode: VoiceMode;
 }
+
+export type VoiceCommandType =
+  | "pause_ai"
+  | "resume_ai"
+  | "force_reply"
+  | "end_turn"
+  | "mute_user";
+
+export interface VoiceCommandDoc {
+  type: VoiceCommandType;
+  createdAt: any;
+  createdBy: string;
+  payload?: Record<string, any>;
+}

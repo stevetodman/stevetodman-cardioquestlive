@@ -24,6 +24,7 @@ export function HoldToSpeakButton({
 }: HoldToSpeakButtonProps) {
   const [state, setState] = useState<HoldState>(disabled ? "disabled" : "idle");
   const pressActive = useRef(false);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
 
   const startPress = useCallback(async () => {
     if (disabled || state === "recording") return;
@@ -58,7 +59,9 @@ export function HoldToSpeakButton({
     (e: React.PointerEvent<HTMLButtonElement>) => {
       // Prevent touch scrolling while holding
       e.preventDefault();
-      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      const target = e.target as HTMLElement;
+      target.setPointerCapture?.(e.pointerId);
+      buttonRef.current = target as HTMLButtonElement;
       startPress();
     },
     [startPress]
@@ -101,7 +104,8 @@ export function HoldToSpeakButton({
   return (
     <button
       type="button"
-      className={`w-full rounded-xl px-4 py-3 text-sm font-semibold border transition-all active:scale-[0.99] ${visualState} ${className}`}
+      ref={buttonRef}
+      className={`w-full rounded-xl px-4 py-3 text-sm font-semibold border transition-all active:scale-[0.99] touch-none select-none ${visualState} ${className}`}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}

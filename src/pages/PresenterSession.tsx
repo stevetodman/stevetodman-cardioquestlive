@@ -18,6 +18,9 @@ import { SessionSummary } from "../components/SessionSummary";
 import { Question } from "../types";
 import { useVoiceState, releaseFloor, setVoiceEnabled } from "../hooks/useVoiceState";
 import { auth } from "../firebase";
+import { VoicePatientOverlay } from "../components/VoicePatientOverlay";
+import { PresenterVoiceControls } from "../components/PresenterVoiceControls";
+import { sendVoiceCommand } from "../services/voiceCommands";
 
 export default function PresenterSession() {
   const { sessionId } = useParams();
@@ -34,6 +37,7 @@ export default function PresenterSession() {
   const [questionStats, setQuestionStats] = useState<
     { questionId: string; questionIndex: number; correctCount: number; totalCount: number; accuracyPct: number }[]
   >([]);
+  const [transcriptLines, setTranscriptLines] = useState<string[]>([]);
   const slideRef = useRef<HTMLDivElement>(null);
   const teams = useTeamScores(sessionId);
   const players = useIndividualScores(sessionId);
@@ -94,6 +98,14 @@ export default function PresenterSession() {
     if (!sessionId) return;
     await releaseFloor(sessionId);
   }, [sessionId]);
+
+  const handleClearTranscript = useCallback(() => {
+    setTranscriptLines([]);
+  }, []);
+
+  const handleAddMockLine = useCallback(() => {
+    setTranscriptLines((prev) => [...prev, `Mock line ${prev.length + 1}`]);
+  }, []);
 
   // keyboard navigation
   useEffect(() => {
@@ -277,6 +289,7 @@ export default function PresenterSession() {
     totalQuestions > 0 ? Math.min(1, Math.max(0, questionsAnsweredCount / totalQuestions)) : 0;
   const avgResponsesPerQuestion =
     questionsAnsweredCount > 0 ? totalResponses / questionsAnsweredCount : 0;
+  const overlayMode = voice.enabled ? (voice.mode ?? "idle") : "disabled";
 
   return (
     <div className="h-screen bg-slate-950 text-slate-50 overflow-hidden relative flex flex-col">
@@ -325,6 +338,9 @@ export default function PresenterSession() {
               </button>
             </div>
           </div>
+          {sessionId && (
+            <PresenterVoiceControls sessionId={sessionId} voice={voice} />
+          )}
           <div className="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-sm shadow-black/20">
             <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
               Voice
@@ -425,6 +441,14 @@ export default function PresenterSession() {
               </div>
             ) : (
               <>
+                <VoicePatientOverlay
+                  voiceMode={(overlayMode as any) ?? "idle"}
+                  enabled={voice.enabled}
+                  floorHolderName={voice.floorHolderName}
+                  transcriptLines={transcriptLines}
+                  onClearTranscript={handleClearTranscript}
+                  onAddMockTranscript={handleAddMockLine}
+                />
                 <div
                   className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
                   ref={slideRef}
