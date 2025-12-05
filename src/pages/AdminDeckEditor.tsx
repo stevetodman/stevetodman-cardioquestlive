@@ -367,7 +367,7 @@ export default function AdminDeckEditor() {
 
   const handleHtmlPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     if (!selectedSlide) return;
-    const items = Array.from(e.clipboardData?.items ?? []);
+    const items = Array.from(e.clipboardData?.items ?? []) as DataTransferItem[];
     const imageItem = items.find((item) => item.kind === "file" && item.type.startsWith("image/"));
     if (!imageItem) return; // allow normal paste for non-images
 

@@ -90,7 +90,8 @@ const mockDoc = (_db: any, ...segments: any[]) => {
     if (segments.length >= 2) {
         const pathSegments = segments.slice(0, segments.length - 1);
         const docId = segments[segments.length - 1] ?? generateId();
-        const coll = mockCollection(_db, ...(pathSegments as string[]));
+        const [firstSegment, ...restSegments] = pathSegments as string[];
+        const coll = mockCollection(_db, firstSegment, ...restSegments);
         return { type: 'doc', path: `${coll.path}/${docId}`, id: docId, collectionPath: coll.path, parentId: coll.parentId };
     }
 

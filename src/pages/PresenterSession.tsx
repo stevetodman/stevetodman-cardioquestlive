@@ -8,12 +8,14 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { doc, onSnapshot, updateDoc, db, collection, query, where } from "../utils/firestore"; // Updated import
-import { SessionData, Question } from "../types";
+import { SessionData } from "../types";
 import { ResponsesChart } from "../components/ResponsesChart";
 import { useTeamScores } from "../hooks/useTeamScores";
 import { useIndividualScores } from "../hooks/useIndividualScores";
 import { TeamScoreboard } from "../components/TeamScoreboard";
 import { IndividualScoreboard } from "../components/IndividualScoreboard";
+import { SessionSummary } from "../components/SessionSummary";
+import { Question } from "../types";
 
 export default function PresenterSession() {
   const { sessionId } = useParams();
@@ -22,6 +24,14 @@ export default function PresenterSession() {
   const [responseTotal, setResponseTotal] = useState(0);
   const [showTeamScores, setShowTeamScores] = useState(true);
   const [showIndividualScores, setShowIndividualScores] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [participantCount, setParticipantCount] = useState<number>(0);
+  const [overallAccuracy, setOverallAccuracy] = useState<number>(0);
+  const [questionsAnsweredCount, setQuestionsAnsweredCount] = useState<number>(0);
+  const [totalResponses, setTotalResponses] = useState<number>(0);
+  const [questionStats, setQuestionStats] = useState<
+    { questionId: string; questionIndex: number; correctCount: number; totalCount: number; accuracyPct: number }[]
+  >([]);
   const slideRef = useRef<HTMLDivElement>(null);
   const teams = useTeamScores(sessionId);
   const players = useIndividualScores(sessionId);
@@ -128,6 +138,78 @@ export default function PresenterSession() {
     return () => unsub();
   }, [sessionId, currentQuestion?.id]);
 
+  // Aggregate participant stats for summary (count + overall accuracy)
+  useEffect(() => {
+    if (!sessionId) return;
+    const ref = collection(db, "sessions", sessionId, "participants");
+    const unsub = onSnapshot(ref, (snapshot: any) => {
+      const docs = snapshot.docs ?? snapshot;
+      let totalCorrect = 0;
+      let totalIncorrect = 0;
+      docs.forEach((docSnap: any) => {
+        const data = docSnap.data?.() ?? docSnap.data();
+        totalCorrect += data?.correctCount ?? 0;
+        totalIncorrect += data?.incorrectCount ?? 0;
+      });
+      const count = docs.length ?? 0;
+      setParticipantCount(count);
+      const totalAnswered = totalCorrect + totalIncorrect;
+      setOverallAccuracy(totalAnswered > 0 ? totalCorrect / totalAnswered : 0);
+    });
+    return () => unsub();
+  }, [sessionId]);
+
+  // Aggregate response stats per question for summary
+  useEffect(() => {
+    if (!sessionId || !session) return;
+    const ref = collection(db, "sessions", sessionId, "responses");
+    const questions = session.questions ?? [];
+    const questionIndexMap = new Map<string, number>();
+    questions.forEach((q, idx) => questionIndexMap.set(q.id, idx + 1));
+
+    const unsub = onSnapshot(ref, (snapshot: any) => {
+      const docs = snapshot.docs ?? snapshot;
+      const perQuestion = new Map<
+        string,
+        { questionId: string; totalCount: number; correctCount: number }
+      >();
+      let totalResp = 0;
+
+      docs.forEach((docSnap: any) => {
+        const data = docSnap.data?.() ?? docSnap.data();
+        const qid = data?.questionId;
+        const choiceIndex = data?.choiceIndex;
+        if (!qid) return;
+        totalResp += 1;
+        const q = perQuestion.get(qid) ?? { questionId: qid, totalCount: 0, correctCount: 0 };
+        q.totalCount += 1;
+        const correctIndex = questions.find((qq) => qq.id === qid)?.correctIndex ?? -1;
+        if (correctIndex === choiceIndex) {
+          q.correctCount += 1;
+        }
+        perQuestion.set(qid, q);
+      });
+
+      const stats = Array.from(perQuestion.values()).map((entry) => {
+        const idx = questionIndexMap.get(entry.questionId) ?? 0;
+        const accuracy = entry.totalCount > 0 ? entry.correctCount / entry.totalCount : 0;
+        return {
+          questionId: entry.questionId,
+          questionIndex: idx,
+          correctCount: entry.correctCount,
+          totalCount: entry.totalCount,
+          accuracyPct: Math.round(accuracy * 100),
+        };
+      });
+
+      setTotalResponses(totalResp);
+      setQuestionsAnsweredCount(stats.length);
+      setQuestionStats(stats);
+    });
+
+    return () => unsub();
+  }, [sessionId, session]);
+
   const openQuestion = async () => {
     if (!currentQuestion) return;
     await updateDoc(doc(db, "sessions", sessionId), {
@@ -173,9 +255,15 @@ export default function PresenterSession() {
             <p className="text-xl">Session not found.</p>
             <Link to="/" className="text-sky-400 underline">Return Home</Link>
           </div>
-        </div>
-      );
+      </div>
+    );
   }
+
+  const totalQuestions = session.questions?.length ?? 0;
+  const questionsAnsweredPct =
+    totalQuestions > 0 ? Math.min(1, Math.max(0, questionsAnsweredCount / totalQuestions)) : 0;
+  const avgResponsesPerQuestion =
+    questionsAnsweredCount > 0 ? totalResponses / questionsAnsweredCount : 0;
 
   return (
     <div className="h-screen bg-slate-950 text-slate-50 overflow-hidden relative flex flex-col">
@@ -189,6 +277,17 @@ export default function PresenterSession() {
               Gamification
             </span>
             <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setShowSummary((v) => !v)}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
+                  showSummary
+                    ? "bg-indigo-600/20 border-indigo-500/60 text-indigo-100 shadow-sm shadow-indigo-900/30"
+                    : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+                }`}
+              >
+                Session summary
+              </button>
               <button
                 type="button"
                 onClick={() => setShowTeamScores((v) => !v)}
@@ -263,43 +362,62 @@ export default function PresenterSession() {
         <div className="w-full max-w-[1800px] flex flex-col flex-1 gap-1.5">
           {/* Presenter layout: bias height toward the slide; chart overlays inside the slide for polls */}
           <div className="relative flex-1 min-h-[62vh] max-h-[78vh]">
-            <div
-              className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
-              ref={slideRef}
-              dangerouslySetInnerHTML={{ __html: currentSlide?.html ?? "" }}
-            />
-
-            {showTeamScores && (teams?.length ?? 0) > 0 && (
-              <div className="absolute top-4 right-4 z-30 pointer-events-none">
-                <TeamScoreboard teams={teams} />
+            {showSummary ? (
+              <div className="absolute inset-0 rounded-2xl overflow-hidden">
+                <SessionSummary
+                  teams={teams}
+                  players={players}
+                  participantCount={participantCount}
+                  overallAccuracy={overallAccuracy}
+                  totalQuestions={totalQuestions}
+                  questionsAnsweredCount={questionsAnsweredCount}
+                  questionsAnsweredPct={questionsAnsweredPct}
+                  totalResponses={totalResponses}
+                  avgResponsesPerQuestion={avgResponsesPerQuestion}
+                  questionStats={questionStats}
+                />
               </div>
-            )}
+            ) : (
+              <>
+                <div
+                  className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
+                  ref={slideRef}
+                  dangerouslySetInnerHTML={{ __html: currentSlide?.html ?? "" }}
+                />
 
-            {showIndividualScores && (players?.length ?? 0) > 0 && (
-              <div className="absolute bottom-4 right-4 z-30 pointer-events-none">
-                <IndividualScoreboard players={players} />
-              </div>
-            )}
-
-            {showResultsOverlay && currentQuestion && (
-              <div className="absolute inset-x-3 bottom-3 pointer-events-none">
-                <div className="bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 shadow-lg shadow-black/30 pointer-events-auto">
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
-                    <span className="uppercase tracking-[0.12em] text-slate-300">Poll Results</span>
-                    <span className="font-mono text-[10px]">
-                      {isQuestionOpen ? "Open" : "Closed"} {isShowingResults ? "· Showing results" : ""}
-                    </span>
+                {showTeamScores && (teams?.length ?? 0) > 0 && (
+                  <div className="absolute top-4 right-4 z-30 pointer-events-none">
+                    <TeamScoreboard teams={teams} />
                   </div>
-                  <ResponsesChart
-                    sessionId={sessionId}
-                    questionId={currentQuestion.id}
-                    options={currentQuestion.options}
-                    correctIndex={currentQuestion.correctIndex ?? 0}
-                    showResults={isShowingResults}
-                    mode="presenter"
-                  />
-                </div>
-              </div>
+                )}
+
+                {showIndividualScores && (players?.length ?? 0) > 0 && (
+                  <div className="absolute bottom-4 right-4 z-30 pointer-events-none">
+                    <IndividualScoreboard players={players} />
+                  </div>
+                )}
+
+                {showResultsOverlay && currentQuestion && (
+                  <div className="absolute inset-x-3 bottom-3 pointer-events-none">
+                    <div className="bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 shadow-lg shadow-black/30 pointer-events-auto">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
+                        <span className="uppercase tracking-[0.12em] text-slate-300">Poll Results</span>
+                        <span className="font-mono text-[10px]">
+                          {isQuestionOpen ? "Open" : "Closed"} {isShowingResults ? "· Showing results" : ""}
+                        </span>
+                      </div>
+                      <ResponsesChart
+                        sessionId={sessionId}
+                        questionId={currentQuestion.id}
+                        options={currentQuestion.options}
+                        correctIndex={currentQuestion.correctIndex ?? 0}
+                        showResults={isShowingResults}
+                        mode="presenter"
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

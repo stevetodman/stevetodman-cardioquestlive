@@ -11,9 +11,13 @@
     ],
     "skipLibCheck": true,
     "types": [
-      "node"
+      "node",
+      "jest",
+      "@testing-library/jest-dom"
     ],
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
+    "baseUrl": ".",
+    "rootDir": ".",
     "isolatedModules": true,
     "moduleDetection": "force",
     "allowJs": true,
@@ -25,5 +29,22 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": [
+    "src/**/*",
+    "types.ts",
+    "firebase.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "pages",
+    "functions",
+    "test",
+    "**/__tests__/**",
+    "jest.config.ts",
+    "vite.config.ts",
+    "tailwind.config.js",
+    "postcss.config.js"
+  ]
 }

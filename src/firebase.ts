@@ -86,7 +86,7 @@ if (isConfigured) {
   }
 }
 
-let authInitPromise: Promise<void> | null = null;
+let authInitPromise: Promise<unknown> | null = null;
 
 export async function ensureSignedIn(): Promise<void> {
   if (!auth) return;
@@ -97,7 +97,7 @@ export async function ensureSignedIn(): Promise<void> {
       throw error;
     });
   }
-  return authInitPromise;
+  await authInitPromise;
 }
 
 export { app, db, functions, auth };
