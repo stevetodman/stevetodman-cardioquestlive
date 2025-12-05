@@ -17,7 +17,9 @@ import {
 import { SessionData, Question, ParticipantDoc } from "../types";
 import { SlidePreview } from "../components/SlidePreview";
 import { auth, ensureSignedIn, isConfigured } from "../firebase";
-import { useVoiceState, takeFloor, releaseFloor } from "../hooks/useVoiceState";
+import { useVoiceState, takeFloorTx, releaseFloor } from "../hooks/useVoiceState";
+import { HoldToSpeakButton } from "../components/HoldToSpeakButton";
+import { voicePatientService } from "../services/VoicePatientService";
 
 function getLocalUserId(): string {
   const key = "cq_live_user_id";
@@ -58,6 +60,7 @@ export default function JoinSession() {
     isConfigured ? auth?.currentUser?.uid ?? null : getLocalUserId()
   );
   const [voiceActionPending, setVoiceActionPending] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
   const voice = useVoiceState(sessionId);
   const userDisplayName = auth?.currentUser?.displayName ?? "Resident";
 
@@ -113,6 +116,11 @@ export default function JoinSession() {
     });
     return () => unsub();
   }, [sessionId]);
+
+  useEffect(() => {
+    const unsub = voicePatientService.onLevel((level) => setMicLevel(level));
+    return () => unsub();
+  }, []);
 
   // Reset local selection when question changes
   useEffect(() => {
@@ -228,7 +236,7 @@ export default function JoinSession() {
     if (!sessionId || !userId) return;
     setVoiceActionPending(true);
     try {
-      await takeFloor(sessionId, { uid: userId, displayName: userDisplayName });
+      await takeFloorTx(sessionId, { uid: userId, displayName: userDisplayName });
     } catch (err) {
       console.error("Failed to take floor", err);
     } finally {
@@ -246,6 +254,16 @@ export default function JoinSession() {
     } finally {
       setVoiceActionPending(false);
     }
+  };
+
+  const handlePressStart = async () => {
+    if (!canSpeak) return;
+    await voicePatientService.ensureMic();
+    await voicePatientService.startCapture();
+  };
+
+  const handlePressEnd = async () => {
+    voicePatientService.stopCapture();
   };
 
   const handleChoice = async (choiceIndex: number) => {
@@ -375,6 +393,24 @@ export default function JoinSession() {
               ) : (
                 <span className="text-xs text-slate-500">Voice mode is off</span>
               )}
+            </div>
+          </div>
+          <div className="mt-3 space-y-2">
+            <HoldToSpeakButton
+              disabled={!canSpeak}
+              onPressStart={handlePressStart}
+              onPressEnd={handlePressEnd}
+              labelIdle="Hold to speak"
+              labelDisabled={voice.enabled ? "You don't have the floor" : "Voice off"}
+            />
+            <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+              Mic level
+            </div>
+            <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 transition-all"
+                style={{ width: `${Math.min(100, Math.round(micLevel * 140))}%` }}
+              ></div>
             </div>
           </div>
         </section>

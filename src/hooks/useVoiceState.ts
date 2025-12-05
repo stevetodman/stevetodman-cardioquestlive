@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { doc, onSnapshot, updateDoc, serverTimestamp, db } from "../utils/firestore";
+import { doc, onSnapshot, updateDoc, serverTimestamp, db, runTransaction } from "../utils/firestore";
 import { VoiceState, VoiceMode } from "../types";
 
 export const defaultVoiceState: VoiceState = {
@@ -46,11 +46,28 @@ export async function takeFloor(
   user: { uid: string; displayName?: string | null }
 ) {
   const ref = doc(db, "sessions", sessionId);
-  await updateDoc(ref, {
-    "voice.floorHolderId": user.uid,
-    "voice.floorHolderName": user.displayName ?? "Resident",
-    "voice.since": serverTimestamp(),
-    "voice.mode": "resident-speaking" as VoiceMode,
+  await takeFloorTx(sessionId, user, true);
+}
+
+export async function takeFloorTx(
+  sessionId: string,
+  user: { uid: string; displayName?: string | null },
+  allowOverride: boolean = false
+) {
+  const sessionRef = doc(db, "sessions", sessionId);
+  await runTransaction(db, async (tx: any) => {
+    const snap = await tx.get(sessionRef);
+    const data = snap?.data ? snap.data() : snap?.data?.();
+    const current = normalizeVoiceState(data?.voice);
+    if (current.floorHolderId && !allowOverride) {
+      throw new Error("Floor already taken");
+    }
+    tx.update(sessionRef, {
+      "voice.floorHolderId": user.uid,
+      "voice.floorHolderName": user.displayName ?? "Resident",
+      "voice.since": serverTimestamp(),
+      "voice.mode": "resident-speaking" as VoiceMode,
+    });
   });
 }
 
