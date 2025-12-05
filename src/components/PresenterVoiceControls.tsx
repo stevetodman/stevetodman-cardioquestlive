@@ -2,6 +2,7 @@ import React from "react";
 import { VoiceState, VoiceCommandType } from "../types";
 import { setVoiceEnabled, releaseFloor, setAIMode } from "../hooks/useVoiceState";
 import { sendVoiceCommand } from "../services/voiceCommands";
+import { voiceGatewayClient } from "../services/VoiceGatewayClient";
 
 interface PresenterVoiceControlsProps {
   sessionId: string;
@@ -11,6 +12,7 @@ interface PresenterVoiceControlsProps {
 async function emitCommand(sessionId: string, type: VoiceCommandType) {
   try {
     await sendVoiceCommand(sessionId, { type });
+    voiceGatewayClient.sendVoiceCommand(type);
   } catch (err) {
     console.error("Failed to send command", err);
   }

@@ -20,7 +20,8 @@ import { useVoiceState, releaseFloor, setVoiceEnabled } from "../hooks/useVoiceS
 import { auth } from "../firebase";
 import { VoicePatientOverlay } from "../components/VoicePatientOverlay";
 import { PresenterVoiceControls } from "../components/PresenterVoiceControls";
-import { sendVoiceCommand } from "../services/voiceCommands";
+import { voiceGatewayClient } from "../services/VoiceGatewayClient";
+import { GatewayStatus, PatientState } from "../types/voiceGateway";
 
 export default function PresenterSession() {
   const { sessionId } = useParams();
@@ -38,6 +39,8 @@ export default function PresenterSession() {
     { questionId: string; questionIndex: number; correctCount: number; totalCount: number; accuracyPct: number }[]
   >([]);
   const [transcriptLines, setTranscriptLines] = useState<string[]>([]);
+  const [patientState, setPatientState] = useState<PatientState>("idle");
+  const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus>("disconnected");
   const slideRef = useRef<HTMLDivElement>(null);
   const teams = useTeamScores(sessionId);
   const players = useIndividualScores(sessionId);
@@ -123,6 +126,28 @@ export default function PresenterSession() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [session, goToSlide]);
+
+  // Voice gateway wiring for presenter
+  useEffect(() => {
+    const unsubStatus = voiceGatewayClient.onStatus((status) => setGatewayStatus(status));
+    const unsubPatient = voiceGatewayClient.onPatientState((state) => setPatientState(state));
+    const unsubTranscript = voiceGatewayClient.onPatientTranscriptDelta((text) =>
+      setTranscriptLines((prev) => [...prev, text])
+    );
+    return () => {
+      unsubStatus();
+      unsubPatient();
+      unsubTranscript();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const uid = auth?.currentUser?.uid ?? "presenter-local";
+    const displayName = auth?.currentUser?.displayName ?? "Presenter";
+    voiceGatewayClient.connect(sessionId, uid, displayName, "presenter");
+    return () => voiceGatewayClient.disconnect();
+  }, [sessionId]);
 
   // Wire in-slide nav buttons to presenter navigation
   useEffect(() => {
@@ -289,7 +314,18 @@ export default function PresenterSession() {
     totalQuestions > 0 ? Math.min(1, Math.max(0, questionsAnsweredCount / totalQuestions)) : 0;
   const avgResponsesPerQuestion =
     questionsAnsweredCount > 0 ? totalResponses / questionsAnsweredCount : 0;
-  const overlayMode = voice.enabled ? (voice.mode ?? "idle") : "disabled";
+  const overlayMode: "idle" | "resident-speaking" | "ai-speaking" | "disabled" | "disconnected" =
+    !voice.enabled
+      ? "disabled"
+      : gatewayStatus !== "connected"
+      ? "disconnected"
+      : patientState === "speaking"
+      ? "ai-speaking"
+      : patientState === "listening"
+      ? "resident-speaking"
+      : patientState === "error"
+      ? "disconnected"
+      : "idle";
 
   return (
     <div className="h-screen bg-slate-950 text-slate-50 overflow-hidden relative flex flex-col">
@@ -356,6 +392,17 @@ export default function PresenterSession() {
                   {voice.floorHolderName ? `Floor: ${voice.floorHolderName}` : "Floor open"}
                 </div>
               )}
+              <div
+                className={`text-[10px] uppercase tracking-[0.14em] px-2 py-1 rounded-full border ${
+                  gatewayStatus === "connected"
+                    ? "border-emerald-500/60 text-emerald-200"
+                    : gatewayStatus === "connecting"
+                    ? "border-sky-500/60 text-sky-200"
+                    : "border-slate-700 text-slate-400"
+                }`}
+              >
+                {gatewayStatus}
+              </div>
               <button
                 type="button"
                 onClick={toggleVoice}

@@ -30,8 +30,28 @@ jest.mock("../../hooks/useIndividualScores", () => ({
   useIndividualScores: () => [{ userId: "u1", teamId: "a", teamName: "Team A", points: 80 }],
 }));
 
+jest.mock("../../firebase", () => ({
+  __esModule: true,
+  auth: { currentUser: { uid: "presenter-1", displayName: "Presenter" } },
+  ensureSignedIn: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock("../../services/voiceCommands", () => ({
   sendVoiceCommand: jest.fn(),
+}));
+
+jest.mock("../../services/VoiceGatewayClient", () => ({
+  voiceGatewayClient: {
+    connect: jest.fn(),
+    disconnect: jest.fn(),
+    startSpeaking: jest.fn(),
+    stopSpeaking: jest.fn(),
+    sendVoiceCommand: jest.fn(),
+    onPatientState: () => () => {},
+    onPatientTranscriptDelta: () => () => {},
+    onParticipantState: () => () => {},
+    onStatus: () => () => {},
+  },
 }));
 
 describe("PresenterSession summary toggle", () => {

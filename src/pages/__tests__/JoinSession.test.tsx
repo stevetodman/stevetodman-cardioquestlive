@@ -14,6 +14,20 @@ jest.mock("../../components/SlidePreview", () => ({
   SlidePreview: ({ html }: { html: string }) => <div data-testid="slide-preview">{html}</div>,
 }));
 
+jest.mock("../../services/VoiceGatewayClient", () => ({
+  voiceGatewayClient: {
+    connect: jest.fn(),
+    disconnect: jest.fn(),
+    startSpeaking: jest.fn(),
+    stopSpeaking: jest.fn(),
+    sendVoiceCommand: jest.fn(),
+    onPatientState: () => () => {},
+    onPatientTranscriptDelta: () => () => {},
+    onParticipantState: () => () => {},
+    onStatus: () => () => {},
+  },
+}));
+
 const mockGetDocs = jest.fn();
 const mockOnSnapshot = jest.fn();
 const mockSetDoc = jest.fn();

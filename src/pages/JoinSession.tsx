@@ -20,6 +20,8 @@ import { auth, ensureSignedIn, isConfigured } from "../firebase";
 import { useVoiceState, takeFloorTx, releaseFloor } from "../hooks/useVoiceState";
 import { HoldToSpeakButton } from "../components/HoldToSpeakButton";
 import { voicePatientService } from "../services/VoicePatientService";
+import { voiceGatewayClient } from "../services/VoiceGatewayClient";
+import { GatewayStatus } from "../types/voiceGateway";
 
 function getLocalUserId(): string {
   const key = "cq_live_user_id";
@@ -61,6 +63,7 @@ export default function JoinSession() {
   );
   const [voiceActionPending, setVoiceActionPending] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
+  const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus>("disconnected");
   const voice = useVoiceState(sessionId);
   const userDisplayName = auth?.currentUser?.displayName ?? "Resident";
 
@@ -121,6 +124,18 @@ export default function JoinSession() {
     const unsub = voicePatientService.onLevel((level) => setMicLevel(level));
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    const unsub = voiceGatewayClient.onStatus((status) => setGatewayStatus(status));
+    return () => unsub();
+  }, []);
+
+  // Connect to voice gateway once we know session/user
+  useEffect(() => {
+    if (!sessionId || !userId) return;
+    voiceGatewayClient.connect(sessionId, userId, userDisplayName, "participant");
+    return () => voiceGatewayClient.disconnect();
+  }, [sessionId, userId, userDisplayName]);
 
   // Reset local selection when question changes
   useEffect(() => {
@@ -260,10 +275,12 @@ export default function JoinSession() {
     if (!canSpeak) return;
     await voicePatientService.ensureMic();
     await voicePatientService.startCapture();
+    voiceGatewayClient.startSpeaking();
   };
 
   const handlePressEnd = async () => {
     voicePatientService.stopCapture();
+    voiceGatewayClient.stopSpeaking();
   };
 
   const handleChoice = async (choiceIndex: number) => {
@@ -340,6 +357,17 @@ export default function JoinSession() {
         <div className="font-bold text-slate-200 tracking-tight">CardioQuest</div>
         <div className="text-xs font-mono bg-slate-900 px-2 py-1 rounded text-sky-400 border border-slate-800">
           {session.joinCode}
+        </div>
+        <div
+          className={`text-[10px] uppercase tracking-[0.16em] px-2 py-1 rounded-full border ${
+            gatewayStatus === "connected"
+              ? "border-emerald-500/60 text-emerald-200"
+              : gatewayStatus === "connecting"
+              ? "border-sky-500/60 text-sky-200"
+              : "border-slate-700 text-slate-400"
+          }`}
+        >
+          Voice: {gatewayStatus}
         </div>
       </header>
 
