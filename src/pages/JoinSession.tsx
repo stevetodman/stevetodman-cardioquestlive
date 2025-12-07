@@ -75,6 +75,8 @@ export default function JoinSession() {
     vitals: Record<string, unknown>;
     fallback: boolean;
     budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
+    scenarioId?: string;
+    stageIds?: string[];
   } | null>(null);
   const [micStatus, setMicStatus] = useState<MicStatus>("unknown");
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
@@ -203,56 +205,45 @@ export default function JoinSession() {
     setSelectedChoice(null);
   }, [session?.currentQuestionId]);
 
-  // Ensure participant doc exists and assign a team
+  // Ensure participant doc exists and assign a team (transaction to avoid race)
   useEffect(() => {
     async function ensureParticipantDoc() {
       if (!sessionId || !userId) return;
+      const participantRef = doc(db, "sessions", sessionId, "participants", userId);
       try {
-        const participantRef = doc(db, "sessions", sessionId, "participants", userId);
-        const existing = await getDoc(participantRef);
-        if (existing.exists && existing.exists()) return;
+        await runTransaction(db, async (tx) => {
+          const existing = await tx.get(participantRef);
+          if (existing.exists()) return;
 
-        // Fetch current counts to do simple round-robin/least-loaded assignment
-        let chosenTeam = TEAM_OPTIONS[0];
-        try {
-          const snap = await getDocs(collection(db, "sessions", sessionId, "participants"));
+          // Compute least-loaded team inside the transaction to avoid races.
+          const snap = await tx.get(collection(db, "sessions", sessionId, "participants"));
           const counts = TEAM_OPTIONS.reduce<Record<string, number>>((acc, t) => {
             acc[t.id] = 0;
             return acc;
           }, {});
-          const docsArray = Array.isArray((snap as any)?.docs) ? (snap as any).docs : [];
-          const iterate = (fn: (docSnap: any) => void) => {
-            if (typeof (snap as any)?.forEach === "function") {
-              (snap as any).forEach(fn);
-            } else {
-              docsArray.forEach(fn);
-            }
-          };
-          iterate((docSnap: any) => {
-            const rawData = typeof docSnap.data === "function" ? docSnap.data() : docSnap.data;
-            const teamId = rawData?.teamId;
+          snap.forEach((docSnap: any) => {
+            const data = docSnap.data?.() ?? docSnap.data?.;
+            const teamId = data?.teamId;
             if (teamId && counts[teamId] !== undefined) {
               counts[teamId] += 1;
             }
           });
-          const sortedByLoad = [...TEAM_OPTIONS].sort((a, b) => (counts[a.id] ?? 0) - (counts[b.id] ?? 0));
-          chosenTeam = sortedByLoad[0] ?? chosenTeam;
-        } catch (err) {
-          console.warn("Failed to compute team load; using default team", err);
-        }
+          const chosenTeam =
+            [...TEAM_OPTIONS].sort((a, b) => (counts[a.id] ?? 0) - (counts[b.id] ?? 0))[0] ?? TEAM_OPTIONS[0];
 
-        const participantDoc: ParticipantDoc = {
-          userId,
-          sessionId,
-          teamId: chosenTeam.id,
-          teamName: chosenTeam.name,
-          points: 0,
-          streak: 0,
-          correctCount: 0,
-          incorrectCount: 0,
-          createdAt: new Date().toISOString(),
-        };
-        await setDoc(participantRef, participantDoc);
+          const participantDoc: ParticipantDoc = {
+            userId,
+            sessionId,
+            teamId: chosenTeam.id,
+            teamName: chosenTeam.name,
+            points: 0,
+            streak: 0,
+            correctCount: 0,
+            incorrectCount: 0,
+            createdAt: new Date().toISOString(),
+          };
+          tx.set(participantRef, participantDoc);
+        });
       } catch (err) {
         console.error("Failed to ensure participant doc", err);
       }
