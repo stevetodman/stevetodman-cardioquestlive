@@ -4,6 +4,8 @@ import { ServerToClientMessage } from "./messageTypes";
 type SessionSockets = {
   presenters: Set<WebSocket>;
   participants: Set<WebSocket>;
+  floorHolder?: string;
+  fallback: boolean;
 };
 
 export class SessionManager {
@@ -11,7 +13,12 @@ export class SessionManager {
 
   private ensureSession(sessionId: string): SessionSockets {
     if (!this.sessions.has(sessionId)) {
-      this.sessions.set(sessionId, { presenters: new Set(), participants: new Set() });
+      this.sessions.set(sessionId, {
+        presenters: new Set(),
+        participants: new Set(),
+        floorHolder: undefined,
+        fallback: false,
+      });
     }
     return this.sessions.get(sessionId)!;
   }
@@ -36,6 +43,36 @@ export class SessionManager {
     if (session.presenters.size === 0 && session.participants.size === 0) {
       this.sessions.delete(sessionId);
     }
+  }
+
+  requestFloor(sessionId: string, userId: string): { granted: boolean; previous?: string } {
+    const session = this.ensureSession(sessionId);
+    if (!session.floorHolder || session.floorHolder === userId) {
+      const previous = session.floorHolder;
+      session.floorHolder = userId;
+      return { granted: true, previous };
+    }
+    return { granted: false, previous: session.floorHolder };
+  }
+
+  releaseFloor(sessionId: string, userId: string): boolean {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.floorHolder !== userId) return false;
+    session.floorHolder = undefined;
+    return true;
+  }
+
+  getFloorHolder(sessionId: string): string | undefined {
+    return this.sessions.get(sessionId)?.floorHolder;
+  }
+
+  setFallback(sessionId: string, fallback: boolean) {
+    const session = this.ensureSession(sessionId);
+    session.fallback = fallback;
+  }
+
+  isFallback(sessionId: string): boolean {
+    return this.sessions.get(sessionId)?.fallback ?? false;
   }
 
   broadcastToSession(sessionId: string, msg: ServerToClientMessage) {

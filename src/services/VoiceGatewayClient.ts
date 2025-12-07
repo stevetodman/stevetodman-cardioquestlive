@@ -13,6 +13,7 @@ type PatientStateListener = (state: PatientState) => void;
 type TranscriptListener = (text: string) => void;
 type ParticipantStateListener = (info: { userId: string; speaking: boolean }) => void;
 type StatusListener = (status: VoiceConnectionStatus) => void;
+type SimStateListener = (state: { stageId: string; vitals: Record<string, unknown>; fallback: boolean }) => void;
 type AudioListener = (audioUrl: string) => void;
 type DoctorUtteranceListener = (text: string, userId: string) => void;
 type ScenarioListener = (scenarioId: PatientScenarioId) => void;
@@ -44,6 +45,7 @@ class VoiceGatewayClient {
   private transcriptListeners = new Set<TranscriptListener>();
   private participantListeners = new Set<ParticipantStateListener>();
   private statusListeners = new Set<StatusListener>();
+  private simStateListeners = new Set<SimStateListener>();
   private audioListeners = new Set<AudioListener>();
   private doctorListeners = new Set<DoctorUtteranceListener>();
   private scenarioListeners = new Set<ScenarioListener>();
@@ -219,6 +221,11 @@ class VoiceGatewayClient {
     return () => this.transcriptListeners.delete(cb);
   }
 
+  onSimState(cb: SimStateListener) {
+    this.simStateListeners.add(cb);
+    return () => this.simStateListeners.delete(cb);
+  }
+
   onParticipantState(cb: ParticipantStateListener) {
     this.participantListeners.add(cb);
     return () => this.participantListeners.delete(cb);
@@ -308,6 +315,12 @@ class VoiceGatewayClient {
       }
       case "analysis_result": {
         this.analysisListeners.forEach((cb) => cb(msg));
+        break;
+      }
+      case "sim_state": {
+        this.simStateListeners.forEach((cb) =>
+          cb({ stageId: msg.stageId, vitals: msg.vitals, fallback: msg.fallback })
+        );
         break;
       }
       case "error": {

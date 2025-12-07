@@ -7,7 +7,9 @@
     "build": "tsc -p .",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "sim:harness": "node scripts/sim-harness.js",
+    "ws:harness": "node scripts/ws-harness.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

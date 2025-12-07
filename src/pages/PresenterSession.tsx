@@ -53,6 +53,11 @@ export default function PresenterSession() {
     state: "disconnected",
     lastChangedAt: Date.now(),
   });
+  const [simState, setSimState] = useState<{
+    stageId: string;
+    vitals: Record<string, unknown>;
+    fallback: boolean;
+  } | null>(null);
   const [transcriptLog, setTranscriptLog] = useState<TranscriptLogTurn[]>([]);
   const [patientAudioUrl, setPatientAudioUrl] = useState<string | null>(null);
   const [doctorQuestionText, setDoctorQuestionText] = useState<string>("");
@@ -264,6 +269,7 @@ export default function PresenterSession() {
   // Voice gateway wiring for presenter
   useEffect(() => {
     const unsubStatus = voiceGatewayClient.onStatus((status) => setGatewayStatus(status));
+    const unsubSim = voiceGatewayClient.onSimState((state) => setSimState(state));
     const unsubPatient = voiceGatewayClient.onPatientState((state) => {
       setPatientState(state);
 
@@ -363,6 +369,7 @@ export default function PresenterSession() {
     });
     return () => {
       unsubStatus();
+       unsubSim();
       unsubPatient();
       unsubTranscript();
       unsubDoctor();
@@ -618,6 +625,21 @@ export default function PresenterSession() {
               scenarioOptions={scenarioOptions}
               onScenarioChange={handleScenarioSelect}
             />
+          )}
+          {simState && (
+            <div className="mt-2 text-[12px] text-slate-300 flex flex-wrap items-center gap-3">
+              <span className="px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-800">
+                Stage: {simState.stageId || "unknown"}
+              </span>
+              <span className="text-[11px] text-slate-400">
+                Vitals: {simState.vitals?.hr ? `HR ${simState.vitals.hr}` : "—"} {simState.vitals?.bp ? `BP ${simState.vitals.bp}` : ""}
+              </span>
+              {simState.fallback && (
+                <span className="px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/60 text-amber-100">
+                  Voice fallback active (text mode)
+                </span>
+              )}
+            </div>
           )}
           <div className="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-sm shadow-black/20">
             <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">

@@ -7,6 +7,7 @@ type Props = {
   micStatus: MicStatus;
   hasFloor: boolean;
   otherSpeaking: boolean;
+  fallback?: boolean;
   onRetryVoice?: () => void;
   onRecheckMic?: () => void;
 };
@@ -29,6 +30,7 @@ export function ParticipantVoiceStatusBanner({
   micStatus,
   hasFloor,
   otherSpeaking,
+  fallback = false,
   onRetryVoice,
   onRecheckMic,
 }: Props) {
@@ -37,7 +39,11 @@ export function ParticipantVoiceStatusBanner({
   let tone: "ok" | "warn" | "error" | "info" = "ok";
   const buttons: Array<{ label: string; onClick?: () => void }> = [];
 
-  if (micStatus === "blocked") {
+  if (fallback) {
+    tone = "warn";
+    title = "Voice fallback (text mode)";
+    body = "Patient voice paused. Use typed questions until voice resumes.";
+  } else if (micStatus === "blocked") {
     tone = "error";
     title = "Microphone blocked";
     body = "Enable microphone in your browser settings, then tap Re-check mic.";

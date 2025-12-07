@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import {
@@ -70,6 +70,11 @@ export default function JoinSession() {
     state: "disconnected",
     lastChangedAt: Date.now(),
   });
+  const [simState, setSimState] = useState<{
+    stageId: string;
+    vitals: Record<string, unknown>;
+    fallback: boolean;
+  } | null>(null);
   const [micStatus, setMicStatus] = useState<MicStatus>("unknown");
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -158,6 +163,11 @@ export default function JoinSession() {
 
   useEffect(() => {
     const unsub = voiceGatewayClient.onStatus((status) => setConnectionStatus(status));
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = voiceGatewayClient.onSimState((state) => setSimState(state));
     return () => unsub();
   }, []);
 
@@ -292,13 +302,19 @@ export default function JoinSession() {
     connectionReady &&
     voice.mode !== "ai-speaking" &&
     micStatus !== "blocked";
-  const canTakeFloor = voice.enabled && !voice.floorHolderId && connectionReady;
+  const fallbackActive = simState?.fallback === true;
+  const canTakeFloor = voice.enabled && !voice.floorHolderId && connectionReady && !fallbackActive;
   const floorTakenByOther =
     voice.enabled && voice.floorHolderId !== null && voice.floorHolderId !== userId;
   const otherSpeaking = (activeSpeakerId && activeSpeakerId !== userId) || floorTakenByOther;
+  const stageLabel = useMemo(() => simState?.stageId ?? "stage unknown", [simState]);
 
   const handleTakeFloor = async () => {
     if (!sessionId || !userId) return;
+    if (fallbackActive) {
+      setVoiceError("Voice is in fallback. Please use typed questions or wait for resume.");
+      return;
+    }
     if (!connectionReady) {
       setVoiceError("Voice is not connected yet.");
       return;
@@ -513,18 +529,26 @@ export default function JoinSession() {
               micStatus={micStatus}
               hasFloor={hasFloor}
               otherSpeaking={otherSpeaking}
+              fallback={fallbackActive}
               onRetryVoice={handleRetryVoice}
               onRecheckMic={handleRecheckMic}
             />
+            <div className="text-[11px] text-slate-500">
+              {fallbackActive
+                ? "Voice fallback active. Use typed questions if available."
+                : `Stage: ${stageLabel}`}
+            </div>
           </div>
           <div className="mt-3 space-y-2">
             <HoldToSpeakButton
-              disabled={!canSpeak}
+              disabled={!canSpeak || fallbackActive}
               onPressStart={handlePressStart}
               onPressEnd={handlePressEnd}
               labelIdle="Hold to ask your question"
               labelDisabled={
-                !voice.enabled
+                fallbackActive
+                  ? "Voice fallback is active"
+                  : !voice.enabled
                   ? "Voice off"
                   : micStatus === "blocked"
                   ? "Mic blocked"

@@ -12,9 +12,26 @@ import { Buffer } from "buffer";
 import { PatientScenarioId } from "./patientCase";
 import { analyzeTranscript } from "./debriefAnalyzer";
 import { DebriefTurn } from "./messageTypes";
+import { RealtimePatientClient } from "./sim/realtimePatientClient";
+import { InMemoryEventLog } from "./sim/eventLog";
+import { ScenarioEngine } from "./sim/scenarioEngine";
+import { ToolGate } from "./sim/toolGate";
+import { ToolIntent } from "./sim/types";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
+const eventLog = new InMemoryEventLog();
+const realtimeModel = process.env.OPENAI_REALTIME_MODEL || "gpt-4o-mini-realtime-preview";
+const realtimeApiKey = process.env.OPENAI_API_KEY || "";
+
+type Runtime = {
+  realtime?: RealtimePatientClient;
+  fallback: boolean;
+  scenarioEngine: ScenarioEngine;
+  toolGate: ToolGate;
+};
+
+const runtimes: Map<string, Runtime> = new Map();
 
 type ClientContext = {
   joined: boolean;
@@ -59,6 +76,19 @@ function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.RawData
 
   switch (parsed.type) {
     case "start_speaking": {
+      const result = sessionManager.requestFloor(ctx.sessionId, parsed.userId);
+      if (!result.granted) {
+        send(ws, { type: "error", message: "floor_taken" });
+        return;
+      }
+      if (result.previous && result.previous !== parsed.userId) {
+        sessionManager.broadcastToSession(ctx.sessionId, {
+          type: "participant_state",
+          sessionId: ctx.sessionId,
+          userId: result.previous,
+          speaking: false,
+        });
+      }
       sessionManager.broadcastToSession(ctx.sessionId, {
         type: "participant_state",
         sessionId: ctx.sessionId,
@@ -68,12 +98,16 @@ function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.RawData
       break;
     }
     case "stop_speaking": {
+      const released = sessionManager.releaseFloor(ctx.sessionId, parsed.userId);
       sessionManager.broadcastToSession(ctx.sessionId, {
         type: "participant_state",
         sessionId: ctx.sessionId,
         userId: parsed.userId,
         speaking: false,
       });
+      if (!released) {
+        log("stop_speaking ignored (not floor holder)", ctx.sessionId, parsed.userId);
+      }
       break;
     }
     case "doctor_audio": {
@@ -260,6 +294,7 @@ function handleScenarioChange(sessionId: string, scenarioId: PatientScenarioId) 
     return;
   }
   setScenarioForSession(sessionId, scenarioId);
+  ensureRuntime(sessionId);
   log("Scenario changed", sessionId, scenarioId);
   sessionManager.broadcastToPresenters(sessionId, {
     type: "scenario_changed",
@@ -277,16 +312,23 @@ async function handleDoctorAudio(
   try {
     const audioBuffer = Buffer.from(audioBase64, "base64");
     log("Doctor audio received", sessionId, "bytes:", audioBuffer.length);
-    const text = await transcribeDoctorAudio(audioBuffer, contentType);
-    if (text && text.trim().length > 0) {
-      log("STT transcript", sessionId, text.slice(0, 120));
-      sessionManager.broadcastToPresenters(sessionId, {
-        type: "doctor_utterance",
-        sessionId,
-        userId,
-        text,
-      });
+    if (sessionManager.isFallback(sessionId)) {
+      log("Session in fallback; routing legacy STT only", sessionId);
+      await handleDoctorAudioLegacy(sessionId, userId, audioBuffer, contentType);
+      return;
     }
+    const runtime = ensureRuntime(sessionId);
+    const floorHolder = sessionManager.getFloorHolder(sessionId);
+    if (floorHolder && floorHolder !== userId) {
+      log("Ignoring doctor_audio; user does not hold floor", sessionId, userId);
+      return;
+    }
+    if (runtime.realtime) {
+      runtime.realtime.sendAudioChunk(audioBuffer);
+      runtime.realtime.commitAudio();
+      return;
+    }
+    await handleDoctorAudioLegacy(sessionId, userId, audioBuffer, contentType);
   } catch (err) {
     logError("doctor_audio handling failed", err);
   }
@@ -307,6 +349,144 @@ async function handleAnalyzeTranscript(sessionId: string, turns: DebriefTurn[]) 
   } catch (err) {
     logError("Debrief analysis error", err);
   }
+}
+
+async function handleDoctorAudioLegacy(
+  sessionId: string,
+  userId: string,
+  audioBuffer: Buffer,
+  contentType: string
+) {
+  const text = await transcribeDoctorAudio(audioBuffer, contentType);
+  if (text && text.trim().length > 0) {
+    log("STT transcript", sessionId, text.slice(0, 120));
+    sessionManager.broadcastToPresenters(sessionId, {
+      type: "doctor_utterance",
+      sessionId,
+      userId,
+      text,
+    });
+  }
+}
+
+function ensureRuntime(sessionId: string): Runtime {
+  const existing = runtimes.get(sessionId);
+  if (existing) return existing;
+  const scenarioId = getScenarioForSession(sessionId);
+  const runtime: Runtime = {
+    fallback: false,
+    scenarioEngine: new ScenarioEngine(sessionId, scenarioId),
+    toolGate: new ToolGate(),
+  };
+  if (realtimeApiKey) {
+    runtime.realtime = new RealtimePatientClient({
+      simId: sessionId,
+      model: realtimeModel,
+      apiKey: realtimeApiKey,
+      systemPrompt: buildSystemPrompt(scenarioId),
+      onAudioOut: (buf) => {
+        sessionManager.broadcastToPresenters(sessionId, {
+          type: "patient_audio",
+          sessionId,
+          audioBase64: buf.toString("base64"),
+        });
+      },
+      onTranscriptDelta: (text, isFinal) => {
+        sessionManager.broadcastToSession(sessionId, {
+          type: "patient_transcript_delta",
+          sessionId,
+          text,
+        });
+        eventLog.append({
+          id: `${Date.now()}-${Math.random()}`,
+          ts: Date.now(),
+          simId: sessionId,
+          type: isFinal ? "scenario.state.diff" : "tool.intent.received",
+          payload: { text, final: isFinal },
+        });
+      },
+      onToolIntent: (intent) => {
+        eventLog.append({
+          id: `${Date.now()}-${Math.random()}`,
+          ts: Date.now(),
+          simId: sessionId,
+          type: "tool.intent.received",
+          payload: intent as any,
+        });
+        handleToolIntent(sessionId, intent);
+      },
+      onDisconnect: () => {
+        runtime.fallback = true;
+        sessionManager.setFallback(sessionId, true);
+        runtime.scenarioEngine.setFallback(true);
+        broadcastSimState(sessionId, runtime.scenarioEngine.getState());
+        sessionManager.broadcastToPresenters(sessionId, {
+          type: "patient_state",
+          sessionId,
+          state: "error",
+        });
+      },
+    });
+    runtime.realtime.connect();
+  }
+  runtimes.set(sessionId, runtime);
+  broadcastSimState(sessionId, runtime.scenarioEngine.getState());
+  return runtime;
+}
+
+function handleToolIntent(sessionId: string, intent: ToolIntent) {
+  const runtime = ensureRuntime(sessionId);
+  const stageId = runtime.scenarioEngine.getState().stageId;
+  const stageDef = runtime.scenarioEngine.getStageDef(stageId);
+  const decision = runtime.toolGate.validate(sessionId, stageDef, intent);
+  if (!decision.allowed) {
+    eventLog.append({
+      id: `${Date.now()}-${Math.random()}`,
+      ts: Date.now(),
+      simId: sessionId,
+      type: "tool.intent.rejected",
+      payload: { intent, reason: decision.reason },
+    });
+    return;
+  }
+  const result = runtime.scenarioEngine.applyIntent(intent);
+  eventLog.append({
+    id: `${Date.now()}-${Math.random()}`,
+    ts: Date.now(),
+    simId: sessionId,
+    type: "tool.intent.approved",
+    payload: intent as any,
+  });
+  result.events.forEach((evt) =>
+    eventLog.append({
+      id: `${Date.now()}-${Math.random()}`,
+      ts: Date.now(),
+      simId: sessionId,
+      type: evt.type as any,
+      payload: evt.payload,
+    })
+  );
+  broadcastSimState(sessionId, result.nextState);
+}
+
+function broadcastSimState(sessionId: string, state: { stageId: string; vitals: any; fallback: boolean }) {
+  sessionManager.broadcastToSession(sessionId, {
+    type: "sim_state",
+    sessionId,
+    stageId: state.stageId,
+    vitals: state.vitals,
+    fallback: state.fallback,
+  });
+}
+
+function buildSystemPrompt(scenario: PatientScenarioId): string {
+  const persona =
+    scenario === "syncope"
+      ? "You are a teen with exertional syncope. Answer as the patient with short, concrete answers. Do not diagnose or recommend treatments."
+      : scenario === "palpitations_svt"
+      ? "You are a teen with recurrent palpitations. Stay in character with short answers, no diagnoses or treatments."
+      : "You are a teen with exertional chest pain. Stay in character with short answers, no diagnoses or treatments.";
+  return `${persona}\nKeep answers to 1-3 sentences. If unsure, say you are not sure.`;
 }
 
 main();

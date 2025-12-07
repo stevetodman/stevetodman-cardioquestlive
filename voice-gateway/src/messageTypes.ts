@@ -107,6 +107,13 @@ export type ServerToClientMessage =
       teachingPoints: string[];
     }
   | {
+      type: "sim_state";
+      sessionId: string;
+      stageId: string;
+      vitals: Record<string, unknown>;
+      fallback: boolean;
+    }
+  | {
       type: "pong";
     }
   | {
