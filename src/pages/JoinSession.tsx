@@ -24,6 +24,7 @@ import { voiceGatewayClient } from "../services/VoiceGatewayClient";
 import { VoiceConnectionStatus, CharacterId } from "../types/voiceGateway";
 import { MicStatus } from "../services/VoicePatientService";
 import { ParticipantVoiceStatusBanner } from "../components/ParticipantVoiceStatusBanner";
+import { sendVoiceCommand } from "../services/voiceCommands";
 
 function getLocalUserId(): string {
   const key = "cq_live_user_id";
@@ -32,6 +33,20 @@ function getLocalUserId(): string {
   const id = crypto.randomUUID();
   localStorage.setItem(key, id);
   return id;
+}
+
+async function emitCommand(
+  sessionId: string,
+  type: "exam" | "toggle_telemetry" | "show_ekg" | "order",
+  payload?: Record<string, any>,
+  character?: CharacterId
+) {
+  sendVoiceCommand(sessionId, { type, payload, character }).catch(() => {});
+  try {
+    voiceGatewayClient.sendVoiceCommand(type as any, payload, character);
+  } catch {
+    // ignore
+  }
 }
 
 const TEAM_OPTIONS = [
@@ -74,14 +89,21 @@ export default function JoinSession() {
   const [simState, setSimState] = useState<{
     stageId: string;
     vitals: Record<string, unknown>;
+    exam?: Record<string, string | undefined>;
+    telemetry?: boolean;
+    rhythmSummary?: string;
+    telemetryWaveform?: number[];
     fallback: boolean;
     budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
     scenarioId?: string;
     stageIds?: string[];
+    orders?: { id: string; type: string; status: string; result?: any; completedAt?: number }[];
   } | null>(null);
   const [micStatus, setMicStatus] = useState<MicStatus>("unknown");
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [showExam, setShowExam] = useState(false);
+  const [showEkg, setShowEkg] = useState(false);
   const voice = useVoiceState(sessionId);
   const userDisplayName = auth?.currentUser?.displayName ?? "Resident";
 
@@ -293,6 +315,10 @@ export default function JoinSession() {
     voice.enabled && voice.floorHolderId !== null && voice.floorHolderId !== userId;
   const otherSpeaking = (activeSpeakerId && activeSpeakerId !== userId) || floorTakenByOther;
   const stageLabel = useMemo(() => simState?.stageId ?? "stage unknown", [simState]);
+  const latestEkg = useMemo(() => {
+    const ekgs = (simState?.orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
+    return ekgs.length ? ekgs[ekgs.length - 1] : null;
+  }, [simState?.orders]);
 
   if (!joinCode) return <div className="p-8 text-center text-slate-400">No join code provided.</div>;
 
@@ -553,6 +579,42 @@ export default function JoinSession() {
               Your question will be routed to this role.
             </span>
           </div>
+          <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+            <button
+              type="button"
+              onClick={() => emitCommand(sessionId!, "exam", {}, "nurse").then(() => setShowExam(true))}
+              disabled={fallbackActive}
+              className={`px-3 py-2 rounded-lg bg-indigo-600/10 border border-indigo-500/60 text-indigo-100 hover:border-indigo-400 ${
+                fallbackActive ? "opacity-60 cursor-not-allowed" : ""
+              }`}
+            >
+              Check exam
+            </button>
+            <button
+              type="button"
+              onClick={() => emitCommand(sessionId!, "toggle_telemetry", { enabled: true }, "tech")}
+              disabled={fallbackActive}
+              className={`px-3 py-2 rounded-lg bg-emerald-600/10 border border-emerald-500/60 text-emerald-100 hover:border-emerald-400 ${
+                fallbackActive ? "opacity-60 cursor-not-allowed" : ""
+              }`}
+            >
+              Start telemetry
+            </button>
+            <button
+              type="button"
+              disabled={!latestEkg}
+              onClick={() => {
+                emitCommand(sessionId!, "show_ekg", {}, "tech");
+                setShowEkg(true);
+              }}
+              className="px-3 py-2 rounded-lg border text-amber-100 bg-amber-600/10 border-amber-500/60 disabled:opacity-50"
+            >
+              Show EKG
+            </button>
+            {latestEkg && (
+              <span className="text-[11px] text-slate-400">EKG ready: latest strip available</span>
+            )}
+          </div>
           <div className="mt-3">
             <ParticipantVoiceStatusBanner
               connection={connectionStatus}
@@ -561,6 +623,7 @@ export default function JoinSession() {
               otherSpeaking={otherSpeaking}
               fallback={fallbackActive}
               throttled={simState?.budget?.throttled}
+              locked={voice.locked}
               onRetryVoice={handleRetryVoice}
               onRecheckMic={handleRecheckMic}
             />
@@ -600,6 +663,44 @@ export default function JoinSession() {
               }
             />
             {voiceError && <div className="text-[11px] text-rose-300">{voiceError}</div>}
+            {showExam && simState?.exam && (
+              <div className="mt-2 bg-slate-900/60 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-1">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+                  Exam
+                </div>
+                {simState.exam.general && <div><span className="text-slate-500 text-[11px] mr-1">General:</span>{simState.exam.general}</div>}
+                {simState.exam.cardio && <div><span className="text-slate-500 text-[11px] mr-1">CV:</span>{simState.exam.cardio}</div>}
+                {simState.exam.lungs && <div><span className="text-slate-500 text-[11px] mr-1">Lungs:</span>{simState.exam.lungs}</div>}
+                {simState.exam.perfusion && <div><span className="text-slate-500 text-[11px] mr-1">Perfusion:</span>{simState.exam.perfusion}</div>}
+                {simState.exam.neuro && <div><span className="text-slate-500 text-[11px] mr-1">Neuro:</span>{simState.exam.neuro}</div>}
+              </div>
+            )}
+            {showEkg && latestEkg && (
+              <div className="mt-2 bg-slate-950/70 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">EKG</div>
+                  <button
+                    type="button"
+                    onClick={() => setShowEkg(false)}
+                    className="text-[11px] text-slate-400 hover:text-slate-200"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="text-slate-200 whitespace-pre-wrap">
+                  {latestEkg.result?.summary ?? "EKG ready for review."}
+                </div>
+                {latestEkg.result?.imageUrl && (
+                  <div className="mt-2">
+                    <img
+                      src={latestEkg.result.imageUrl}
+                      alt="EKG strip"
+                      className="w-full max-h-48 object-contain rounded border border-slate-800"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
             <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
               Mic level
             </div>
@@ -612,6 +713,50 @@ export default function JoinSession() {
             {transcribing && (
               <div className="text-[11px] text-slate-400">Transcribing your question...</div>
             )}
+          </div>
+          {/* Mobile bottom sheet PTT */}
+          <div className="sm:hidden fixed inset-x-0 bottom-0 z-40">
+            <div className="bg-slate-950/95 border-t border-slate-800 px-3 py-3 shadow-2xl shadow-black/50">
+              <div className="flex items-center justify-between text-[11px] text-slate-300 mb-2">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-[0.14em] ${
+                      canSpeak
+                        ? "bg-emerald-500/15 text-emerald-100 border border-emerald-500/40"
+                        : "bg-slate-800 text-slate-300 border border-slate-700"
+                    }`}
+                  >
+                    {canSpeak ? "Floor free" : otherSpeaking ? "Other speaking" : "No floor"}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-[0.14em] border border-slate-700 text-slate-200">
+                    {simState?.stageId ? `Stage: ${simState.stageId}` : "Stage unknown"}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  {connectionStatus.state === "ready" ? "Voice ready" : connectionStatus.state}
+                </div>
+              </div>
+              <HoldToSpeakButton
+                disabled={!canSpeak || fallbackActive}
+                onPressStart={handlePressStart}
+                onPressEnd={handlePressEnd}
+                labelIdle="Hold to speak"
+                labelDisabled={
+                  fallbackActive
+                    ? "Voice fallback active"
+                    : !voice.enabled
+                    ? "Voice off"
+                    : micStatus === "blocked"
+                    ? "Mic blocked"
+                    : !connectionReady
+                    ? "Voice not ready"
+                    : otherSpeaking
+                    ? "Someone else is speaking"
+                    : "You don't have the floor"
+                }
+                helperText={canSpeak ? "Hold and ask, then release." : "Take floor to speak or wait."}
+              />
+            </div>
           </div>
         </section>
 

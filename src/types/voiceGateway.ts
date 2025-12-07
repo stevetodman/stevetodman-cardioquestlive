@@ -9,13 +9,14 @@ export type PatientScenarioId =
   | "ductal_shock"
   | "cyanotic_spell";
 
-export type CharacterId = "patient" | "nurse" | "tech" | "consultant";
+export type CharacterId = "patient" | "parent" | "nurse" | "tech" | "consultant";
 
 export const ROLE_COLORS: Record<
   CharacterId | "doctor" | "patient",
   { text: string; border: string; bg?: string }
 > = {
   patient: { text: "text-slate-100", border: "border-slate-600", bg: "bg-slate-800/70" },
+  parent: { text: "text-rose-200", border: "border-rose-500/50", bg: "bg-rose-900/40" },
   nurse: { text: "text-emerald-200", border: "border-emerald-500/50", bg: "bg-emerald-900/40" },
   tech: { text: "text-sky-200", border: "border-sky-500/50", bg: "bg-sky-900/40" },
   consultant: { text: "text-indigo-200", border: "border-indigo-500/50", bg: "bg-indigo-900/40" },
@@ -77,7 +78,12 @@ export type ClientToServerMessage =
         | "mute_user"
         | "freeze"
         | "unfreeze"
-        | "skip_stage";
+        | "skip_stage"
+        | "order"
+        | "exam"
+        | "toggle_telemetry"
+        | "show_ekg"
+        | "treatment";
       payload?: Record<string, unknown>;
     }
   | {
@@ -123,6 +129,7 @@ export type ServerToClientMessage =
       sessionId: string;
       state: "idle" | "listening" | "speaking" | "error";
       character?: CharacterId;
+      displayName?: string;
     }
   | {
       type: "patient_transcript_delta";
@@ -163,9 +170,16 @@ export type ServerToClientMessage =
       stageIds?: string[];
       scenarioId?: PatientScenarioId;
       vitals: Record<string, unknown>;
+      exam?: Record<string, string | undefined>;
+      telemetry?: boolean;
+      rhythmSummary?: string;
+      telemetryWaveform?: number[];
       findings?: string[];
       fallback: boolean;
       budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
+      orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending" | "complete"; result?: any; completedAt?: number }[];
+      ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
+      telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
     }
   | {
       type: "pong";

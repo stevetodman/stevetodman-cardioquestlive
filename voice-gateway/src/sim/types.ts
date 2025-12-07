@@ -62,6 +62,18 @@ export type SimState = {
   scenarioId: string;
   stageId: string;
   vitals: Vitals;
+  exam?: {
+    general?: string;
+    cardio?: string;
+    lungs?: string;
+    perfusion?: string;
+    neuro?: string;
+  };
+  telemetry?: boolean;
+  rhythmSummary?: string;
+  telemetryWaveform?: number[];
+  telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
+  ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
   findings?: string[];
   fallback: boolean;
   stageEnteredAt?: number;

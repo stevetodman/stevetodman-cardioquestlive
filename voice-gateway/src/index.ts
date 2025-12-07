@@ -18,7 +18,7 @@ import { ScenarioEngine } from "./sim/scenarioEngine";
 import { ToolGate } from "./sim/toolGate";
 import { ToolIntent } from "./sim/types";
 import { CostController } from "./sim/costController";
-import { persistSimState, logSimEvent } from "./persistence";
+import { persistSimState, logSimEvent, loadSimState } from "./persistence";
 import { validateMessage, validateSimStateMessage } from "./validators";
 import { getAuth } from "./firebaseAdmin";
 import { getOrderResultTemplate } from "./orderTemplates";
@@ -30,6 +30,7 @@ const realtimeModel = process.env.OPENAI_REALTIME_MODEL || "gpt-4o-mini-realtime
 const realtimeApiKey = process.env.OPENAI_API_KEY || "";
 const softBudgetUsd = Number(process.env.SOFT_BUDGET_USD || 3.5);
 const hardBudgetUsd = Number(process.env.HARD_BUDGET_USD || 4.5);
+const scenarioHeartbeatMs = Number(process.env.SCENARIO_HEARTBEAT_MS || 1000);
 // Default to secure WebSocket auth; only allow insecure for local dev/tunnels when explicitly set.
 const allowInsecureWs = process.env.ALLOW_INSECURE_VOICE_WS === "true";
 if (allowInsecureWs && process.env.NODE_ENV === "production") {
@@ -47,6 +48,10 @@ type Runtime = {
 };
 
 const runtimes: Map<string, Runtime> = new Map();
+const scenarioTimers: Map<string, NodeJS.Timeout> = new Map();
+const notifiedOrders: Map<string, Set<string>> = new Map();
+const alertFlags: Map<string, { hypoxia?: boolean }> = new Map();
+const hydratedSessions: Set<string> = new Set();
 
 type ClientContext = {
   joined: boolean;
@@ -191,6 +196,24 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
         case "order": {
           const orderType = typeof parsed.payload?.orderType === "string" ? parsed.payload.orderType : "vitals";
           handleOrder(simId, orderType as any);
+          break;
+        }
+        case "exam": {
+          handleExamRequest(simId);
+          break;
+        }
+        case "toggle_telemetry": {
+          const enabled = parsed.payload?.enabled === true;
+          handleTelemetryToggle(simId, enabled);
+          break;
+        }
+        case "treatment": {
+          const treatmentType = typeof parsed.payload?.treatmentType === "string" ? parsed.payload.treatmentType : undefined;
+          handleTreatment(simId, treatmentType);
+          break;
+        }
+        case "show_ekg": {
+          handleShowEkg(simId);
           break;
         }
         case "pause_ai":
@@ -384,6 +407,11 @@ function respondForCharacter(character: CharacterId, doctorUtterance?: string, o
   const prompt = doctorUtterance?.trim();
   const fallback = orderSummary ? `Got it. ${orderSummary}` : "I'll take care of that.";
   switch (character) {
+    case "parent":
+      return (
+        prompt ||
+        "I'm worried—can you tell me what's happening and if there's anything I should do? I can share birth or family history if needed."
+      );
     case "nurse":
       return prompt || (orderSummary ? orderSummary : "On it. I'll grab vitals now and update you.");
     case "tech":
@@ -396,12 +424,26 @@ function respondForCharacter(character: CharacterId, doctorUtterance?: string, o
   }
 }
 
-async function handleForceReply(
-  sessionId: string,
-  userId: string,
-  doctorUtterance?: string,
-  character: CharacterId = "patient"
-) {
+function chooseCharacter(utterance?: string): CharacterId {
+  if (!utterance) return "patient";
+  const text = utterance.toLowerCase();
+  if (/(vitals|blood pressure|bp|hr|pulse|oxygen|o2|spo2|iv|bolus|fluids|medicate|tylenol|motrin|pge)/.test(text)) {
+    return "nurse";
+  }
+  if (/(ekg|ecg|monitor|strip|leads|imaging|xray|cxr|echo|ultrasound)/.test(text)) {
+    return "tech";
+  }
+  if (/(consult|cardiology|icu|attending|what should we do|plan|recommend)/.test(text)) {
+    return "consultant";
+  }
+  if (/(birth|pregnancy|family history|mom|dad|parent|guardian)/.test(text)) {
+    return "parent";
+  }
+  return "patient";
+}
+
+async function handleForceReply(sessionId: string, userId: string, doctorUtterance?: string, character?: CharacterId) {
+  const routedCharacter = character ?? chooseCharacter(doctorUtterance);
   const openai = getOpenAIClient();
   const runtime = ensureRuntime(sessionId);
   const latestOrderSummary = (() => {
@@ -416,32 +458,32 @@ async function handleForceReply(
     }
     return "";
   })();
-  if (!openai || character !== "patient") {
+  if (!openai || routedCharacter !== "patient") {
     log(openai ? "force_reply stub (non-patient)" : "OPENAI_API_KEY not set; using stub patient response");
-    const text = respondForCharacter(character, doctorUtterance, latestOrderSummary);
+    const text = respondForCharacter(routedCharacter, doctorUtterance, latestOrderSummary);
     sessionManager.broadcastToSession(sessionId, {
       type: "patient_state",
       sessionId,
       state: "speaking",
-      character,
+      character: routedCharacter,
     });
     sessionManager.broadcastToSession(sessionId, {
       type: "patient_transcript_delta",
       sessionId,
       text,
-      character,
+      character: routedCharacter,
     });
     sessionManager.broadcastToSession(sessionId, {
       type: "patient_state",
       sessionId,
       state: "idle",
-      character,
+      character: routedCharacter,
     });
     return;
   }
 
   const engine = getOrCreatePatientEngine(sessionId);
-  const personaPrompt = getPersonaPrompt(character, engine.getCase());
+  const personaPrompt = getPersonaPrompt(routedCharacter, engine.getCase());
   const doctorPrompt =
     doctorUtterance && doctorUtterance.length > 0
       ? doctorUtterance
@@ -459,14 +501,14 @@ async function handleForceReply(
       type: "patient_state",
       sessionId,
       state: "speaking",
-      character,
+      character: routedCharacter,
     });
 
     const messages = engine.getHistory();
     let fullText = "";
 
     const stream =
-      character === "patient"
+      routedCharacter === "patient"
         ? await openai.chat.completions.create({
             model: MODEL,
             messages:
@@ -523,20 +565,20 @@ async function handleForceReply(
         type: "patient_transcript_delta",
         sessionId,
         text: delta,
-        character,
+        character: routedCharacter,
       });
     }
 
     const finalText = fullText.trim();
     engine.appendPatientTurn(finalText);
 
-    const audioBuffer = await synthesizePatientAudio(finalText, CHARACTER_VOICE_MAP[character]);
+    const audioBuffer = await synthesizePatientAudio(finalText, CHARACTER_VOICE_MAP[routedCharacter]);
     if (audioBuffer) {
       sessionManager.broadcastToPresenters(sessionId, {
         type: "patient_audio",
         sessionId,
         audioBase64: audioBuffer.toString("base64"),
-        character,
+        character: routedCharacter,
       });
     }
 
@@ -544,7 +586,7 @@ async function handleForceReply(
       type: "patient_state",
       sessionId,
       state: "idle",
-      character,
+      character: routedCharacter,
     });
     log("Patient reply complete", sessionId, "chars:", fullText.length);
   } catch (err) {
@@ -553,13 +595,13 @@ async function handleForceReply(
       type: "patient_state",
       sessionId,
       state: "error",
-      character,
+      character: routedCharacter,
     });
     sessionManager.broadcastToSession(sessionId, {
       type: "patient_transcript_delta",
       sessionId,
       text: "I'm sorry, I'm having trouble answering right now.",
-      character,
+      character: routedCharacter,
     });
   }
 }
@@ -738,8 +780,38 @@ function ensureRuntime(sessionId: string): Runtime {
     runtime.realtime.connect();
   }
   runtimes.set(sessionId, runtime);
-  broadcastSimState(sessionId, { ...runtime.scenarioEngine.getState(), stageIds: runtime.scenarioEngine.getStageIds() });
+  broadcastSimState(sessionId, {
+    ...runtime.scenarioEngine.getState(),
+    stageIds: runtime.scenarioEngine.getStageIds(),
+  });
+  startScenarioHeartbeat(sessionId);
+  if (!hydratedSessions.has(sessionId)) {
+    hydratedSessions.add(sessionId);
+    void hydrateSimState(sessionId, runtime);
+  }
   return runtime;
+}
+
+async function hydrateSimState(sessionId: string, runtime: Runtime) {
+  try {
+    const persisted = await loadSimState(sessionId);
+    if (!persisted) return;
+    if (persisted.ekgHistory) {
+      runtime.scenarioEngine.setEkgHistory(persisted.ekgHistory as any);
+    }
+    if (persisted.telemetryHistory) {
+      runtime.scenarioEngine.setTelemetryHistory(persisted.telemetryHistory as any);
+    }
+    broadcastSimState(sessionId, {
+      ...runtime.scenarioEngine.getState(),
+      stageIds: runtime.scenarioEngine.getStageIds(),
+      ekgHistory: persisted.ekgHistory as any,
+      telemetryHistory: persisted.telemetryHistory as any,
+      telemetryWaveform: persisted.telemetryWaveform as any,
+    });
+  } catch (err) {
+    logError("hydrateSimState failed", err);
+  }
 }
 
 function handleToolIntent(sessionId: string, intent: ToolIntent) {
@@ -824,17 +896,71 @@ function handleBudgetHardLimit(sessionId: string) {
   }
 }
 
+function startScenarioHeartbeat(sessionId: string) {
+  if (scenarioTimers.has(sessionId)) return;
+  const tick = () => {
+    const runtime = runtimes.get(sessionId);
+    if (!runtime) return;
+    const result = runtime.scenarioEngine.tick(Date.now());
+    const telemetryWaveform = runtime.scenarioEngine.getState().telemetry
+      ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
+      : undefined;
+    if (result) {
+      if (runtime.scenarioEngine.getState().telemetry) {
+        const rhythm = runtime.scenarioEngine.getState().rhythmSummary;
+        const history = runtime.scenarioEngine.getState().telemetryHistory ?? [];
+        if (rhythm && (history.length === 0 || history[history.length - 1]?.rhythm !== rhythm)) {
+          runtime.scenarioEngine.setTelemetryHistory([...history, { ts: Date.now(), rhythm }]);
+        }
+      }
+      result.events?.forEach((evt) =>
+        eventLog.append({
+          id: `${Date.now()}-${Math.random()}`,
+          ts: Date.now(),
+          simId: sessionId,
+          type: evt.type as any,
+          payload: evt.payload,
+        })
+      );
+      result.events?.forEach((evt) =>
+        logSimEvent(sessionId, { type: evt.type, payload: evt.payload as any }).catch(() => {})
+      );
+      broadcastSimState(sessionId, {
+        ...runtime.scenarioEngine.getState(),
+        stageIds: runtime.scenarioEngine.getStageIds(),
+        telemetryWaveform,
+        budget: runtime.cost.getState?.(),
+      });
+    } else if (telemetryWaveform) {
+      broadcastSimState(sessionId, {
+        ...runtime.scenarioEngine.getState(),
+        stageIds: runtime.scenarioEngine.getStageIds(),
+        telemetryWaveform,
+        budget: runtime.cost.getState?.(),
+      });
+    }
+  };
+  const handle = setInterval(tick, scenarioHeartbeatMs);
+  scenarioTimers.set(sessionId, handle);
+}
+
 function broadcastSimState(
   sessionId: string,
   state: {
     stageId: string;
     vitals: any;
+    exam?: Record<string, string>;
+    telemetry?: boolean;
+    rhythmSummary?: string;
+    telemetryWaveform?: number[];
     fallback: boolean;
     budget?: any;
     stageIds?: string[];
     scenarioId?: string;
     findings?: string[];
     orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending" | "complete"; result?: OrderResult; completedAt?: number }[];
+    ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
+    telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
   }
 ) {
   const validated = validateSimStateMessage(state);
@@ -849,10 +975,16 @@ function broadcastSimState(
     scenarioId: (validated.scenarioId ?? getScenarioForSession(sessionId)) as PatientScenarioId,
     stageIds: validated.stageIds,
     vitals: validated.vitals ?? {},
+    exam: validated.exam ?? {},
+    telemetry: validated.telemetry,
+    rhythmSummary: validated.rhythmSummary,
+    telemetryWaveform: validated.telemetryWaveform,
     findings: validated.findings ?? [],
     fallback: validated.fallback,
     budget: validated.budget,
     orders: validated.orders,
+    ekgHistory: (state as any).ekgHistory,
+    telemetryHistory: (state as any).telemetryHistory,
   });
   persistSimState(sessionId, state as any).catch(() => {});
 }
@@ -905,10 +1037,264 @@ function handleOrder(sessionId: string, orderType: "vitals" | "ekg" | "labs" | "
     const updatedOrders = nextOrders.map((o) =>
       o.id === newOrder.id ? { ...o, status: "complete", result, completedAt: Date.now() } : o
     );
+    const stateRef: any = runtime.scenarioEngine.getState();
+    if (orderType === "ekg") {
+      stateRef.telemetry = true;
+      stateRef.rhythmSummary = result.summary;
+      const entry = { ts: Date.now(), summary: result.summary, imageUrl: (result as any).imageUrl };
+      const updatedHistory = [...(runtime.scenarioEngine.getState().ekgHistory ?? []), entry].slice(-3);
+      runtime.scenarioEngine.setEkgHistory(updatedHistory);
+    }
+    const telemetryWaveform =
+      orderType === "ekg"
+        ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
+        : runtime.scenarioEngine.getState().telemetry
+        ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
+        : undefined;
     broadcastSimState(sessionId, {
       ...runtime.scenarioEngine.getState(),
       stageIds: runtime.scenarioEngine.getStageIds(),
+      telemetry: orderType === "ekg" ? true : runtime.scenarioEngine.getState().telemetry,
+      rhythmSummary: orderType === "ekg" ? result.summary : runtime.scenarioEngine.getState().rhythmSummary,
+      telemetryWaveform,
+      ekgHistory: runtime.scenarioEngine.getState().ekgHistory,
       orders: updatedOrders,
     });
+    if (orderType === "ekg") {
+      const announcement =
+        result?.summary && typeof result.summary === "string"
+          ? `EKG complete: ${result.summary}`
+          : "EKG complete. Displaying the strip now.";
+      sessionManager.broadcastToSession(sessionId, {
+        type: "patient_state",
+        sessionId,
+        state: "speaking",
+        character: "tech",
+      });
+      sessionManager.broadcastToSession(sessionId, {
+        type: "patient_transcript_delta",
+        sessionId,
+        text: announcement,
+        character: "tech",
+      });
+      sessionManager.broadcastToSession(sessionId, {
+        type: "patient_state",
+        sessionId,
+        state: "idle",
+        character: "tech",
+      });
+    }
   }, delay);
+}
+
+function handleExamRequest(sessionId: string) {
+  const runtime = ensureRuntime(sessionId);
+  const exam = runtime.scenarioEngine.getState().exam ?? {};
+  const maneuver = (runtime as any).lastManeuver as string | undefined;
+  const summary = [
+    exam.general && `General: ${exam.general}`,
+    exam.cardio && `CV: ${exam.cardio}`,
+    exam.lungs && `Lungs: ${exam.lungs}`,
+    exam.perfusion && `Perfusion: ${exam.perfusion}`,
+    exam.neuro && `Neuro: ${exam.neuro}`,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+  const text = summary || "Exam unchanged from prior check.";
+  sessionManager.broadcastToSession(sessionId, {
+    type: "patient_state",
+    sessionId,
+    state: "speaking",
+    character: "nurse",
+  });
+  sessionManager.broadcastToSession(sessionId, {
+    type: "patient_transcript_delta",
+    sessionId,
+    text: maneuver ? `${maneuver}: ${text}` : text,
+    character: "nurse",
+  });
+  sessionManager.broadcastToSession(sessionId, {
+    type: "patient_state",
+    sessionId,
+    state: "idle",
+    character: "nurse",
+  });
+  logSimEvent(sessionId, { type: "exam.requested", payload: { maneuver: maneuver ?? "standard" } }).catch(() => {});
+}
+
+function handleTelemetryToggle(sessionId: string, enabled: boolean) {
+  const runtime = ensureRuntime(sessionId);
+  runtime.scenarioEngine.setTelemetry(enabled, runtime.scenarioEngine.getState().rhythmSummary);
+  const telemetryWaveform = enabled ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90) : [];
+  const telemetryHistory = runtime.scenarioEngine.getState().telemetryHistory ?? [];
+  broadcastSimState(sessionId, {
+    ...runtime.scenarioEngine.getState(),
+    stageIds: runtime.scenarioEngine.getStageIds(),
+    telemetry: enabled,
+    telemetryWaveform,
+    telemetryHistory,
+  });
+  if (enabled) {
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: "Telemetry leads on. Live rhythm streaming.",
+      character: "tech",
+    });
+  }
+}
+
+function handleShowEkg(sessionId: string) {
+  const runtime = ensureRuntime(sessionId);
+  const ekgs = (runtime.scenarioEngine.getState().orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
+  const latest = ekgs.length ? ekgs[ekgs.length - 1] : null;
+  const summary = latest?.result?.summary ?? runtime.scenarioEngine.getState().rhythmSummary ?? "Latest EKG ready to view.";
+  const imageUrl = (latest?.result as any)?.imageUrl;
+  const telemetryWaveform = runtime.scenarioEngine.getState().telemetry
+    ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
+    : undefined;
+  sessionManager.broadcastToSession(sessionId, {
+    type: "patient_transcript_delta",
+    sessionId,
+    text: `EKG: ${summary}`,
+    character: "tech",
+  });
+  if (imageUrl) {
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: `EKG image: ${imageUrl}`,
+      character: "tech",
+    });
+  }
+  // Keep a rolling archive of last 3 ekg ids/urls on runtime
+  const archive = (runtime as any).ekgArchive ?? [];
+    const entry = { ts: Date.now(), summary, imageUrl };
+    const updatedArchive = [...(runtime.scenarioEngine.getState().ekgHistory ?? []), entry].slice(-3);
+    runtime.scenarioEngine.setEkgHistory(updatedArchive);
+  broadcastSimState(sessionId, {
+    ...runtime.scenarioEngine.getState(),
+    stageIds: runtime.scenarioEngine.getStageIds(),
+    telemetryWaveform,
+  });
+  logSimEvent(sessionId, { type: "ekg.viewed", payload: { summary, imageUrl } }).catch(() => {});
+}
+
+function handleTreatment(sessionId: string, treatmentType?: string) {
+  const runtime = ensureRuntime(sessionId);
+  const delta: any = {};
+  let note = "";
+  let decayMs = 120000; // effects decay over ~2 minutes
+  let rhythmNote: string | undefined;
+  let decayIntent: ToolIntent | null = null;
+  switch ((treatmentType ?? "").toLowerCase()) {
+    case "oxygen":
+    case "o2":
+      delta.spo2 = 3;
+      delta.hr = -3;
+      note = "Oxygen applied";
+      rhythmNote = "Improved oxygenation, rate easing slightly.";
+      decayIntent = { type: "intent_updateVitals", delta: { spo2: -2, hr: 2 } as any };
+      break;
+    case "fluids":
+    case "bolus":
+      delta.hr = -4;
+      delta.sbpPerMin = 6;
+      delta.dbpPerMin = 4;
+      note = "Fluid bolus given";
+      rhythmNote = "Perfusion improving with fluids.";
+      decayIntent = { type: "intent_updateVitals", delta: { hr: 2, sbpPerMin: -4, dbpPerMin: -3 } as any };
+      break;
+    case "position":
+    case "knee-chest":
+      delta.spo2 = 4;
+      delta.hr = -5;
+      note = "Position changed (knee-chest)";
+      rhythmNote = "Squatting/knee-chest reduces shunt; sats improving.";
+      decayIntent = { type: "intent_updateVitals", delta: { spo2: -3, hr: 3 } as any };
+      break;
+    case "medication":
+    case "rate-control":
+      delta.hr = -10;
+      delta.spo2 = 1;
+      decayMs = 180000;
+      note = "Rate control medication administered";
+      rhythmNote = "Rate slowing after medication.";
+      decayIntent = { type: "intent_updateVitals", delta: { hr: 6, spo2: -1 } as any };
+      break;
+    default:
+      return;
+  }
+  runtime.scenarioEngine.applyVitalsAdjustment(delta);
+  const telemetryWaveform = runtime.scenarioEngine.getState().telemetry
+    ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
+    : undefined;
+  maybeAdvanceStageFromTreatment(runtime, treatmentType);
+  broadcastSimState(sessionId, {
+    ...runtime.scenarioEngine.getState(),
+    stageIds: runtime.scenarioEngine.getStageIds(),
+    telemetryWaveform,
+  });
+  if (note) {
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: `${note}. Vitals updating.`,
+      character: "nurse",
+    });
+    if (rhythmNote && runtime.scenarioEngine.getState().telemetry) {
+      sessionManager.broadcastToSession(sessionId, {
+        type: "patient_transcript_delta",
+        sessionId,
+        text: rhythmNote,
+        character: "tech",
+      });
+    }
+  }
+  logSimEvent(sessionId, { type: "treatment.applied", payload: { treatmentType, note } }).catch(() => {});
+
+  if (decayIntent) {
+    setTimeout(() => {
+      const rt = runtimes.get(sessionId);
+      if (!rt) return;
+      rt.scenarioEngine.applyIntent(decayIntent);
+      broadcastSimState(sessionId, {
+        ...rt.scenarioEngine.getState(),
+        stageIds: rt.scenarioEngine.getStageIds(),
+        telemetryWaveform: rt.scenarioEngine.getState().telemetry
+          ? buildTelemetryWaveform(rt.scenarioEngine.getState().vitals.hr ?? 90)
+          : undefined,
+      });
+    }, decayMs);
+  }
+}
+
+function buildTelemetryWaveform(hr: number): number[] {
+  const samples = 180;
+  const waveform: number[] = [];
+  const msPerBeat = Math.max(350, Math.min(1500, 60000 / Math.max(1, hr)));
+  for (let i = 0; i < samples; i++) {
+    const tMs = (i / samples) * msPerBeat * 1.5;
+    const phase = (tMs % msPerBeat) / msPerBeat;
+    const spike = phase < 0.04 ? Math.exp(-((phase - 0.02) * 160) ** 2) * 1.4 : 0;
+    const base = 0.04 * Math.sin(phase * Math.PI * 2);
+    const noise = (Math.random() - 0.5) * 0.015;
+    waveform.push(base + spike + noise);
+  }
+  return waveform;
+}
+
+function maybeAdvanceStageFromTreatment(runtime: Runtime, treatmentType?: string) {
+  const scenarioId = runtime.scenarioEngine.getState().scenarioId as PatientScenarioId;
+  const stageId = runtime.scenarioEngine.getState().stageId;
+  const t = (treatmentType ?? "").toLowerCase();
+  if (scenarioId === "palpitations_svt" && stageId === "stage_2_episode" && t.includes("rate")) {
+    runtime.scenarioEngine.setStage("stage_3_post_episode");
+  }
+  if (scenarioId === "ductal_shock" && stageId === "stage_1_shock" && (t.includes("fluid") || t.includes("bolus"))) {
+    runtime.scenarioEngine.setStage("stage_2_improving");
+  }
+  if (scenarioId === "cyanotic_spell" && stageId === "stage_2_spell" && (t.includes("oxygen") || t.includes("knee") || t.includes("position"))) {
+    runtime.scenarioEngine.setStage("stage_3_recovery");
+  }
 }

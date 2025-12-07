@@ -75,6 +75,7 @@ export interface VoiceState {
   floorHolderName: string | null;
   since: any; // Firestore Timestamp | null; kept loose for mock compatibility
   mode: VoiceMode;
+  locked?: boolean;
 }
 
 export type VoiceCommandType =
@@ -85,7 +86,12 @@ export type VoiceCommandType =
   | "mute_user"
   | "freeze"
   | "unfreeze"
-  | "skip_stage";
+  | "skip_stage"
+  | "order"
+  | "exam"
+  | "toggle_telemetry"
+  | "show_ekg"
+  | "treatment";
 
 export interface VoiceCommandDoc {
   type: VoiceCommandType;

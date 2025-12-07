@@ -1,12 +1,12 @@
 export type ClientRole = "presenter" | "participant";
 
-export type CharacterId = "patient" | "nurse" | "tech" | "consultant";
+export type CharacterId = "patient" | "parent" | "nurse" | "tech" | "consultant";
 
 export type OrderType = "vitals" | "ekg" | "labs" | "imaging";
 
 export type OrderResult =
   | { type: "vitals"; hr?: number; bp?: string; rr?: number; spo2?: number; temp?: number }
-  | { type: "ekg"; summary: string }
+  | { type: "ekg"; summary: string; imageUrl?: string; meta?: { rate?: string; axis?: string; intervals?: string } }
   | { type: "labs"; summary: string }
   | { type: "imaging"; summary: string };
 
@@ -36,7 +36,20 @@ export type ClientToServerMessage =
       sessionId: string;
       userId: string;
       character?: CharacterId;
-      commandType: "pause_ai" | "resume_ai" | "force_reply" | "end_turn" | "mute_user" | "freeze" | "unfreeze" | "skip_stage" | "order";
+      commandType:
+        | "pause_ai"
+        | "resume_ai"
+        | "force_reply"
+        | "end_turn"
+        | "mute_user"
+        | "freeze"
+        | "unfreeze"
+        | "skip_stage"
+        | "order"
+        | "exam"
+        | "toggle_telemetry"
+        | "show_ekg"
+        | "treatment";
       payload?: Record<string, unknown>;
     }
   | {
@@ -137,6 +150,10 @@ export type ServerToClientMessage =
       stageIds?: string[];
       scenarioId?: PatientScenarioId;
       vitals: Record<string, unknown>;
+      exam?: Record<string, string | undefined>;
+      telemetry?: boolean;
+      rhythmSummary?: string;
+      telemetryWaveform?: number[];
       findings?: string[];
       fallback: boolean;
       budget?: {
@@ -146,6 +163,8 @@ export type ServerToClientMessage =
         fallback?: boolean;
       };
       orders?: { id: string; type: OrderType; status: "pending" | "complete"; result?: OrderResult; completedAt?: number }[];
+      ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
+      telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
     }
   | {
       type: "pong";

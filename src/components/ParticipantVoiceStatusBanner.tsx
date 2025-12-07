@@ -9,6 +9,7 @@ type Props = {
   otherSpeaking: boolean;
   fallback?: boolean;
   throttled?: boolean;
+  locked?: boolean;
   onRetryVoice?: () => void;
   onRecheckMic?: () => void;
 };
@@ -33,6 +34,7 @@ export function ParticipantVoiceStatusBanner({
   otherSpeaking,
   fallback = false,
   throttled = false,
+  locked = false,
   onRetryVoice,
   onRecheckMic,
 }: Props) {
@@ -45,6 +47,10 @@ export function ParticipantVoiceStatusBanner({
     tone = "warn";
     title = "Voice fallback (text mode)";
     body = "Patient voice paused. Use typed questions until voice resumes.";
+  } else if (locked) {
+    tone = "warn";
+    title = "Floor locked by presenter";
+    body = "Wait for the presenter to unlock or hand you the floor.";
   } else if (throttled) {
     tone = "info";
     title = "Voice throttled";

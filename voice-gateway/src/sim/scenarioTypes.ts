@@ -21,6 +21,20 @@ export type StageTransition = {
 export type StageDef = {
   id: string;
   vitals: { hr: number; bp: string; rr?: number; spo2?: number; temp?: number };
+  exam?: {
+    general?: string;
+    cardio?: string;
+    lungs?: string;
+    perfusion?: string;
+    neuro?: string;
+  };
+  rhythm?: string;
+  drift?: {
+    hrPerMin?: number;
+    spo2PerMin?: number;
+    sbpPerMin?: number;
+    dbpPerMin?: number;
+  };
   allowedIntents?: string[];
   allowedStages?: string[];
   reveals?: { id: string; trigger: "always" | "on_question"; text: string }[];

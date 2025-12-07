@@ -76,14 +76,21 @@
 - **Firestore**
   - `firestore.rules`: Session/voice rules; voice-only updates allowed for authenticated users when valid.
 
+## Latest additions
+
+- Multi-role voices with presenter overlay avatars (patient/parent/nurse/tech/consultant).
+- Exam/telemetry/EKG state in `sim_state`: stage-driven exam snippets, telemetry waveform + rhythm history, EKG archive with meta (rate/axis/intervals) and strip URLs.
+- Treatment effects with basic decay and scenario transitions (e.g., SVT → post-episode after rate control; ductal shock improves after bolus; cyanotic spell improves after O₂/knee-chest).
+- Histories persisted via Firestore (telemetry/EKG) and hydrated on reconnect.
+- Timeline now shows EKG/telemetry updates; EKG viewer shows prior strips.
+- Placeholder assets checked in under `/public/avatars/*.png` and `/public/images/ekg/*.png`—replace with final art/strips as needed.
+
 ## Open TODOs / Next Ideas
 
-- Improve mobile UX for floor/voice (e.g., banners for permissions/network).
-- Add persistence of debrief/transcripts to Firestore for post-session review.
-- Improve debrief with saved timeline and role evidence, plus presenter export to PDF.
-- More patient scenarios and richer personas; deck-driven scenario selection.
+- Swap placeholders for final avatar art and scenario-specific EKG strips.
+- Add transcript/debrief logging of actions (exam/telemetry/EKG/treatment) with export.
+- Refine treatment curves and alarms: scenario-specific dosing/stacking, telemetry alarms for deterioration.
+- Improve mobile UX for floor/voice (permissions/network banners) and participant-side guardrails.
 - Participant-side audio playback fan-out (currently presenter-only).
-- Consider soft locks or presenter override flows for floor control; polish error surfaced to users.
-- For iPhone mic support in dev, run over HTTPS/WSS via quick or named Cloudflare tunnels; see `docs/virtual-patient-https-iphone.md` for quick/named tunnel recipes and the one-command scripts (`dev:vp:quick`, `dev:vp:named`).
-- Deterministic voice sim core: `sim_state` is now published and consumed in UI; see `docs/voice-sim-state-and-harnesses.md` for current harnesses and remaining wiring (Firestore persistence, Realtime smoke, budget guardrails).
-- Voice WS auth is secure by default; clients should join with Firebase ID tokens. Only use `ALLOW_INSECURE_VOICE_WS=true` for local/emulator or quick-tunnel dev.
+- For iPhone mic support in dev, run over HTTPS/WSS via quick or named Cloudflare tunnels; see `docs/virtual-patient-https-iphone.md`.
+- Voice WS auth is secure by default; use Firebase ID tokens. Only set `ALLOW_INSECURE_VOICE_WS=true` for local/emulator or quick-tunnel dev.

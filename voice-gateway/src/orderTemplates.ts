@@ -23,7 +23,7 @@ export function getOrderResultTemplate(type: OrderType, scenario: PatientScenari
       summary:
         scenario === "palpitations_svt"
           ? "Narrow regular tachycardia ~180 bpm, possible RP>PR."
-        : scenario === "syncope"
+          : scenario === "syncope"
           ? "Sinus rhythm ~96 bpm, borderline QTc."
           : scenario === "myocarditis"
           ? "Sinus tachycardia ~125 bpm, diffuse low voltage; nonspecific ST-T changes."
@@ -34,6 +34,30 @@ export function getOrderResultTemplate(type: OrderType, scenario: PatientScenari
           : scenario === "cyanotic_spell"
           ? "Right axis, RVH; no acute ischemic changes."
           : "Sinus rhythm, occasional PACs, nonspecific ST/T changes.",
+      imageUrl:
+        scenario === "palpitations_svt"
+          ? "/images/ekg/ekg-svt.png"
+          : scenario === "myocarditis"
+          ? "/images/ekg/ekg-myocarditis.png"
+          : scenario === "exertional_syncope_hcm"
+          ? "/images/ekg/ekg-hcm.png"
+          : scenario === "ductal_shock"
+          ? "/images/ekg/ekg-ductal.png"
+          : scenario === "cyanotic_spell"
+          ? "/images/ekg/ekg-cyanotic.png"
+          : "/images/ekg/ekg-baseline.png",
+      meta:
+        scenario === "palpitations_svt"
+          ? { rate: "~180 bpm narrow regular", intervals: "RP>PR possible", axis: "Normal" }
+          : scenario === "exertional_syncope_hcm"
+          ? { rate: "~105 bpm", intervals: "Normal", axis: "Left; LVH with Qs" }
+          : scenario === "myocarditis"
+          ? { rate: "~125 bpm", intervals: "PR/QRS normal", axis: "Low voltage diffuse" }
+          : scenario === "ductal_shock"
+          ? { rate: "~180 bpm", intervals: "Normal", axis: "Rightward" }
+          : scenario === "cyanotic_spell"
+          ? { rate: "~150 bpm", intervals: "Normal", axis: "Right axis; RVH" }
+          : { rate: "~95 bpm", intervals: "Normal", axis: "Normal" },
     };
   }
   if (type === "labs") {

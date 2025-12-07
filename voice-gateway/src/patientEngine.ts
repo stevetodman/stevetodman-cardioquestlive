@@ -1,5 +1,5 @@
 import { PatientCase, PatientScenarioId, createDefaultPatientCase } from "./patientCase";
-import { buildPatientSystemPrompt, buildNursePrompt, buildTechPrompt, buildConsultantPrompt } from "./patientPersona";
+import { buildPatientSystemPrompt, buildNursePrompt, buildTechPrompt, buildConsultantPrompt, buildParentPrompt } from "./patientPersona";
 import { CharacterId } from "./messageTypes";
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -14,6 +14,7 @@ const sessionScenarios = new Map<string, PatientScenarioId>();
 const MAX_HISTORY = 12;
 const CHARACTER_PROMPTS: Record<CharacterId, string> = {
   patient: "",
+  parent: buildParentPrompt(),
   nurse: buildNursePrompt(),
   tech: buildTechPrompt(),
   consultant: buildConsultantPrompt(),

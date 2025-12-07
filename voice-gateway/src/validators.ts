@@ -39,6 +39,10 @@ const voiceCommandSchema = z.object({
     "unfreeze",
     "skip_stage",
     "order",
+    "exam",
+    "toggle_telemetry",
+    "show_ekg",
+    "treatment",
   ]),
   payload: z.record(z.any()).optional(),
 });
@@ -101,6 +105,18 @@ const simStateSchema = z
         temp: z.number().optional(),
       })
       .optional(),
+    exam: z
+      .object({
+        general: z.string().optional(),
+        cardio: z.string().optional(),
+        lungs: z.string().optional(),
+        perfusion: z.string().optional(),
+        neuro: z.string().optional(),
+      })
+      .optional(),
+    telemetry: z.boolean().optional(),
+    rhythmSummary: z.string().optional(),
+    telemetryWaveform: z.array(z.number()).optional(),
     findings: z.array(z.string()).optional(),
     fallback: z.boolean(),
     budget: z
@@ -126,10 +142,36 @@ const simStateSchema = z
               spo2: z.number().optional(),
               temp: z.number().optional(),
               summary: z.string().optional(),
+              imageUrl: z.string().optional(),
+              meta: z
+                .object({
+                  rate: z.string().optional(),
+                  axis: z.string().optional(),
+                  intervals: z.string().optional(),
+                })
+                .optional(),
             })
             .partial()
             .optional(),
           completedAt: z.number().optional(),
+        })
+      )
+      .optional(),
+    ekgHistory: z
+      .array(
+        z.object({
+          ts: z.number(),
+          summary: z.string(),
+          imageUrl: z.string().optional(),
+        })
+      )
+      .optional(),
+    telemetryHistory: z
+      .array(
+        z.object({
+          ts: z.number(),
+          rhythm: z.string().optional(),
+          note: z.string().optional(),
         })
       )
       .optional(),

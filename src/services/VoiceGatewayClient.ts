@@ -10,7 +10,7 @@ import {
   CharacterId,
 } from "../types/voiceGateway";
 
-type PatientStateListener = (state: PatientState) => void;
+type PatientStateListener = (state: PatientState, character?: CharacterId, displayName?: string) => void;
 type TranscriptListener = (text: string) => void;
 type ParticipantStateListener = (info: { userId: string; speaking: boolean }) => void;
 type StatusListener = (status: VoiceConnectionStatus) => void;
@@ -19,9 +19,16 @@ type SimStateListener = (state: {
   stageIds?: string[];
   scenarioId?: PatientScenarioId;
   vitals: Record<string, unknown>;
+  exam?: Record<string, string | undefined>;
+  telemetry?: boolean;
+  rhythmSummary?: string;
+  telemetryWaveform?: number[];
   findings?: string[];
   fallback: boolean;
   budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
+  orders?: any[];
+  ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
+  telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
 }) => void;
 type AudioListener = (audioUrl: string) => void;
 type DoctorUtteranceListener = (text: string, userId: string, character?: CharacterId) => void;
@@ -299,7 +306,7 @@ class VoiceGatewayClient {
 
     switch (msg.type) {
       case "patient_state": {
-        this.patientListeners.forEach((cb) => cb(msg.state));
+        this.patientListeners.forEach((cb) => cb(msg.state, (msg as any).character, (msg as any).displayName));
         break;
       }
       case "patient_transcript_delta": {
@@ -345,9 +352,16 @@ class VoiceGatewayClient {
             stageIds: msg.stageIds,
             scenarioId: msg.scenarioId,
             vitals: msg.vitals,
+            exam: (msg as any).exam,
+            telemetry: (msg as any).telemetry,
+            rhythmSummary: (msg as any).rhythmSummary,
+            telemetryWaveform: (msg as any).telemetryWaveform,
             findings: msg.findings,
             fallback: msg.fallback,
             budget: msg.budget,
+            orders: (msg as any).orders,
+            ekgHistory: (msg as any).ekgHistory,
+            telemetryHistory: (msg as any).telemetryHistory,
           })
         );
         break;

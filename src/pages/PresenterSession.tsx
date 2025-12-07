@@ -20,6 +20,7 @@ import { useVoiceState, releaseFloor, setVoiceEnabled } from "../hooks/useVoiceS
 import { auth } from "../firebase";
 import { VoicePatientOverlay, TranscriptTurn } from "../components/VoicePatientOverlay";
 import { PresenterVoiceControls } from "../components/PresenterVoiceControls";
+import { VoiceCharacterTile } from "../components/VoiceCharacterTile";
 import { voiceGatewayClient } from "../services/VoiceGatewayClient";
 import {
   PatientState,
@@ -138,6 +139,10 @@ export default function PresenterSession() {
   const [simState, setSimState] = useState<{
     stageId: string;
     vitals: Record<string, unknown>;
+    exam?: Record<string, string | undefined>;
+    telemetry?: boolean;
+    rhythmSummary?: string;
+    telemetryWaveform?: number[];
     fallback: boolean;
     findings?: string[];
     budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
@@ -148,6 +153,7 @@ export default function PresenterSession() {
   const [transcriptLog, setTranscriptLog] = useState<TranscriptLogTurn[]>([]);
   const [patientAudioUrl, setPatientAudioUrl] = useState<string | null>(null);
   const [freezeStatus, setFreezeStatus] = useState<"live" | "frozen">("live");
+  const [showEkg, setShowEkg] = useState(false);
   const [availableStages, setAvailableStages] = useState<string[]>([]);
   const [selectedStage, setSelectedStage] = useState<string>("");
   const [doctorQuestionText, setDoctorQuestionText] = useState<string>("");
@@ -159,13 +165,24 @@ const [isAnalyzing, setIsAnalyzing] = useState(false);
 const [debriefResult, setDebriefResult] = useState<AnalysisResult | null>(null);
 const [timelineCopyStatus, setTimelineCopyStatus] = useState<"idle" | "copied" | "error">("idle");
 const [timelineFilter, setTimelineFilter] = useState<string>("all");
-const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 const [timelineSearch, setTimelineSearch] = useState<string>("");
+  const [voiceLocked, setVoiceLocked] = useState(false);
+  const [activeCharacter, setActiveCharacter] = useState<{ character: CharacterId; state: PatientState } | null>(null);
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
   );
+  const latestEkg = useMemo(() => {
+    const ekgs = (simState?.orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
+    return ekgs.length ? ekgs[ekgs.length - 1] : null;
+  }, [simState?.orders]);
+  const ekgHistory = useMemo(() => {
+    if ((simState as any)?.ekgHistory) return (simState as any).ekgHistory;
+    const ekgs = (simState?.orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
+    return ekgs.slice(-3).reverse();
+  }, [simState?.orders, (simState as any)?.ekgHistory]);
   const timelineItems = useMemo(() => {
     const items: { id: string; ts: number; label: string; detail: string }[] = [];
     transcriptLog.forEach((t) => {
@@ -174,6 +191,22 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
         ts: t.timestamp,
         label: t.character ? t.character : t.role === "doctor" ? "Doctor" : "Patient",
         detail: t.text,
+      });
+    });
+    (simState?.telemetryHistory ?? []).forEach((h, idx) => {
+      items.push({
+        id: `telemetry-${idx}-${h.ts ?? Date.now()}`,
+        ts: h.ts ?? Date.now(),
+        label: "Telemetry",
+        detail: h.rhythm ?? "Rhythm update",
+      });
+    });
+    (ekgHistory ?? []).forEach((ekg, idx) => {
+      items.push({
+        id: `ekg-${idx}-${ekg.ts ?? Date.now()}`,
+        ts: ekg.ts ?? Date.now(),
+        label: "EKG",
+        detail: ekg.summary ?? "EKG",
       });
     });
     (simState?.orders ?? [])
@@ -189,6 +222,22 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
               : o.result?.summary ?? "Result ready",
         });
       });
+    if (simState?.exam) {
+      items.push({
+        id: `exam-${simState.stageId}-${Date.now()}`,
+        ts: Date.now(),
+        label: "Exam",
+        detail: [
+          simState.exam.general && `General: ${simState.exam.general}`,
+          simState.exam.cardio && `CV: ${simState.exam.cardio}`,
+          simState.exam.lungs && `Lungs: ${simState.exam.lungs}`,
+          simState.exam.perfusion && `Perfusion: ${simState.exam.perfusion}`,
+          simState.exam.neuro && `Neuro: ${simState.exam.neuro}`,
+        ]
+          .filter(Boolean)
+          .join(" | "),
+      });
+    }
     return items
       .sort((a, b) => a.ts - b.ts)
       .filter((item, idx, arr) => arr.findIndex((it) => it.id === item.id) === idx)
@@ -604,8 +653,19 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
         setTranscriptLog((prev) => [...prev, ...entries]);
       }
     });
+    const unsubVoiceState = voiceGatewayClient.onVoiceState?.((voiceState) => {
+      if (voiceState && typeof voiceState.locked === "boolean") {
+        setVoiceLocked(voiceState.locked);
+      }
+    });
     const unsubPatient = voiceGatewayClient.onPatientState((state, character?: string) => {
       setPatientState(state);
+      if (character) {
+        setActiveCharacter({ character: character as CharacterId, state });
+        if (state !== "speaking") {
+          setTimeout(() => setActiveCharacter((prev) => (prev?.state === "speaking" ? prev : null)), 1200);
+        }
+      }
 
       if (state === "speaking") {
         currentTurnCharacterRef.current = character ?? "patient";
@@ -716,6 +776,7 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
     return () => {
       unsubStatus();
       unsubSim();
+      unsubVoiceState?.();
       unsubPatient();
       unsubTranscript();
       unsubDoctor();
@@ -1021,6 +1082,56 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
                   Voice fallback active (text mode)
                 </span>
               )}
+              {simState.exam && (
+                <div className="bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-2 w-full">
+                  <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold mb-1">
+                    <span>Exam</span>
+                    <span className="text-[10px] text-slate-500">On-demand bedside</span>
+                  </div>
+                  <div className="grid gap-1.5 text-sm text-slate-200 md:grid-cols-2">
+                    {simState.exam.general && <div><span className="text-slate-400 text-[11px] mr-1">General:</span>{simState.exam.general}</div>}
+                    {simState.exam.cardio && <div><span className="text-slate-400 text-[11px] mr-1">CV:</span>{simState.exam.cardio}</div>}
+                    {simState.exam.lungs && <div><span className="text-slate-400 text-[11px] mr-1">Lungs:</span>{simState.exam.lungs}</div>}
+                    {simState.exam.perfusion && <div><span className="text-slate-400 text-[11px] mr-1">Perfusion:</span>{simState.exam.perfusion}</div>}
+                    {simState.exam.neuro && <div><span className="text-slate-400 text-[11px] mr-1">Neuro:</span>{simState.exam.neuro}</div>}
+                  </div>
+                </div>
+              )}
+              {simState.telemetry && (
+                <div className="bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-2 w-full">
+                  <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold mb-1">
+                    <span>Telemetry</span>
+                    <span className="text-[10px] text-slate-500">Presenter only</span>
+                  </div>
+                  <div className="text-sm text-emerald-100">
+                    {simState.rhythmSummary ?? "Rhythm available"}
+                  </div>
+                  {simState.telemetryWaveform && simState.telemetryWaveform.length > 0 && (
+                    <svg viewBox={`0 0 ${simState.telemetryWaveform.length} 2`} className="w-full h-16 mt-2">
+                      <polyline
+                        fill="none"
+                        stroke="#34d399"
+                        strokeWidth="0.08"
+                        points={simState.telemetryWaveform
+                          .map((v, idx) => `${idx},${1 - v}`)
+                          .join(" ")}
+                      />
+                    </svg>
+                  )}
+                  {simState.telemetryHistory && simState.telemetryHistory.length > 0 && (
+                    <div className="mt-2 text-[12px] text-slate-300 space-y-1">
+                      {simState.telemetryHistory.slice(-4).reverse().map((h, idx) => (
+                        <div key={`telemetry-history-${idx}`} className="flex justify-between">
+                          <span>{h.rhythm ?? "Rhythm"}</span>
+                          <span className="text-[10px] text-slate-500">
+                            {h.ts ? new Date(h.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {simState.orders && simState.orders.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 w-full">
                   {simState.orders.slice(-6).map((order) => {
@@ -1074,6 +1185,66 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
                       </div>
                     );
                   })}
+                </div>
+              )}
+              {latestEkg && (
+                <div className="flex items-center justify-between w-full bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-2">
+                  <div className="text-sm text-slate-200">Latest EKG ready</div>
+                  <button
+                    type="button"
+                    onClick={() => setShowEkg(true)}
+                    className="px-2.5 py-1 text-[12px] rounded-lg border border-slate-700 text-slate-100 hover:border-slate-500"
+                  >
+                    Show EKG
+                  </button>
+                </div>
+              )}
+              {showEkg && latestEkg && (
+                <div className="bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-3 w-full shadow-sm shadow-black/40">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold text-slate-100">EKG</div>
+                    <button
+                      type="button"
+                      onClick={() => setShowEkg(false)}
+                      className="text-xs text-slate-400 hover:text-slate-200"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div className="text-slate-200 text-sm mt-2 whitespace-pre-wrap">
+                    {latestEkg.result?.summary ?? "Strip available for review."}
+                  </div>
+                  {latestEkg.result?.meta && (
+                    <div className="text-[12px] text-slate-400 mt-1">
+                      {latestEkg.result.meta.rate && <div>Rate: {latestEkg.result.meta.rate}</div>}
+                      {latestEkg.result.meta.intervals && <div>Intervals: {latestEkg.result.meta.intervals}</div>}
+                      {latestEkg.result.meta.axis && <div>Axis: {latestEkg.result.meta.axis}</div>}
+                    </div>
+                  )}
+                  {latestEkg.result?.imageUrl && (
+                    <div className="mt-2">
+                      <img
+                        src={latestEkg.result.imageUrl}
+                        alt="EKG strip"
+                        className="w-full max-h-52 object-contain rounded border border-slate-800"
+                      />
+                    </div>
+                  )}
+                  {ekgHistory.length > 1 && (
+                    <div className="mt-3">
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold mb-1">
+                        Prior EKGs
+                      </div>
+                      <ul className="space-y-1 text-[12px] text-slate-300">
+                        {ekgHistory.slice(1).map((ekg, idx) => (
+                          <li key={`ekg-history-${idx}`}>
+                            {new Date(ekg.completedAt ?? Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })} —{" "}
+                            {ekg.result?.summary ?? "EKG"}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1178,10 +1349,12 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
                 className={`px-2 py-0.5 rounded-full border text-xs ${
                   freezeStatus === "frozen"
                     ? "border-amber-500/60 text-amber-100"
+                    : voiceLocked
+                    ? "border-rose-500/60 text-rose-100"
                     : "border-emerald-500/60 text-emerald-100"
                 }`}
               >
-                {freezeStatus === "frozen" ? "Paused" : "Live"}
+                {voiceLocked ? "Locked" : freezeStatus === "frozen" ? "Paused" : "Live"}
               </span>
             </div>
             <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
@@ -1223,6 +1396,14 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
                     patientAudioUrl={patientAudioUrl}
                     onClearTranscript={() => setTranscriptTurns([])}
                   />
+                  {activeCharacter && (
+                    <div className="absolute top-4 left-4 z-30">
+                      <VoiceCharacterTile
+                        character={activeCharacter.character}
+                        state={activeCharacter.state}
+                      />
+                    </div>
+                  )}
                   <div
                     className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
                     ref={slideRef}

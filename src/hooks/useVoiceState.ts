@@ -96,3 +96,10 @@ export async function setVoiceEnabled(sessionId: string, enabled: boolean) {
     "voice.since": enabled ? null : null,
   });
 }
+
+export async function setVoiceLock(sessionId: string, locked: boolean) {
+  const ref = doc(db, "sessions", sessionId);
+  await updateDoc(ref, {
+    "voice.locked": locked,
+  });
+}

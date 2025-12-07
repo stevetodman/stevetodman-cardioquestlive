@@ -18,6 +18,8 @@ const stateCache: Map<
     vitalsKey?: string;
     findingsKey?: string;
     ordersKey?: string;
+    telemetryKey?: string;
+    ekgKey?: string;
     lastWrite?: number;
   }
 > = new Map();
@@ -33,6 +35,8 @@ export async function persistSimState(simId: string, state: SimState & { budget?
   const findingsKey = makeKey(state.findings || []);
   const ordersKey = makeKey(state.orders || []);
   const stageIdsKey = makeKey(state.stageIds || []);
+  const telemetryKey = makeKey(state.telemetryHistory || []);
+  const ekgKey = makeKey(state.ekgHistory || []);
   const now = Date.now();
   const shouldSkip =
     cache.stageId === state.stageId &&
@@ -42,6 +46,8 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     cache.budgetKey === budgetKey &&
     cache.ordersKey === ordersKey &&
     cache.stageIdsKey === stageIdsKey &&
+    cache.telemetryKey === telemetryKey &&
+    cache.ekgKey === ekgKey &&
     cache.lastWrite &&
     now - cache.lastWrite < 500;
   if (shouldSkip) return;
@@ -64,6 +70,15 @@ export async function persistSimState(simId: string, state: SimState & { budget?
   if (state.orders) {
     payload.orders = state.orders;
   }
+  if (state.telemetryHistory) {
+    payload.telemetryHistory = state.telemetryHistory;
+  }
+  if (state.ekgHistory) {
+    payload.ekgHistory = state.ekgHistory;
+  }
+  if (state.telemetryWaveform) {
+    payload.telemetryWaveform = state.telemetryWaveform;
+  }
   await docRef.set(payload, { merge: true });
   stateCache.set(simId, {
     stageId: state.stageId,
@@ -73,6 +88,8 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     budgetKey,
     ordersKey,
     stageIdsKey,
+    telemetryKey,
+    ekgKey,
     lastWrite: now,
   });
 }
@@ -93,4 +110,26 @@ export async function logSimEvent(simId: string, event: SimEvent) {
     payload: event.payload ?? {},
     ...(event.correlationId ? { correlationId: event.correlationId } : {}),
   });
+}
+
+export async function loadSimState(simId: string): Promise<Partial<SimState> | null> {
+  const db = getFirestore();
+  if (!db) return null;
+  const docRef = db.collection("sessions").doc(simId);
+  const snap = await docRef.get();
+  if (!snap.exists) return null;
+  const data = snap.data() || {};
+  return {
+    stageId: data.stageId,
+    scenarioId: data.scenarioId,
+    vitals: data.vitals,
+    findings: data.findings,
+    fallback: data.fallback,
+    stageIds: data.stageIds,
+    orders: data.orders,
+    budget: data.budget,
+    telemetryHistory: data.telemetryHistory,
+    ekgHistory: data.ekgHistory,
+    telemetryWaveform: data.telemetryWaveform,
+  } as Partial<SimState>;
 }

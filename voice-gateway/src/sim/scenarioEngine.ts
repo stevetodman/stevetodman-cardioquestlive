@@ -245,6 +245,158 @@ const scenarioMap: Record<ScenarioId, ScenarioDef> = {
   },
 };
 
+const examTemplates: Record<
+  ScenarioId,
+  { baseline: StageDef["exam"]; decomp?: StageDef["exam"]; spell?: StageDef["exam"] }
+> = {
+  syncope: {
+    baseline: {
+      general: "Well-appearing, oriented.",
+      cardio: "Regular rhythm, no loud murmurs.",
+      lungs: "Clear to auscultation.",
+      perfusion: "Warm, good pulses, no edema.",
+      neuro: "Normal speech, intact strength.",
+    },
+    decomp: {
+      general: "Dizzy and pale on standing.",
+      cardio: "Tachycardic, otherwise normal heart sounds.",
+      lungs: "Clear.",
+      perfusion: "Mildly cool, delayed cap refill.",
+      neuro: "Lightheaded, near-syncope.",
+    },
+  },
+  exertional_chest_pain: {
+    baseline: {
+      general: "Well-appearing teen, mild discomfort.",
+      cardio: "Regular rhythm, possible soft SEM LSB.",
+      lungs: "Clear bilaterally.",
+      perfusion: "Warm extremities, brisk cap refill.",
+      neuro: "Alert, answers appropriately.",
+    },
+    decomp: {
+      general: "Uncomfortable after exertion.",
+      cardio: "Tachycardic, no rub, no JVD.",
+      lungs: "Clear.",
+      perfusion: "Warm but anxious.",
+      neuro: "Anxious, oriented.",
+    },
+  },
+  palpitations_svt: {
+    baseline: {
+      general: "Comfortable between episodes.",
+      cardio: "Regular rhythm, no murmurs at rest.",
+      lungs: "Clear.",
+      perfusion: "Warm, normal pulses.",
+      neuro: "Alert, no focal deficits.",
+    },
+    decomp: {
+      general: "Anxious during tachycardia.",
+      cardio: "Rapid regular pulse, no gallop.",
+      lungs: "Clear.",
+      perfusion: "Warm, slightly diaphoretic.",
+      neuro: "Alert, follows commands.",
+    },
+  },
+  myocarditis: {
+    baseline: {
+      general: "Tired, low energy.",
+      cardio: "Tachycardic, possible S3/rub.",
+      lungs: "Mild crackles bases.",
+      perfusion: "Cool extremities, delayed cap refill.",
+      neuro: "Sleepy but oriented.",
+    },
+    decomp: {
+      general: "Ill-appearing, tachypneic.",
+      cardio: "Tachycardic with gallop.",
+      lungs: "Bibasilar crackles.",
+      perfusion: "Cool, weak pulses.",
+      neuro: "Lethargic but arousable.",
+    },
+  },
+  exertional_syncope_hcm: {
+    baseline: {
+      general: "Well-appearing athlete.",
+      cardio: "Harsh SEM LLSB increases with Valsalva/standing.",
+      lungs: "Clear.",
+      perfusion: "Warm, strong pulses.",
+      neuro: "Alert.",
+    },
+    decomp: {
+      general: "Lightheaded post-exertion.",
+      cardio: "Tachycardic, murmur more pronounced standing.",
+      lungs: "Clear.",
+      perfusion: "Warm, cap refill slightly delayed.",
+      neuro: "Dizzy when upright.",
+    },
+  },
+  ductal_shock: {
+    baseline: {
+      general: "Ill, irritable infant.",
+      cardio: "Tachycardic, possible gallop.",
+      lungs: "Mild retractions, coarse breath sounds.",
+      perfusion: "Cool extremities, weak pulses, hepatomegaly.",
+      neuro: "Irritable, hypotonic when tired.",
+    },
+    decomp: {
+      general: "Lethargic, mottled.",
+      cardio: "Severe tachycardia, weak heart sounds.",
+      lungs: "Crackles, increased work of breathing.",
+      perfusion: "Poor pulses, delayed cap refill.",
+      neuro: "Lethargic.",
+    },
+  },
+  cyanotic_spell: {
+    baseline: {
+      general: "Quiet toddler, mildly cyanotic lips.",
+      cardio: "Soft systolic murmur LUSB.",
+      lungs: "Clear.",
+      perfusion: "Warm, slight clubbing.",
+      neuro: "Alert, playful.",
+    },
+    spell: {
+      general: "Irritable, squatting, cyanotic.",
+      cardio: "Tachycardic, murmur louder.",
+      lungs: "Clear.",
+      perfusion: "Cool extremities, delayed cap refill.",
+      neuro: "Fussy but alert.",
+    },
+  },
+};
+
+const rhythmTemplates: Record<
+  ScenarioId,
+  { baseline: string; decomp?: string; episode?: string; spell?: string }
+> = {
+  syncope: {
+    baseline: "Sinus 90s, normal intervals",
+    decomp: "Sinus tachy 120s, borderline QTc",
+  },
+  exertional_chest_pain: {
+    baseline: "Sinus 80-90s, nonspecific ST/T",
+    decomp: "Sinus tachy 110-120s, nonspecific changes",
+  },
+  palpitations_svt: {
+    baseline: "Sinus 90s at rest",
+    episode: "Narrow regular tachycardia ~180",
+  },
+  myocarditis: {
+    baseline: "Sinus tachy 120s, low voltage, diffuse ST/T changes",
+    decomp: "Sinus tachy 130s, low voltage with ST depressions",
+  },
+  exertional_syncope_hcm: {
+    baseline: "Sinus 90s, LVH with deep Qs",
+    decomp: "Sinus 110s, LVH with repol changes",
+  },
+  ductal_shock: {
+    baseline: "Sinus tachy 180s, possible RV strain",
+    decomp: "Sinus tachy 190s, low amplitude complexes",
+  },
+  cyanotic_spell: {
+    baseline: "Sinus 100s, RVH/right axis",
+    spell: "Sinus 150s, RV strain pattern",
+  },
+};
+
 export type ApplyResult = {
   nextState: SimState;
   diff: Partial<SimState>;
@@ -254,6 +406,7 @@ export type ApplyResult = {
 export class ScenarioEngine {
   private scenario: ScenarioDef;
   private state: SimState;
+  private lastTickMs: number;
 
   constructor(simId: string, scenarioId: ScenarioId) {
     this.scenario = scenarioMap[scenarioId] ?? syncopeScenario;
@@ -263,10 +416,16 @@ export class ScenarioEngine {
       scenarioId: this.scenario.id,
       stageId: initialStage.id,
       vitals: initialStage.vitals,
+      exam: this.getExam(initialStage.id, this.scenario.id),
+      rhythmSummary: this.getRhythm(initialStage.id, this.scenario.id),
       fallback: false,
+      telemetry: false,
+      telemetryHistory: [],
+      ekgHistory: [],
       findings: [],
       stageEnteredAt: Date.now(),
     };
+    this.lastTickMs = Date.now();
   }
 
   getState(): SimState {
@@ -277,6 +436,36 @@ export class ScenarioEngine {
     this.state = { ...this.state, fallback };
   }
 
+  setTelemetry(on: boolean, rhythmSummary?: string) {
+    this.state = {
+      ...this.state,
+      telemetry: on,
+      rhythmSummary: rhythmSummary ?? this.state.rhythmSummary,
+    };
+    if (on) {
+      const history = this.state.telemetryHistory ?? [];
+      this.state = {
+        ...this.state,
+        telemetryHistory: [...history, { ts: Date.now(), rhythm: this.state.rhythmSummary }],
+      };
+    }
+  }
+
+  applyVitalsAdjustment(delta: Partial<Vitals>) {
+    const nextVitals = this.applyVitalsDelta(this.state.vitals, delta);
+    if (!nextVitals) return this.state;
+    this.state = { ...this.state, vitals: nextVitals };
+    return this.state;
+  }
+
+  setEkgHistory(history: { ts: number; summary: string; imageUrl?: string }[]) {
+    this.state = { ...this.state, ekgHistory: history };
+  }
+
+  setTelemetryHistory(history: { ts: number; rhythm?: string; note?: string }[]) {
+    this.state = { ...this.state, telemetryHistory: history };
+  }
+
   setStage(stageId: string): boolean {
     const nextStage = this.getStageDef(stageId);
     if (!nextStage) return false;
@@ -284,6 +473,8 @@ export class ScenarioEngine {
       ...this.state,
       stageId: nextStage.id,
       vitals: nextStage.vitals ?? this.state.vitals,
+      exam: this.getExam(nextStage.id, this.state.scenarioId as ScenarioId),
+      rhythmSummary: this.getRhythm(nextStage.id, this.state.scenarioId as ScenarioId),
       stageEnteredAt: Date.now(),
     };
     return true;
@@ -307,6 +498,8 @@ export class ScenarioEngine {
           ...this.state,
           stageId: nextStage.id,
           vitals: nextStage.vitals ?? this.state.vitals,
+          exam: this.getExam(nextStage.id, this.state.scenarioId as ScenarioId),
+          rhythmSummary: this.getRhythm(nextStage.id, this.state.scenarioId as ScenarioId),
           stageEnteredAt: Date.now(),
         };
         diff = { stageId: nextStage.id, vitals: nextStage.vitals, stageEnteredAt: this.state.stageEnteredAt };
@@ -347,6 +540,8 @@ export class ScenarioEngine {
           ...this.state,
           stageId: toStage.id,
           vitals: toStage.vitals ?? this.state.vitals,
+          exam: this.getExam(toStage.id, this.state.scenarioId as ScenarioId),
+          rhythmSummary: this.getRhythm(toStage.id, this.state.scenarioId as ScenarioId),
           stageEnteredAt: nowMs,
         };
         return {
@@ -354,12 +549,58 @@ export class ScenarioEngine {
           diff: { stageId: toStage.id, vitals: toStage.vitals, stageEnteredAt: nowMs },
           events: [
             { type: "scenario.transition", payload: { to: toStage.id } },
-            { type: "scenario.state.diff", payload: { stageId: toStage.id, vitals: toStage.vitals } },
+            { type: "scenario.state.diff", payload: { stageId: toStage.id, vitals: toStage.vitals, exam: this.state.exam } },
           ],
         };
       }
     }
     return null;
+  }
+
+  tick(nowMs = Date.now()): ApplyResult | null {
+    const stage = this.getCurrentStage();
+    let changed = false;
+    const events: { type: string; payload?: Record<string, unknown> }[] = [];
+    let diff: Partial<SimState> = {};
+    const elapsedSec = (nowMs - this.lastTickMs) / 1000;
+    this.lastTickMs = nowMs;
+
+    // Apply drift if configured
+    if (stage.drift && elapsedSec > 0 && this.state.vitals) {
+      const nextVitals = { ...this.state.vitals };
+      if (stage.drift.hrPerMin) {
+        nextVitals.hr = Math.max(0, Math.round((nextVitals.hr ?? 0) + (stage.drift.hrPerMin / 60) * elapsedSec));
+      }
+      const parseBp = (bp: string | undefined) => {
+        if (!bp) return { sbp: 0, dbp: 0 };
+        const [s, d] = bp.split("/").map((n) => Number(n));
+        return { sbp: s || 0, dbp: d || 0 };
+      };
+      const bpParsed = parseBp(nextVitals.bp as string | undefined);
+      if (stage.drift.spo2PerMin) {
+        const nextSpo2 = Math.max(50, Math.min(100, (nextVitals.spo2 ?? 100) + (stage.drift.spo2PerMin / 60) * elapsedSec));
+        nextVitals.spo2 = Math.round(nextSpo2);
+      }
+      if (stage.drift.sbpPerMin || stage.drift.dbpPerMin) {
+        const nextSbp = Math.max(40, Math.round(bpParsed.sbp + (stage.drift.sbpPerMin ?? 0) / 60 * elapsedSec));
+        const nextDbp = Math.max(20, Math.round(bpParsed.dbp + (stage.drift.dbpPerMin ?? 0) / 60 * elapsedSec));
+        nextVitals.bp = `${nextSbp}/${nextDbp}`;
+      }
+      this.state = { ...this.state, vitals: nextVitals };
+      diff = { ...diff, vitals: nextVitals };
+      changed = true;
+    }
+
+    const transition = this.evaluateAutomaticTransitions([], nowMs);
+    if (transition) {
+      changed = true;
+      diff = { ...diff, ...transition.diff };
+      events.push(...(transition.events ?? []));
+    }
+
+    if (!changed) return null;
+    events.push({ type: "scenario.state.diff", payload: diff as any });
+    return { nextState: this.state, diff, events };
   }
 
   private isTransitionSatisfied(when: StageTransition["when"], elapsedSec: number, actions: Set<string>): boolean {
@@ -392,6 +633,25 @@ export class ScenarioEngine {
 
   getStageIds(): string[] {
     return this.scenario.stages.map((s) => s.id);
+  }
+
+  private getExam(stageId: string, scenarioId: ScenarioId) {
+    const template = examTemplates[scenarioId] ?? examTemplates.syncope;
+    const isDecomp = stageId.includes("decomp") || stageId.includes("worse") || stageId.includes("support") || stageId.includes("episode");
+    const isSpell = stageId.includes("spell");
+    if (isSpell && template.spell) return template.spell;
+    if (isDecomp && template.decomp) return template.decomp;
+    return template.baseline;
+  }
+
+  private getRhythm(stageId: string, scenarioId: ScenarioId) {
+    const template = rhythmTemplates[scenarioId] ?? rhythmTemplates.syncope;
+    const isDecomp = stageId.includes("decomp") || stageId.includes("worse") || stageId.includes("support") || stageId.includes("episode");
+    const isSpell = stageId.includes("spell");
+    if (isSpell && template.spell) return template.spell;
+    if (isDecomp && template.decomp) return template.decomp;
+    if (stageId.includes("episode") && template.episode) return template.episode;
+    return template.baseline;
   }
 
   private applyVitalsDelta(current: Vitals, delta: Partial<Vitals>): Vitals | null {
