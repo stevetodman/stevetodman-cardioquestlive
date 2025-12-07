@@ -61,6 +61,6 @@ export async function logSimEvent(simId: string, event: SimEvent) {
     ts: admin.firestore.FieldValue.serverTimestamp(),
     type: event.type,
     payload: event.payload ?? {},
-    correlationId: event.correlationId,
+    ...(event.correlationId ? { correlationId: event.correlationId } : {}),
   });
 }

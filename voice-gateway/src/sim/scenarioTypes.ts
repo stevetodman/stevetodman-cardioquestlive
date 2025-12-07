@@ -15,6 +15,7 @@ export type StageDef = {
   id: string;
   vitals: { hr: number; bp: string; rr?: number; spo2?: number; temp?: number };
   allowedIntents?: string[];
+  allowedStages?: string[];
   reveals?: { id: string; trigger: "always" | "on_question"; text: string }[];
   transitions?: StageTransition[];
 };

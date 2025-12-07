@@ -59,7 +59,7 @@ class VoiceGatewayClient {
     this.statusListeners.forEach((cb) => cb(this.connectionStatus));
   }
 
-  connect(sessionId: string, userId: string, displayName: string, role: ClientRole) {
+  connect(sessionId: string, userId: string, displayName: string, role: ClientRole, authToken?: string) {
     // Reuse existing connection if it matches session/user and is healthy
     if (
       this.ws &&
@@ -77,6 +77,7 @@ class VoiceGatewayClient {
     this.userId = userId;
     this.displayName = displayName;
     this.role = role;
+    const token = authToken;
 
     const url = DEFAULT_URL;
     if (typeof import.meta !== "undefined" && (import.meta as any).env?.DEV) {
@@ -101,13 +102,17 @@ class VoiceGatewayClient {
     this.ws.onopen = () => {
       this.setStatus({ state: "ready" });
       console.debug("[voice-gateway] socket open");
-      this.send({
-        type: "join",
-        sessionId,
-        userId,
-        displayName,
-        role,
-      });
+      this.send(
+        {
+          type: "join",
+          sessionId,
+          userId,
+          displayName,
+          role,
+          authToken: token,
+        },
+        true
+      );
     };
 
     this.ws.onmessage = (evt) => {
@@ -150,9 +155,11 @@ class VoiceGatewayClient {
     this.setStatus({ state: "disconnected" });
   }
 
-  private send(msg: ClientToServerMessage) {
+  private send(msg: ClientToServerMessage, force = false) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.debug("[voice-gateway] send skipped; socket not open", this.ws?.readyState);
+      if (!force) {
+        console.debug("[voice-gateway] send skipped; socket not open", this.ws?.readyState);
+      }
       return;
     }
     try {

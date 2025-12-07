@@ -6,8 +6,8 @@ export type ToolGateDecision =
   | { allowed: false; reason: string };
 
 const VITAL_LIMITS = {
-  hr: { min: 20, max: 240 },
-  rr: { min: 5, max: 80 },
+  hr: { min: 30, max: 250 },
+  rr: { min: 4, max: 80 },
   spo2: { min: 50, max: 100 },
   temp: { min: 90, max: 110 },
 };
@@ -35,6 +35,9 @@ export class ToolGate {
       }
       case "intent_advanceStage": {
         if (!intent.stageId) return { allowed: false, reason: "missing_stage" };
+        if (stage?.allowedStages && stage.allowedStages.length > 0 && !stage.allowedStages.includes(intent.stageId)) {
+          return { allowed: false, reason: "stage_not_allowed" };
+        }
         return { allowed: true };
       }
       case "intent_revealFinding":

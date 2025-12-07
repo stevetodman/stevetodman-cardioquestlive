@@ -32,6 +32,7 @@ import { SessionTranscriptPanel, TranscriptLogTurn } from "../components/Session
 import { sendVoiceCommand } from "../services/voiceCommands";
 import { DebriefPanel } from "../components/DebriefPanel";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
+import { Select } from "../components/Select";
 
 export default function PresenterSession() {
   const { sessionId } = useParams();
@@ -62,6 +63,9 @@ export default function PresenterSession() {
   } | null>(null);
   const [transcriptLog, setTranscriptLog] = useState<TranscriptLogTurn[]>([]);
   const [patientAudioUrl, setPatientAudioUrl] = useState<string | null>(null);
+  const [freezeStatus, setFreezeStatus] = useState<"live" | "frozen">("live");
+  const [availableStages, setAvailableStages] = useState<string[]>([]);
+  const [selectedStage, setSelectedStage] = useState<string>("");
   const [doctorQuestionText, setDoctorQuestionText] = useState<string>("");
   const [autoForceReply, setAutoForceReply] = useState(false);
   const [selectedScenario, setSelectedScenario] =
@@ -159,6 +163,55 @@ export default function PresenterSession() {
     if (!sessionId) return;
     await releaseFloor(sessionId);
   }, [sessionId]);
+
+  const handleFreezeToggle = useCallback(
+    (next: "freeze" | "unfreeze") => {
+      if (!sessionId) return;
+      sendVoiceCommand(sessionId, {
+        type: "voice_command",
+        sessionId,
+        userId: auth?.currentUser?.uid ?? "presenter-local",
+        commandType: next === "freeze" ? "freeze" : "unfreeze",
+      });
+      setFreezeStatus(next === "freeze" ? "frozen" : "live");
+    },
+    [sessionId]
+  );
+
+  const handleForceReply = useCallback(() => {
+    if (!sessionId) return;
+    const trimmed = doctorQuestionText.trim();
+    sendVoiceCommand(sessionId, {
+      type: "voice_command",
+      sessionId,
+      userId: auth?.currentUser?.uid ?? "presenter-local",
+      commandType: "force_reply",
+      payload: trimmed ? { doctorUtterance: trimmed } : undefined,
+    });
+  }, [sessionId, doctorQuestionText]);
+
+  const handleRevealClue = useCallback(() => {
+    if (!sessionId) return;
+    const hint = doctorQuestionText.trim() || "Hint: ask about symptom timing, triggers, and family history.";
+    sendVoiceCommand(sessionId, {
+      type: "voice_command",
+      sessionId,
+      userId: auth?.currentUser?.uid ?? "presenter-local",
+      commandType: "force_reply",
+      payload: { doctorUtterance: hint },
+    });
+  }, [sessionId, doctorQuestionText]);
+
+  const handleSkipStage = useCallback(() => {
+    if (!sessionId || !selectedStage) return;
+    sendVoiceCommand(sessionId, {
+      type: "voice_command",
+      sessionId,
+      userId: auth?.currentUser?.uid ?? "presenter-local",
+      commandType: "skip_stage",
+      payload: { stageId: selectedStage },
+    });
+  }, [sessionId, selectedStage]);
 
   const handleScenarioSelect = useCallback((scenarioId: PatientScenarioId) => {
     setSelectedScenario(scenarioId);
@@ -272,7 +325,13 @@ export default function PresenterSession() {
   // Voice gateway wiring for presenter
   useEffect(() => {
     const unsubStatus = voiceGatewayClient.onStatus((status) => setGatewayStatus(status));
-    const unsubSim = voiceGatewayClient.onSimState((state) => setSimState(state));
+    const unsubSim = voiceGatewayClient.onSimState((state) => {
+      setSimState(state);
+      setAvailableStages(state.stageIds ?? []);
+      if (!selectedStage && state.stageIds && state.stageIds.length > 0) {
+        setSelectedStage(state.stageIds[0]);
+      }
+    });
     const unsubPatient = voiceGatewayClient.onPatientState((state) => {
       setPatientState(state);
 
@@ -372,7 +431,7 @@ export default function PresenterSession() {
     });
     return () => {
       unsubStatus();
-       unsubSim();
+      unsubSim();
       unsubPatient();
       unsubTranscript();
       unsubDoctor();
@@ -384,10 +443,18 @@ export default function PresenterSession() {
 
   useEffect(() => {
     if (!sessionId) return;
-    const uid = auth?.currentUser?.uid ?? "presenter-local";
-    const displayName = auth?.currentUser?.displayName ?? "Presenter";
-    voiceGatewayClient.connect(sessionId, uid, displayName, "presenter");
-    return () => voiceGatewayClient.disconnect();
+    let mounted = true;
+    (async () => {
+      const uid = auth?.currentUser?.uid ?? "presenter-local";
+      const displayName = auth?.currentUser?.displayName ?? "Presenter";
+      const authToken = auth?.currentUser?.getIdToken ? await auth.currentUser.getIdToken() : undefined;
+      if (!mounted) return;
+      voiceGatewayClient.connect(sessionId, uid, displayName, "presenter", authToken);
+    })();
+    return () => {
+      mounted = false;
+      voiceGatewayClient.disconnect();
+    };
   }, [sessionId]);
 
   // Wire in-slide nav buttons to presenter navigation
@@ -760,6 +827,104 @@ export default function PresenterSession() {
         <div className="w-full max-w-[1800px]">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <SessionTranscriptPanel turns={transcriptLog} sessionId={sessionId} />
+            <div className="rounded-xl border border-slate-800/80 bg-slate-900/70 p-3 text-slate-100">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-semibold text-slate-200">Live Captions</div>
+                <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                  {freezeStatus === "frozen" ? "Voice paused" : "Voice live"}
+                </div>
+              </div>
+              <div className="space-y-1 max-h-[200px] overflow-y-auto pr-1 text-sm">
+                {transcriptTurns.length === 0 && (
+                  <div className="text-slate-500 text-xs">No captions yet.</div>
+                )}
+                {transcriptTurns.slice(-8).map((t) => (
+                  <div
+                    key={t.id}
+                    className={`rounded-lg px-2 py-1 ${
+                      t.role === "doctor"
+                        ? "bg-slate-800/70 text-amber-100"
+                        : "bg-emerald-900/50 text-emerald-100"
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase mr-1 opacity-70">
+                      {t.role === "doctor" ? "Doctor" : "Patient"}
+                    </span>
+                    <span>{t.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-800/80 bg-slate-900/70 p-3 text-slate-100">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-semibold text-slate-200">Voice Controls</div>
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`text-[10px] uppercase tracking-wide ${
+                      freezeStatus === "frozen" ? "text-amber-400" : "text-emerald-400"
+                    }`}
+                  >
+                    {freezeStatus === "frozen" ? "Frozen" : "Live"}
+                  </div>
+                  <div className="text-[10px] font-mono text-slate-400">
+                    Cost: ${simState?.budget?.usdEstimate?.toFixed(2) ?? "0.00"} ·{" "}
+                    {simState?.budget?.voiceSeconds ? `${Math.round(simState.budget.voiceSeconds)}s` : "0s"}
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleFreezeToggle(freezeStatus === "frozen" ? "unfreeze" : "freeze")}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition ${
+                    freezeStatus === "frozen"
+                      ? "bg-emerald-700 text-emerald-50 hover:bg-emerald-600"
+                      : "bg-amber-700 text-amber-50 hover:bg-amber-600"
+                  }`}
+                >
+                  {freezeStatus === "frozen" ? "Unfreeze patient" : "Freeze patient"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleForceReply}
+                  className="px-2.5 py-1 rounded-md text-xs font-semibold bg-sky-700 text-sky-50 hover:bg-sky-600"
+                >
+                  Force reply
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRevealClue}
+                  className="px-2.5 py-1 rounded-md text-xs font-semibold bg-purple-700 text-purple-50 hover:bg-purple-600"
+                >
+                  Reveal clue
+                </button>
+                <div className="flex items-center gap-1 text-xs text-slate-300">
+                  Stage:
+                  <select
+                    value={selectedStage}
+                    onChange={(e) => setSelectedStage(e.target.value)}
+                    className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100"
+                  >
+                    {(availableStages.length ? availableStages : simState?.stageIds ?? []).map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleSkipStage}
+                    className="px-2 py-1 rounded-md text-xs font-semibold bg-slate-700 text-slate-50 hover:bg-slate-600"
+                    disabled={!selectedStage}
+                  >
+                    Skip
+                  </button>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-slate-400">
+                  Current: <span className="text-slate-200 font-semibold">{simState?.stageId ?? "?"}</span>
+                </div>
+              </div>
+            </div>
             <DebriefPanel
               result={debriefResult}
               isAnalyzing={isAnalyzing}

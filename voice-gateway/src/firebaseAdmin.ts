@@ -6,6 +6,7 @@ import admin from "firebase-admin";
 
 let app: admin.app.App | null = null;
 let firestoreInstance: admin.firestore.Firestore | null = null;
+let authInstance: admin.auth.Auth | null = null;
 
 export function getFirestore(): admin.firestore.Firestore | null {
   if (firestoreInstance) return firestoreInstance;
@@ -19,6 +20,22 @@ export function getFirestore(): admin.firestore.Firestore | null {
     return firestoreInstance;
   } catch (err) {
     console.warn("[firestore] firebase-admin init failed; persistence disabled", err);
+    return null;
+  }
+}
+
+export function getAuth(): admin.auth.Auth | null {
+  if (authInstance) return authInstance;
+  try {
+    if (!admin.apps || admin.apps.length === 0) {
+      app = admin.initializeApp();
+    } else {
+      app = admin.apps[0]!;
+    }
+    authInstance = admin.auth(app);
+    return authInstance;
+  } catch (err) {
+    console.warn("[auth] firebase-admin init failed; ws auth disabled", err);
     return null;
   }
 }

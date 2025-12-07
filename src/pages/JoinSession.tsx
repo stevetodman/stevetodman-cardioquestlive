@@ -186,8 +186,16 @@ export default function JoinSession() {
   // Connect to voice gateway once we know session/user
   useEffect(() => {
     if (!sessionId || !userId) return;
-    voiceGatewayClient.connect(sessionId, userId, userDisplayName, "participant");
-    return () => voiceGatewayClient.disconnect();
+    let mounted = true;
+    (async () => {
+      const authToken = auth?.currentUser?.getIdToken ? await auth.currentUser.getIdToken() : undefined;
+      if (!mounted) return;
+      voiceGatewayClient.connect(sessionId, userId, userDisplayName, "participant", authToken);
+    })();
+    return () => {
+      mounted = false;
+      voiceGatewayClient.disconnect();
+    };
   }, [sessionId, userId, userDisplayName]);
 
   // Reset local selection when question changes

@@ -19,6 +19,8 @@ import { ToolGate } from "./sim/toolGate";
 import { ToolIntent } from "./sim/types";
 import { CostController } from "./sim/costController";
 import { persistSimState, logSimEvent } from "./persistence";
+import { validateMessage } from "./validators";
+import { getAuth } from "./firebaseAdmin";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
@@ -27,6 +29,7 @@ const realtimeModel = process.env.OPENAI_REALTIME_MODEL || "gpt-4o-mini-realtime
 const realtimeApiKey = process.env.OPENAI_API_KEY || "";
 const softBudgetUsd = Number(process.env.SOFT_BUDGET_USD || 3.5);
 const hardBudgetUsd = Number(process.env.HARD_BUDGET_USD || 4.5);
+const allowInsecureWs = process.env.ALLOW_INSECURE_VOICE_WS !== "false";
 
 type Runtime = {
   realtime?: RealtimePatientClient;
@@ -50,59 +53,22 @@ function send(ws: WebSocket, msg: ServerToClientMessage) {
   }
 }
 
-function validateMessage(msg: any): ClientToServerMessage | null {
-  if (!msg || typeof msg !== "object") return null;
-  switch (msg.type) {
-    case "join":
-      if (
-        typeof msg.sessionId === "string" &&
-        typeof msg.userId === "string" &&
-        (msg.role === "presenter" || msg.role === "participant")
-      ) {
-        return msg as ClientToServerMessage;
-      }
-      return null;
-    case "start_speaking":
-    case "stop_speaking":
-      if (typeof msg.sessionId === "string" && typeof msg.userId === "string") return msg as ClientToServerMessage;
-      return null;
-    case "voice_command":
-      if (
-        typeof msg.sessionId === "string" &&
-        typeof msg.userId === "string" &&
-        ["pause_ai", "resume_ai", "force_reply", "end_turn", "mute_user"].includes(msg.commandType)
-      ) {
-        return msg as ClientToServerMessage;
-      }
-      return null;
-    case "doctor_audio":
-      if (
-        typeof msg.sessionId === "string" &&
-        typeof msg.userId === "string" &&
-        typeof msg.audioBase64 === "string" &&
-        typeof msg.contentType === "string"
-      ) {
-        return msg as ClientToServerMessage;
-      }
-      return null;
-    case "set_scenario":
-      if (typeof msg.sessionId === "string" && typeof msg.userId === "string" && typeof msg.scenarioId === "string") {
-        return msg as ClientToServerMessage;
-      }
-      return null;
-    case "analyze_transcript":
-      if (typeof msg.sessionId === "string" && typeof msg.userId === "string" && Array.isArray(msg.turns)) {
-        return msg as ClientToServerMessage;
-      }
-      return null;
-    case "ping":
-      return { type: "ping", sessionId: typeof msg.sessionId === "string" ? msg.sessionId : undefined };
-    default:
-      return null;
+async function verifyAuthToken(authToken: string | undefined, claimedUserId: string): Promise<boolean> {
+  if (allowInsecureWs) return true;
+  if (!authToken) return false;
+  try {
+    const auth = getAuth();
+    if (!auth) return false;
+    const decoded = await auth.verifyIdToken(authToken);
+    if (decoded.uid && decoded.uid === claimedUserId) return true;
+    return false;
+  } catch (err) {
+    logError("Auth token verification failed", err);
+    return false;
   }
 }
 
-function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.RawData) {
+async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.RawData) {
   let parsedRaw: any;
   try {
     parsedRaw = JSON.parse(raw.toString());
@@ -120,6 +86,12 @@ function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.RawData
   if (parsed.type === "join") {
     if (!parsed.sessionId || !parsed.userId || !parsed.role) {
       send(ws, { type: "error", message: "Missing join fields" });
+      return;
+    }
+    const authed = await verifyAuthToken(parsed.authToken, parsed.userId);
+    if (!authed) {
+      send(ws, { type: "error", message: "unauthorized" });
+      ws.close();
       return;
     }
     ctx.joined = true;
@@ -186,32 +158,73 @@ function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.RawData
     }
     case "voice_command": {
       log("Voice command", parsed.commandType, "by", parsed.userId, "session", ctx.sessionId);
-      if (parsed.commandType === "force_reply") {
-        const doctorUtterance =
-          typeof parsed.payload?.doctorUtterance === "string"
-            ? parsed.payload.doctorUtterance.trim()
-            : undefined;
-        handleForceReply(ctx.sessionId, parsed.userId, doctorUtterance);
-      } else if (parsed.commandType === "pause_ai") {
-        sessionManager.broadcastToSession(ctx.sessionId, {
-          type: "patient_state",
-          sessionId: ctx.sessionId,
-          state: "idle",
-        });
-      } else if (parsed.commandType === "resume_ai") {
-        sessionManager.broadcastToSession(ctx.sessionId, {
-          type: "patient_state",
-          sessionId: ctx.sessionId,
-          state: "listening",
-        });
-      } else if (parsed.commandType === "end_turn") {
-        sessionManager.broadcastToSession(ctx.sessionId, {
-          type: "patient_state",
-          sessionId: ctx.sessionId,
-          state: "idle",
-        });
+      const runtime = ensureRuntime(ctx.sessionId);
+      switch (parsed.commandType) {
+        case "force_reply": {
+          const doctorUtterance =
+            typeof parsed.payload?.doctorUtterance === "string"
+              ? parsed.payload.doctorUtterance.trim()
+              : undefined;
+          handleForceReply(ctx.sessionId, parsed.userId, doctorUtterance);
+          break;
+        }
+        case "pause_ai":
+        case "freeze": {
+          sessionManager.broadcastToSession(ctx.sessionId, {
+            type: "patient_state",
+            sessionId: ctx.sessionId,
+            state: "idle",
+          });
+          runtime.fallback = true;
+          sessionManager.setFallback(ctx.sessionId, true);
+          broadcastSimState(ctx.sessionId, {
+            ...runtime.scenarioEngine.getState(),
+            fallback: true,
+            budget: runtime.cost.getState?.() ?? undefined,
+          });
+          break;
+        }
+        case "resume_ai":
+        case "unfreeze": {
+          runtime.fallback = false;
+          sessionManager.setFallback(ctx.sessionId, false);
+          sessionManager.broadcastToSession(ctx.sessionId, {
+            type: "patient_state",
+            sessionId: ctx.sessionId,
+            state: "listening",
+          });
+          broadcastSimState(ctx.sessionId, {
+            ...runtime.scenarioEngine.getState(),
+            fallback: false,
+            budget: runtime.cost.getState?.() ?? undefined,
+          });
+          break;
+        }
+        case "end_turn": {
+          sessionManager.broadcastToSession(ctx.sessionId, {
+            type: "patient_state",
+            sessionId: ctx.sessionId,
+            state: "idle",
+          });
+          break;
+        }
+        case "skip_stage": {
+          const stageId = typeof parsed.payload?.stageId === "string" ? parsed.payload.stageId : undefined;
+          if (stageId) {
+            runtime.scenarioEngine.setStage(stageId);
+            broadcastSimState(ctx.sessionId, {
+              ...runtime.scenarioEngine.getState(),
+              fallback: runtime.fallback,
+              budget: runtime.cost.getState?.() ?? undefined,
+            });
+          }
+          break;
+        }
+        case "mute_user": {
+          // no-op
+          break;
+        }
       }
-      // mute_user currently no-op beyond log
       break;
     }
     case "ping": {
@@ -231,7 +244,9 @@ function main() {
   wss.on("connection", (ws) => {
     const ctx: ClientContext = { joined: false, sessionId: null, role: null };
 
-    ws.on("message", (data) => handleMessage(ws, ctx, data));
+    ws.on("message", (data) => {
+      void handleMessage(ws, ctx, data);
+    });
 
     ws.on("close", () => {
       if (ctx.joined && ctx.sessionId && ctx.role) {
@@ -497,7 +512,10 @@ function ensureRuntime(sessionId: string): Runtime {
         runtime.fallback = true;
         sessionManager.setFallback(sessionId, true);
         runtime.scenarioEngine.setFallback(true);
-        broadcastSimState(sessionId, runtime.scenarioEngine.getState());
+        broadcastSimState(sessionId, {
+          ...runtime.scenarioEngine.getState(),
+          stageIds: runtime.scenarioEngine.getStageIds(),
+        });
         sessionManager.broadcastToPresenters(sessionId, {
           type: "patient_state",
           sessionId,
@@ -508,7 +526,7 @@ function ensureRuntime(sessionId: string): Runtime {
     runtime.realtime.connect();
   }
   runtimes.set(sessionId, runtime);
-  broadcastSimState(sessionId, runtime.scenarioEngine.getState());
+  broadcastSimState(sessionId, { ...runtime.scenarioEngine.getState(), stageIds: runtime.scenarioEngine.getStageIds() });
   return runtime;
 }
 
@@ -571,12 +589,13 @@ function handleBudgetHardLimit(sessionId: string) {
 
 function broadcastSimState(
   sessionId: string,
-  state: { stageId: string; vitals: any; fallback: boolean; budget?: any }
+  state: { stageId: string; vitals: any; fallback: boolean; budget?: any; stageIds?: string[] }
 ) {
   sessionManager.broadcastToSession(sessionId, {
     type: "sim_state",
     sessionId,
     stageId: state.stageId,
+    stageIds: state.stageIds,
     vitals: state.vitals,
     fallback: state.fallback,
     budget: state.budget,

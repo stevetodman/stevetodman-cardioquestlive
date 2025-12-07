@@ -3,12 +3,12 @@
 This document captures the current deterministic voice sim shape, how to exercise it locally, and what remains to wire before production.
 
 ### What’s implemented
-- `sim_state` WebSocket message (stageId, vitals, fallback) published by the voice-gateway.
+- `sim_state` WebSocket message (stageId, stageIds, vitals, fallback, budget) published by the voice-gateway.
 - Frontend consumption:
-  - Presenter: stage/vitals chip and fallback chip near voice controls.
+  - Presenter: stage/vitals/cost chips, freeze/unfreeze, force reply, reveal clue, skip to stage dropdown, live captions.
   - Participant: status banner shows fallback; PTT disables when fallback is active.
 - Deterministic core scaffolding in gateway:
-  - `ScenarioEngine` (in-memory state) and `ToolGate` (validation/rate limits).
+  - `ScenarioEngine` (in-memory state) and `ToolGate` (validation/rate limits; vitals clamped; stage allowlist check).
   - RealtimePatientClient scaffold (not exercised here without network).
 - Harnesses:
   - `npm run sim:harness` (voice-gateway) — exercises ScenarioEngine + ToolGate.
@@ -37,9 +37,9 @@ GW_URL=ws://localhost:8081/ws/voice npm run ws:harness
    - Stage label is visible in participant view.
 
 ### What’s missing / next wiring
-- Firestore persistence: sim_state + events are still in-memory; add firebase-admin writes for `sessions/{simId}` and `sessions/{simId}/events`.
+- Firestore persistence: sim_state + events are still in-memory; add firebase-admin writes for `sessions/{simId}` and `sessions/{simId}/events` (planned).
 - Realtime/OpenAI path needs live testing (network/API key).
-- Budget guardrail: plug CostController into Realtime usage and flip to fallback on threshold.
+- Budget guardrail: CostController wired; UI shows cost; soft/hard thresholds should be live-tested.
 - Jest rules tests: run with Firestore emulator to remove skipped warnings.
 
 ### Production-minded checklist

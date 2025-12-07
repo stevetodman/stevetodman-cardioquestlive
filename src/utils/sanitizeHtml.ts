@@ -1,85 +1,31 @@
-const allowedTags = new Set([
-  "div",
-  "p",
-  "span",
-  "strong",
-  "em",
-  "ul",
-  "ol",
-  "li",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "img",
-  "section",
-  "article",
-  "header",
-  "footer",
-  "blockquote",
-  "code",
-  "pre",
-  "br",
-]);
+import DOMPurifyModule from "dompurify";
 
-const allowedAttributes = new Set([
-  "class",
-  "id",
-  "href",
-  "src",
-  "alt",
-  "title",
-  "aria-label",
-  "aria-hidden",
-]);
+const factory = (DOMPurifyModule as any)?.default ?? DOMPurifyModule;
+const purifier =
+  typeof window !== "undefined" && typeof window.document !== "undefined"
+    ? typeof factory === "function"
+      ? factory(window as unknown as Window)
+      : factory?.sanitize
+      ? factory
+      : null
+    : null;
 
-const allowedProtocols = ["http:", "https:", "mailto:"];
+const ALLOWED_TAGS = [
+  "div","p","span","strong","em","ul","ol","li","h1","h2","h3","h4","h5","h6",
+  "img","section","article","header","footer","blockquote","code","pre","br",
+];
+
+const ALLOWED_ATTR = ["class","id","href","src","alt","title","aria-label","aria-hidden","data-*"];
 
 export function sanitizeHtml(html: string): string {
   if (!html?.trim()) return "";
-
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-
-  const nodes = doc.body.querySelectorAll("*");
-  nodes.forEach((el) => {
-    const tag = el.tagName.toLowerCase();
-    if (!allowedTags.has(tag)) {
-      const parent = el.parentNode;
-      if (!parent) return;
-      while (el.firstChild) parent.insertBefore(el.firstChild, el);
-      parent.removeChild(el);
-      return;
-    }
-
-    Array.from(el.attributes).forEach((attr) => {
-      const name = attr.name.toLowerCase();
-      if (name.startsWith("on")) {
-        el.removeAttribute(attr.name);
-        return;
-      }
-      if (!allowedAttributes.has(name) && !name.startsWith("data-")) {
-        el.removeAttribute(attr.name);
-        return;
-      }
-      if (name === "href" || name === "src") {
-        const value = attr.value.trim();
-        const url = (() => {
-          try {
-            return new URL(value, "http://localhost");
-          } catch {
-            return null;
-          }
-        })();
-        if (!url || !allowedProtocols.includes(url.protocol)) {
-          el.removeAttribute(attr.name);
-          return;
-        }
-      }
-    });
+  if (!purifier?.sanitize) return html;
+  return purifier.sanitize(html, {
+    ALLOWED_TAGS,
+    ALLOWED_ATTR,
+    ALLOW_DATA_ATTR: true,
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+    FORBID_TAGS: ["style","script"],
+    FORBID_ATTR: ["style","onerror","onclick"],
   });
-
-  return doc.body.innerHTML;
 }

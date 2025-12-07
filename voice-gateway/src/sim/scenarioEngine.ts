@@ -91,6 +91,17 @@ export class ScenarioEngine {
     this.state = { ...this.state, fallback };
   }
 
+  setStage(stageId: string): boolean {
+    const nextStage = this.getStageDef(stageId);
+    if (!nextStage) return false;
+    this.state = {
+      ...this.state,
+      stageId: nextStage.id,
+      vitals: nextStage.vitals ?? this.state.vitals,
+    };
+    return true;
+  }
+
   applyIntent(intent: ToolIntent): ApplyResult {
     const events: { type: string; payload?: Record<string, unknown> }[] = [];
     let diff: Partial<SimState> = {};
@@ -127,6 +138,10 @@ export class ScenarioEngine {
 
   getStageDef(stageId: string): StageDef | undefined {
     return this.scenario.stages.find((s) => s.id === stageId);
+  }
+
+  getStageIds(): string[] {
+    return this.scenario.stages.map((s) => s.id);
   }
 
   private applyVitalsDelta(current: Vitals, delta: Partial<Vitals>): Vitals | null {

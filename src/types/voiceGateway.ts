@@ -33,6 +33,7 @@ export type ClientToServerMessage =
       userId: string;
       displayName?: string;
       role: ClientRole;
+      authToken?: string;
     }
   | {
       type: "start_speaking";
@@ -48,7 +49,15 @@ export type ClientToServerMessage =
       type: "voice_command";
       sessionId: string;
       userId: string;
-      commandType: "pause_ai" | "resume_ai" | "force_reply" | "end_turn" | "mute_user";
+      commandType:
+        | "pause_ai"
+        | "resume_ai"
+        | "force_reply"
+        | "end_turn"
+        | "mute_user"
+        | "freeze"
+        | "unfreeze"
+        | "skip_stage";
       payload?: Record<string, unknown>;
     }
   | {
@@ -125,6 +134,7 @@ export type ServerToClientMessage =
       type: "sim_state";
       sessionId: string;
       stageId: string;
+      stageIds?: string[];
       vitals: Record<string, unknown>;
       fallback: boolean;
       budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };

@@ -1,15 +1,19 @@
+/** @jest-environment node */
 /**
- * Firestore emulator-aware tests. These will be skipped if FIRESTORE_EMULATOR_HOST is not set.
+ * Firestore emulator-aware tests. These will be skipped if FIRESTORE_EMULATOR_HOST/PROJECT not set.
  */
 import { persistSimState, logSimEvent } from "../persistence";
 import { getFirestore } from "../firebaseAdmin";
 import admin from "firebase-admin";
 
+jest.setTimeout(20000);
+
 const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+const projectId = process.env.GOOGLE_CLOUD_PROJECT;
 
 describe("persistence helpers (emulator)", () => {
-  if (!emulatorHost) {
-    it.skip("skipped because FIRESTORE_EMULATOR_HOST is not set", () => {});
+  if (!emulatorHost || !projectId) {
+    it.skip("skipped because emulator/project not configured", () => {});
     return;
   }
 
@@ -18,6 +22,7 @@ describe("persistence helpers (emulator)", () => {
   beforeAll(() => {
     // ensure firestore is initialized against emulator
     process.env.FIRESTORE_EMULATOR_HOST = emulatorHost;
+    process.env.GOOGLE_CLOUD_PROJECT = projectId;
     getFirestore();
   });
 
