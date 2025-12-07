@@ -1,6 +1,7 @@
 import { getFirestore } from "./firebaseAdmin";
 import admin from "firebase-admin";
 import { SimState } from "./sim/types";
+import { z } from "zod";
 
 type BudgetState = {
   usdEstimate?: number;
@@ -133,21 +134,57 @@ export async function loadSimState(simId: string): Promise<Partial<SimState> | n
   if (!snap.exists) return null;
   const data = snap.data() || {};
   const updatedAtMs = data.updatedAt?.toMillis ? data.updatedAt.toMillis() : Date.now();
-  return {
-    stageId: data.stageId,
-    scenarioId: data.scenarioId,
-    vitals: data.vitals,
-    findings: data.findings,
-    fallback: data.fallback,
-    stageIds: data.stageIds,
-    orders: data.orders,
-    budget: data.budget,
-    telemetryHistory: data.telemetryHistory,
-    ekgHistory: data.ekgHistory,
-    telemetryWaveform: data.telemetryWaveform,
-    treatmentHistory: data.treatmentHistory,
-    stageEnteredAt: data.stageEnteredAt,
-    telemetry: data.telemetry,
-    updatedAtMs,
-  } as Partial<SimState>;
+  return sanitizePersistedState(data, updatedAtMs);
+}
+
+const persistedStateSchema = z
+  .object({
+    stageId: z.string().optional(),
+    scenarioId: z.string().optional(),
+    vitals: z
+      .object({
+        hr: z.number().optional(),
+        bp: z.string().optional(),
+        rr: z.number().optional(),
+        spo2: z.number().optional(),
+        temp: z.number().optional(),
+      })
+      .optional(),
+    findings: z.array(z.string()).optional(),
+    fallback: z.boolean().optional(),
+    stageIds: z.array(z.string()).optional(),
+    orders: z
+      .array(
+        z.object({
+          id: z.string(),
+          type: z.enum(["vitals", "ekg", "labs", "imaging"]),
+          status: z.enum(["pending", "complete"]),
+          result: z.record(z.any()).optional(),
+          completedAt: z.number().optional(),
+        })
+      )
+      .optional(),
+    budget: z
+      .object({
+        usdEstimate: z.number().optional(),
+        voiceSeconds: z.number().optional(),
+        throttled: z.boolean().optional(),
+        fallback: z.boolean().optional(),
+      })
+      .optional(),
+    telemetryHistory: z.array(z.record(z.any())).optional(),
+    ekgHistory: z.array(z.record(z.any())).optional(),
+    telemetryWaveform: z.array(z.number()).optional(),
+    treatmentHistory: z.array(z.record(z.any())).optional(),
+    stageEnteredAt: z.number().optional(),
+    telemetry: z.boolean().optional(),
+  })
+  .passthrough();
+
+export function sanitizePersistedState(raw: any, updatedAtMs: number): Partial<SimState> {
+  const parsed = persistedStateSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { updatedAtMs } as any;
+  }
+  return { ...parsed.data, updatedAtMs } as Partial<SimState>;
 }

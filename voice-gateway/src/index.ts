@@ -22,8 +22,10 @@ import { persistSimState, logSimEvent, loadSimState } from "./persistence";
 import { validateMessage, validateSimStateMessage } from "./validators";
 import { getAuth } from "./firebaseAdmin";
 import { getOrderResultTemplate } from "./orderTemplates";
-import fs from "fs";
-import path from "path";
+import { respondForCharacter, chooseCharacter, isUnsafeUtterance } from "./speechHelpers";
+import { buildTelemetryWaveform, checkAlarms } from "./telemetry";
+import { assetExists } from "./assetUtils";
+import { Runtime } from "./typesRuntime";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
@@ -45,14 +47,6 @@ if (allowInsecureWs && process.env.NODE_ENV === "production") {
     "[warn] ALLOW_INSECURE_VOICE_WS=true in production; require Firebase ID tokens or set ALLOW_INSECURE_VOICE_WS=false."
   );
 }
-
-type Runtime = {
-  realtime?: RealtimePatientClient;
-  fallback: boolean;
-  scenarioEngine: ScenarioEngine;
-  toolGate: ToolGate;
-  cost: CostController;
-};
 
 const runtimes: Map<string, Runtime> = new Map();
 const scenarioTimers: Map<string, NodeJS.Timeout> = new Map();
@@ -425,47 +419,6 @@ function main() {
   server.listen(PORT, () => {
     log(`Voice gateway listening on :${PORT} (path: /ws/voice)`);
   });
-}
-
-function respondForCharacter(character: CharacterId, doctorUtterance?: string, orderSummary?: string): string {
-  const prompt = doctorUtterance?.trim();
-  const fallback = orderSummary ? `Got it. ${orderSummary}` : "I'll take care of that.";
-  switch (character) {
-    case "parent":
-      return (
-        prompt ||
-        "I'm worried—can you tell me what's happening and if there's anything I should do? I can share birth or family history if needed."
-      );
-    case "nurse":
-      return prompt || (orderSummary ? orderSummary : "On it. I'll grab vitals now and update you.");
-    case "tech":
-      return prompt || (orderSummary ? orderSummary : "I'll get the EKG leads on and hand you a strip shortly.");
-    case "imaging":
-      return prompt || (orderSummary ? orderSummary : "I'll get the chest X-ray; give me a moment to process it.");
-    case "consultant":
-      return prompt || (orderSummary ? `Recent results: ${orderSummary}` : "Monitor closely and get an EKG; we can adjust after results.");
-    case "patient":
-    default:
-      return prompt || fallback;
-  }
-}
-
-function chooseCharacter(utterance?: string): CharacterId {
-  if (!utterance) return "patient";
-  const text = utterance.toLowerCase();
-  if (/(vitals|blood pressure|bp|hr|pulse|oxygen|o2|spo2|iv|bolus|fluids|medicate|tylenol|motrin|pge)/.test(text)) {
-    return "nurse";
-  }
-  if (/(ekg|ecg|monitor|strip|leads|imaging|xray|cxr|echo|ultrasound)/.test(text)) {
-    return "tech";
-  }
-  if (/(consult|cardiology|icu|attending|what should we do|plan|recommend)/.test(text)) {
-    return "consultant";
-  }
-  if (/(birth|pregnancy|family history|mom|dad|parent|guardian)/.test(text)) {
-    return "parent";
-  }
-  return "patient";
 }
 
 async function handleForceReply(sessionId: string, userId: string, doctorUtterance?: string, character?: CharacterId) {
@@ -1417,21 +1370,6 @@ function handleTreatment(sessionId: string, treatmentType?: string) {
       });
     }, decayMs);
   }
-}
-
-function buildTelemetryWaveform(hr: number): number[] {
-  const samples = 180;
-  const waveform: number[] = [];
-  const msPerBeat = Math.max(350, Math.min(1500, 60000 / Math.max(1, hr)));
-  for (let i = 0; i < samples; i++) {
-    const tMs = (i / samples) * msPerBeat * 1.5;
-    const phase = (tMs % msPerBeat) / msPerBeat;
-    const spike = phase < 0.04 ? Math.exp(-((phase - 0.02) * 160) ** 2) * 1.4 : 0;
-    const base = 0.04 * Math.sin(phase * Math.PI * 2);
-    const noise = (Math.random() - 0.5) * 0.015;
-    waveform.push(base + spike + noise);
-  }
-  return waveform;
 }
 
 function assetExists(urlPath: string): boolean {
