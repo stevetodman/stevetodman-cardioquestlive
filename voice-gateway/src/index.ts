@@ -40,6 +40,7 @@ const commandCooldownMs = Number(process.env.COMMAND_COOLDOWN_MS || 3000);
 const lastAutoReplyAt: Map<string, number> = new Map();
 const lastAutoReplyByUser: Map<string, number> = new Map();
 const lastDoctorUtterance: Map<string, { text: string; ts: number }> = new Map();
+const lastTreatmentAt: Map<string, number> = new Map();
 // Default to secure WebSocket auth; only allow insecure for local dev/tunnels when explicitly set.
 const allowInsecureWs = process.env.ALLOW_INSECURE_VOICE_WS === "true";
 if (allowInsecureWs && process.env.NODE_ENV === "production") {
@@ -1279,6 +1280,19 @@ function handleShowEkg(sessionId: string) {
 
 function handleTreatment(sessionId: string, treatmentType?: string) {
   const runtime = ensureRuntime(sessionId);
+  const key = `${sessionId}:${(treatmentType ?? "").toLowerCase()}`;
+  const now = Date.now();
+  const last = lastTreatmentAt.get(key) || 0;
+  if (now - last < 8000) {
+    sessionManager.broadcastToPresenters(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: "Treatment already given; wait a moment before re-dosing.",
+      character: "nurse",
+    });
+    return;
+  }
+  lastTreatmentAt.set(key, now);
   const delta: any = {};
   let note = "";
   let decayMs = 120000; // effects decay over ~2 minutes
