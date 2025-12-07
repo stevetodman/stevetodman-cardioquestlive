@@ -34,6 +34,8 @@ const hardBudgetUsd = Number(process.env.HARD_BUDGET_USD || 4.5);
 const scenarioHeartbeatMs = Number(process.env.SCENARIO_HEARTBEAT_MS || 1000);
 const commandCooldownMs = Number(process.env.COMMAND_COOLDOWN_MS || 3000);
 const lastAutoReplyAt: Map<string, number> = new Map();
+const lastAutoReplyByUser: Map<string, number> = new Map();
+const lastDoctorUtterance: Map<string, { text: string; ts: number }> = new Map();
 // Default to secure WebSocket auth; only allow insecure for local dev/tunnels when explicitly set.
 const allowInsecureWs = process.env.ALLOW_INSECURE_VOICE_WS === "true";
 if (allowInsecureWs && process.env.NODE_ENV === "production") {
@@ -55,6 +57,14 @@ const scenarioTimers: Map<string, NodeJS.Timeout> = new Map();
 const notifiedOrders: Map<string, Set<string>> = new Map();
 const alertFlags: Map<string, { hypoxia?: boolean }> = new Map();
 const hydratedSessions: Set<string> = new Set();
+const alarmSeenAt: Map<
+  string,
+  {
+    spo2Low?: number;
+    hrHigh?: number;
+    hrLow?: number;
+  }
+> = new Map();
 
 type ClientContext = {
   joined: boolean;
@@ -714,18 +724,50 @@ async function handleDoctorAudioLegacy(
   }
 }
 
-function maybeAutoForceReply(sessionId: string, text: string, explicitCharacter?: CharacterId) {
+function maybeAutoForceReply(sessionId: string, text: string, explicitCharacter?: CharacterId, userId?: string) {
   const trimmed = text.trim();
   if (!trimmed) return;
   // Basic guardrails: require a minimal utterance and a short cooldown.
   const words = trimmed.split(/\s+/).length;
   if (words < 3 || trimmed.length < 12) return;
+  if (isUnsafeUtterance(trimmed)) {
+    log("auto-reply blocked for safety", sessionId);
+    sessionManager.broadcastToPresenters(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: "NPC reply held for review (content flagged). Use manual reply if appropriate.",
+      character: "nurse",
+    });
+    return;
+  }
   const now = Date.now();
   const last = lastAutoReplyAt.get(sessionId) || 0;
   if (now - last < commandCooldownMs) return;
+  if (userId) {
+    const key = `${sessionId}:${userId}`;
+    const lastUser = lastAutoReplyByUser.get(key) || 0;
+    if (now - lastUser < commandCooldownMs) return;
+    lastAutoReplyByUser.set(key, now);
+  }
+  const lastUtter = lastDoctorUtterance.get(sessionId);
+  if (lastUtter && lastUtter.text === trimmed && now - lastUtter.ts < 1500) {
+    return;
+  }
+  lastDoctorUtterance.set(sessionId, { text: trimmed, ts: now });
+  const floorHolder = sessionManager.getFloorHolder(sessionId);
+  if (floorHolder && userId && floorHolder !== userId) {
+    return;
+  }
   lastAutoReplyAt.set(sessionId, now);
   const routed = explicitCharacter ?? chooseCharacter(trimmed);
   handleForceReply(sessionId, "auto", trimmed, routed);
+}
+
+function isUnsafeUtterance(text: string): boolean {
+  const lower = text.toLowerCase();
+  const hasProfanity = /(fuck|shit|bitch|asshole|cunt)/.test(lower);
+  const hasLongNumber = /\b\d{3}[-.\s]?\d{2,3}[-.\s]?\d{4}\b/.test(text);
+  return hasProfanity || hasLongNumber;
 }
 
 function broadcastDoctorUtterance(sessionId: string, userId: string, text: string, character?: CharacterId) {
@@ -736,7 +778,7 @@ function broadcastDoctorUtterance(sessionId: string, userId: string, text: strin
     text,
     character,
   });
-  maybeAutoForceReply(sessionId, text, character);
+  maybeAutoForceReply(sessionId, text, character, userId);
 }
 
 function ensureRuntime(sessionId: string): Runtime {
@@ -1126,7 +1168,34 @@ function handleOrder(sessionId: string, orderType: "vitals" | "ekg" | "labs" | "
         state: "idle",
         character: "tech",
       });
+    } else if (orderType === "imaging") {
+      const announcement =
+        result?.summary && typeof result.summary === "string"
+          ? `Chest X-ray complete: ${result.summary}`
+          : "Chest X-ray complete. Showing the image now.";
+      sessionManager.broadcastToSession(sessionId, {
+        type: "patient_state",
+        sessionId,
+        state: "speaking",
+        character: "imaging",
+      });
+      sessionManager.broadcastToSession(sessionId, {
+        type: "patient_transcript_delta",
+        sessionId,
+        text: announcement,
+        character: "imaging",
+      });
+      sessionManager.broadcastToSession(sessionId, {
+        type: "patient_state",
+        sessionId,
+        state: "idle",
+        character: "imaging",
+      });
     }
+    logSimEvent(sessionId, {
+      type: `order.${orderType}.complete`,
+      payload: { result, completedAt: Date.now() },
+    }).catch(() => {});
   }, delay);
 }
 
@@ -1200,6 +1269,7 @@ function handleTelemetryToggle(sessionId: string, enabled: boolean) {
       character: "tech",
     });
   }
+  logSimEvent(sessionId, { type: "telemetry.toggle", payload: { enabled } }).catch(() => {});
 }
 
 function handleShowEkg(sessionId: string) {
@@ -1368,9 +1438,27 @@ function checkAlarms(sessionId: string, runtime: Runtime) {
   const spo2 = vitals.spo2 ?? 100;
   const hr = vitals.hr ?? 80;
   const alarms: string[] = [];
-  if (spo2 < 88) alarms.push(`SpO2 low: ${spo2}%`);
-  if (hr > 170) alarms.push(`HR high: ${hr} bpm`);
-  if (hr < 40) alarms.push(`HR low: ${hr} bpm`);
+  const now = Date.now();
+  const seen = alarmSeenAt.get(sessionId) ?? {};
+  if (spo2 < 88) {
+    seen.spo2Low = seen.spo2Low ?? now;
+    if (now - seen.spo2Low >= 4000) alarms.push(`SpO2 low: ${spo2}%`);
+  } else {
+    seen.spo2Low = undefined;
+  }
+  if (hr > 170) {
+    seen.hrHigh = seen.hrHigh ?? now;
+    if (now - seen.hrHigh >= 4000) alarms.push(`HR high: ${hr} bpm`);
+  } else {
+    seen.hrHigh = undefined;
+  }
+  if (hr < 40) {
+    seen.hrLow = seen.hrLow ?? now;
+    if (now - seen.hrLow >= 4000) alarms.push(`HR low: ${hr} bpm`);
+  } else {
+    seen.hrLow = undefined;
+  }
+  alarmSeenAt.set(sessionId, seen);
   if (alarms.length === 0) return;
   sessionManager.broadcastToPresenters(sessionId, {
     type: "patient_transcript_delta",
