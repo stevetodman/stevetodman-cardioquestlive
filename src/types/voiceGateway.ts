@@ -5,6 +5,8 @@ export type PatientScenarioId =
   | "syncope"
   | "palpitations_svt";
 
+export type CharacterId = "patient" | "nurse" | "tech" | "consultant";
+
 export type DebriefTurn = {
   role: "doctor" | "patient";
   text: string;
@@ -39,16 +41,19 @@ export type ClientToServerMessage =
       type: "start_speaking";
       sessionId: string;
       userId: string;
+      character?: CharacterId;
     }
   | {
       type: "stop_speaking";
       sessionId: string;
       userId: string;
+      character?: CharacterId;
     }
   | {
       type: "voice_command";
       sessionId: string;
       userId: string;
+      character?: CharacterId;
       commandType:
         | "pause_ai"
         | "resume_ai"
@@ -68,6 +73,7 @@ export type ClientToServerMessage =
       type: "doctor_audio";
       sessionId: string;
       userId: string;
+      character?: CharacterId;
       audioBase64: string;
       contentType: string;
     }
@@ -95,27 +101,32 @@ export type ServerToClientMessage =
       sessionId: string;
       userId: string;
       speaking: boolean;
+      character?: CharacterId;
     }
   | {
       type: "patient_state";
       sessionId: string;
       state: "idle" | "listening" | "speaking" | "error";
+      character?: CharacterId;
     }
   | {
       type: "patient_transcript_delta";
       sessionId: string;
       text: string;
+      character?: CharacterId;
     }
   | {
       type: "patient_audio";
       sessionId: string;
       audioBase64: string;
+      character?: CharacterId;
     }
   | {
       type: "doctor_utterance";
       sessionId: string;
       userId: string;
       text: string;
+      character?: CharacterId;
     }
   | {
       type: "scenario_changed";

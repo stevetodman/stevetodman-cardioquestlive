@@ -2,10 +2,10 @@ import "dotenv/config";
 import http from "http";
 import WebSocket, { WebSocketServer } from "ws";
 import { SessionManager } from "./sessionManager";
-import { ClientToServerMessage, ServerToClientMessage } from "./messageTypes";
-import { log, logError } from "./logger";
+import { CharacterId, ClientToServerMessage, OrderResult, ServerToClientMessage } from "./messageTypes";
+import { log, logError, logEvent } from "./logger";
 import { getOpenAIClient, MODEL } from "./openaiClient";
-import { getOrCreatePatientEngine, setScenarioForSession, getScenarioForSession } from "./patientEngine";
+import { getOrCreatePatientEngine, setScenarioForSession, getScenarioForSession, getPersonaPrompt } from "./patientEngine";
 import { synthesizePatientAudio } from "./ttsClient";
 import { transcribeDoctorAudio } from "./sttClient";
 import { Buffer } from "buffer";
@@ -19,8 +19,9 @@ import { ToolGate } from "./sim/toolGate";
 import { ToolIntent } from "./sim/types";
 import { CostController } from "./sim/costController";
 import { persistSimState, logSimEvent } from "./persistence";
-import { validateMessage } from "./validators";
+import { validateMessage, validateSimStateMessage } from "./validators";
 import { getAuth } from "./firebaseAdmin";
+import { getOrderResultTemplate } from "./orderTemplates";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
@@ -51,6 +52,13 @@ type ClientContext = {
   joined: boolean;
   sessionId: string | null;
   role: "presenter" | "participant" | null;
+};
+
+const CHARACTER_VOICE_MAP: Partial<Record<CharacterId, string>> = {
+  patient: process.env.OPENAI_TTS_VOICE_PATIENT,
+  nurse: process.env.OPENAI_TTS_VOICE_NURSE,
+  tech: process.env.OPENAI_TTS_VOICE_TECH,
+  consultant: process.env.OPENAI_TTS_VOICE_CONSULTANT,
 };
 
 function send(ws: WebSocket, msg: ServerToClientMessage) {
@@ -97,6 +105,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
     const authed = await verifyAuthToken(parsed.authToken, parsed.userId);
     if (!authed) {
       send(ws, { type: "error", message: "unauthorized" });
+      logEvent("ws.auth.denied", { sessionId: parsed.sessionId, userId: parsed.userId });
       ws.close();
       return;
     }
@@ -105,6 +114,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
     ctx.role = parsed.role;
     sessionManager.addClient(parsed.sessionId, parsed.role, ws);
     send(ws, { type: "joined", sessionId: parsed.sessionId, role: parsed.role });
+    logEvent("ws.join", { sessionId: parsed.sessionId, role: parsed.role, userId: parsed.userId });
     log("Client joined", parsed.sessionId, parsed.role, parsed.userId);
     return;
   }
@@ -154,7 +164,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
       break;
     }
     case "doctor_audio": {
-      handleDoctorAudio(simId, parsed.userId, parsed.audioBase64, parsed.contentType);
+      handleDoctorAudio(simId, parsed.userId, parsed.audioBase64, parsed.contentType, parsed.character as CharacterId | undefined);
       break;
     }
     case "set_scenario": {
@@ -168,13 +178,19 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
     case "voice_command": {
       log("Voice command", parsed.commandType, "by", parsed.userId, "session", simId);
       const runtime = ensureRuntime(simId);
+      const character = parsed.character as CharacterId | undefined;
       switch (parsed.commandType) {
         case "force_reply": {
           const doctorUtterance =
             typeof parsed.payload?.doctorUtterance === "string"
               ? parsed.payload.doctorUtterance.trim()
               : undefined;
-          handleForceReply(simId, parsed.userId, doctorUtterance);
+          handleForceReply(simId, parsed.userId, doctorUtterance, character);
+          break;
+        }
+        case "order": {
+          const orderType = typeof parsed.payload?.orderType === "string" ? parsed.payload.orderType : "vitals";
+          handleOrder(simId, orderType as any);
           break;
         }
         case "pause_ai":
@@ -192,6 +208,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
             fallback: true,
             budget: runtime.cost.getState?.() ?? undefined,
           });
+          logEvent("voice.fallback_enabled", { sessionId: simId, reason: parsed.commandType });
           break;
         }
         case "resume_ai":
@@ -209,6 +226,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
               fallback: true,
               budget,
             });
+            logEvent("voice.resume_blocked", { sessionId: simId, usd: budget?.usdEstimate });
             break;
           }
 
@@ -292,6 +310,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
             fallback: false,
             budget: budget ?? runtime.cost.getState?.() ?? undefined,
           });
+          logEvent("voice.fallback_disabled", { sessionId: simId, reason: parsed.commandType });
           break;
         }
         case "end_turn": {
@@ -347,6 +366,7 @@ function main() {
       if (ctx.joined && ctx.sessionId && ctx.role) {
         sessionManager.removeClient(ctx.sessionId, ctx.role, ws);
         log("Client disconnected", ctx.sessionId, ctx.role);
+        logEvent("ws.disconnect", { sessionId: ctx.sessionId, role: ctx.role });
       }
     });
 
@@ -360,29 +380,68 @@ function main() {
   });
 }
 
-async function handleForceReply(sessionId: string, userId: string, doctorUtterance?: string) {
+function respondForCharacter(character: CharacterId, doctorUtterance?: string, orderSummary?: string): string {
+  const prompt = doctorUtterance?.trim();
+  const fallback = orderSummary ? `Got it. ${orderSummary}` : "I'll take care of that.";
+  switch (character) {
+    case "nurse":
+      return prompt || (orderSummary ? orderSummary : "On it. I'll grab vitals now and update you.");
+    case "tech":
+      return prompt || (orderSummary ? orderSummary : "I'll get the EKG leads on and hand you a strip shortly.");
+    case "consultant":
+      return prompt || (orderSummary ? `Recent results: ${orderSummary}` : "Monitor closely and get an EKG; we can adjust after results.");
+    case "patient":
+    default:
+      return prompt || fallback;
+  }
+}
+
+async function handleForceReply(
+  sessionId: string,
+  userId: string,
+  doctorUtterance?: string,
+  character: CharacterId = "patient"
+) {
   const openai = getOpenAIClient();
-  if (!openai) {
-    log("OPENAI_API_KEY not set; using stub patient response");
+  const runtime = ensureRuntime(sessionId);
+  const latestOrderSummary = (() => {
+    const completed = (runtime.scenarioEngine.getState().orders ?? []).filter((o) => o.status === "complete");
+    if (completed.length === 0) return "";
+    const last = completed[completed.length - 1];
+    if (last.result?.type === "vitals") {
+      return `Latest vitals: HR ${last.result.hr ?? "—"}, BP ${last.result.bp ?? "—"}, SpO2 ${last.result.spo2 ?? "—"}.`;
+    }
+    if (last.result?.summary) {
+      return `Latest result: ${last.result.summary}`;
+    }
+    return "";
+  })();
+  if (!openai || character !== "patient") {
+    log(openai ? "force_reply stub (non-patient)" : "OPENAI_API_KEY not set; using stub patient response");
+    const text = respondForCharacter(character, doctorUtterance, latestOrderSummary);
     sessionManager.broadcastToSession(sessionId, {
       type: "patient_state",
       sessionId,
       state: "speaking",
+      character,
     });
     sessionManager.broadcastToSession(sessionId, {
       type: "patient_transcript_delta",
       sessionId,
-      text: "Hi doctor, I’m here as a test patient.",
+      text,
+      character,
     });
     sessionManager.broadcastToSession(sessionId, {
       type: "patient_state",
       sessionId,
       state: "idle",
+      character,
     });
     return;
   }
 
   const engine = getOrCreatePatientEngine(sessionId);
+  const personaPrompt = getPersonaPrompt(character, engine.getCase());
   const doctorPrompt =
     doctorUtterance && doctorUtterance.length > 0
       ? doctorUtterance
@@ -400,16 +459,61 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
       type: "patient_state",
       sessionId,
       state: "speaking",
+      character,
     });
 
     const messages = engine.getHistory();
     let fullText = "";
 
-    const stream = await openai.chat.completions.create({
-      model: MODEL,
-      messages,
-      stream: true,
-    });
+    const stream =
+      character === "patient"
+        ? await openai.chat.completions.create({
+            model: MODEL,
+            messages:
+              (() => {
+                const orderSummaryArr = (runtime.scenarioEngine.getState().orders ?? [])
+                  .filter((o) => o.status === "complete" && o.result)
+                  .slice(-3)
+                  .map((o) => {
+                    if (o.result?.type === "vitals") {
+                      return `Vitals: HR ${o.result.hr ?? "—"} BP ${o.result.bp ?? "—"} SpO2 ${o.result.spo2 ?? "—"}`;
+                    }
+                    if (o.result?.summary) {
+                      return `${o.type}: ${o.result.summary}`;
+                    }
+                    return `${o.type}: complete`;
+                  });
+                const base = engine.getHistory();
+                if (orderSummaryArr.length === 0) return base;
+                return [
+                  ...base,
+                  {
+                    role: "user",
+                    content: `Recent orders:\n${orderSummaryArr.join(
+                      "\n"
+                    )}\nUse the latest result if it helps answer. Question: ${doctorPrompt}`,
+                  },
+                ];
+              })(),
+            stream: true,
+          })
+        : await openai.chat.completions.create({
+            model: MODEL,
+            messages: [
+              personaPrompt,
+              {
+                role: "user",
+                content: `Recent orders:\n${
+                  (runtime.scenarioEngine.getState().orders ?? [])
+                    .filter((o) => o.status === "complete" && o.result?.summary)
+                    .slice(-3)
+                    .map((o) => `- ${o.type}: ${o.result?.summary}`)
+                    .join("\n") || "- none"
+                }\nQuestion: ${doctorPrompt}`,
+              },
+            ],
+            stream: true,
+          });
 
     for await (const part of stream) {
       const delta = part.choices?.[0]?.delta?.content;
@@ -419,18 +523,20 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
         type: "patient_transcript_delta",
         sessionId,
         text: delta,
+        character,
       });
     }
 
     const finalText = fullText.trim();
     engine.appendPatientTurn(finalText);
 
-    const audioBuffer = await synthesizePatientAudio(finalText);
+    const audioBuffer = await synthesizePatientAudio(finalText, CHARACTER_VOICE_MAP[character]);
     if (audioBuffer) {
       sessionManager.broadcastToPresenters(sessionId, {
         type: "patient_audio",
         sessionId,
         audioBase64: audioBuffer.toString("base64"),
+        character,
       });
     }
 
@@ -438,6 +544,7 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
       type: "patient_state",
       sessionId,
       state: "idle",
+      character,
     });
     log("Patient reply complete", sessionId, "chars:", fullText.length);
   } catch (err) {
@@ -446,11 +553,13 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
       type: "patient_state",
       sessionId,
       state: "error",
+      character,
     });
     sessionManager.broadcastToSession(sessionId, {
       type: "patient_transcript_delta",
       sessionId,
       text: "I'm sorry, I'm having trouble answering right now.",
+      character,
     });
   }
 }
@@ -479,14 +588,15 @@ async function handleDoctorAudio(
   sessionId: string,
   userId: string,
   audioBase64: string,
-  contentType: string
+  contentType: string,
+  character?: CharacterId
 ) {
   try {
     const audioBuffer = Buffer.from(audioBase64, "base64");
-    log("Doctor audio received", sessionId, "bytes:", audioBuffer.length);
+    log("Doctor audio received", sessionId, "bytes:", audioBuffer.length, "character:", character ?? "patient");
     if (sessionManager.isFallback(sessionId)) {
       log("Session in fallback; routing legacy STT only", sessionId);
-      await handleDoctorAudioLegacy(sessionId, userId, audioBuffer, contentType);
+      await handleDoctorAudioLegacy(sessionId, userId, audioBuffer, contentType, character);
       return;
     }
     const runtime = ensureRuntime(sessionId);
@@ -500,7 +610,7 @@ async function handleDoctorAudio(
       runtime.realtime.commitAudio();
       return;
     }
-    await handleDoctorAudioLegacy(sessionId, userId, audioBuffer, contentType);
+    await handleDoctorAudioLegacy(sessionId, userId, audioBuffer, contentType, character);
   } catch (err) {
     logError("doctor_audio handling failed", err);
   }
@@ -527,7 +637,8 @@ async function handleDoctorAudioLegacy(
   sessionId: string,
   userId: string,
   audioBuffer: Buffer,
-  contentType: string
+  contentType: string,
+  character?: CharacterId
 ) {
   const text = await transcribeDoctorAudio(audioBuffer, contentType);
   if (text && text.trim().length > 0) {
@@ -537,6 +648,7 @@ async function handleDoctorAudioLegacy(
       sessionId,
       userId,
       text,
+      character,
     });
   }
 }
@@ -686,12 +798,14 @@ function handleToolIntent(sessionId: string, intent: ToolIntent) {
 function handleBudgetSoftLimit(sessionId: string) {
   logSimEvent(sessionId, { type: "budget.soft_limit" }).catch(() => {});
   console.warn("[budget] soft limit reached", sessionId);
+  logEvent("budget.soft_limit", { sessionId });
 }
 
 function handleBudgetHardLimit(sessionId: string) {
   const runtime = runtimes.get(sessionId);
   logSimEvent(sessionId, { type: "budget.hard_limit" }).catch(() => {});
   console.warn("[budget] hard limit reached, switching to fallback", sessionId);
+  logEvent("budget.hard_limit", { sessionId });
   if (runtime) {
     runtime.fallback = true;
     runtime.scenarioEngine.setFallback(true);
@@ -716,18 +830,25 @@ function broadcastSimState(
     stageIds?: string[];
     scenarioId?: string;
     findings?: string[];
+    orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending" | "complete"; result?: OrderResult; completedAt?: number }[];
   }
 ) {
+  const validated = validateSimStateMessage(state);
+  if (!validated) {
+    logError("sim_state validation failed; skipping broadcast", state);
+    return;
+  }
   sessionManager.broadcastToSession(sessionId, {
     type: "sim_state",
     sessionId,
-    stageId: state.stageId,
-    scenarioId: (state.scenarioId ?? getScenarioForSession(sessionId)) as PatientScenarioId,
-    stageIds: state.stageIds,
-    vitals: state.vitals,
-    findings: state.findings,
-    fallback: state.fallback,
-    budget: state.budget,
+    stageId: validated.stageId,
+    scenarioId: (validated.scenarioId ?? getScenarioForSession(sessionId)) as PatientScenarioId,
+    stageIds: validated.stageIds,
+    vitals: validated.vitals ?? {},
+    findings: validated.findings ?? [],
+    fallback: validated.fallback,
+    budget: validated.budget,
+    orders: validated.orders,
   });
   persistSimState(sessionId, state as any).catch(() => {});
 }
@@ -743,3 +864,39 @@ function buildSystemPrompt(scenario: PatientScenarioId): string {
 }
 
 main();
+function makeOrder(type: "vitals" | "ekg" | "labs" | "imaging"): { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending"; createdAt: number } {
+  return {
+    id: `order-${type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    type,
+    status: "pending",
+    createdAt: Date.now(),
+  };
+}
+
+function resolveOrder(order: { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending" | "complete"; result?: OrderResult }, scenario: PatientScenarioId): OrderResult {
+  return getOrderResultTemplate(order.type, scenario);
+}
+
+function handleOrder(sessionId: string, orderType: "vitals" | "ekg" | "labs" | "imaging") {
+  const runtime = ensureRuntime(sessionId);
+  const currentOrders = runtime.scenarioEngine.getState().orders ?? [];
+  const newOrder = makeOrder(orderType);
+  const nextOrders = [...currentOrders, newOrder];
+  broadcastSimState(sessionId, {
+    ...runtime.scenarioEngine.getState(),
+    stageIds: runtime.scenarioEngine.getStageIds(),
+    orders: nextOrders,
+  });
+  const delay = orderType === "vitals" ? 1500 : orderType === "ekg" ? 2500 : 2200;
+  setTimeout(() => {
+    const result = resolveOrder(newOrder, runtime.scenarioEngine.getState().scenarioId as PatientScenarioId);
+    const updatedOrders = nextOrders.map((o) =>
+      o.id === newOrder.id ? { ...o, status: "complete", result, completedAt: Date.now() } : o
+    );
+    broadcastSimState(sessionId, {
+      ...runtime.scenarioEngine.getState(),
+      stageIds: runtime.scenarioEngine.getStageIds(),
+      orders: updatedOrders,
+    });
+  }, delay);
+}

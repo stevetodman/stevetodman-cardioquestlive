@@ -1,5 +1,15 @@
 export type ClientRole = "presenter" | "participant";
 
+export type CharacterId = "patient" | "nurse" | "tech" | "consultant";
+
+export type OrderType = "vitals" | "ekg" | "labs" | "imaging";
+
+export type OrderResult =
+  | { type: "vitals"; hr?: number; bp?: string; rr?: number; spo2?: number; temp?: number }
+  | { type: "ekg"; summary: string }
+  | { type: "labs"; summary: string }
+  | { type: "imaging"; summary: string };
+
 export type ClientToServerMessage =
   | {
       type: "join";
@@ -13,17 +23,20 @@ export type ClientToServerMessage =
       type: "start_speaking";
       sessionId: string;
       userId: string;
+      character?: CharacterId;
     }
   | {
       type: "stop_speaking";
       sessionId: string;
       userId: string;
+      character?: CharacterId;
     }
   | {
       type: "voice_command";
       sessionId: string;
       userId: string;
-      commandType: "pause_ai" | "resume_ai" | "force_reply" | "end_turn" | "mute_user" | "freeze" | "unfreeze" | "skip_stage";
+      character?: CharacterId;
+      commandType: "pause_ai" | "resume_ai" | "force_reply" | "end_turn" | "mute_user" | "freeze" | "unfreeze" | "skip_stage" | "order";
       payload?: Record<string, unknown>;
     }
   | {
@@ -34,6 +47,7 @@ export type ClientToServerMessage =
       type: "doctor_audio";
       sessionId: string;
       userId: string;
+      character?: CharacterId;
       audioBase64: string;
       contentType: string;
     }
@@ -72,27 +86,32 @@ export type ServerToClientMessage =
       sessionId: string;
       userId: string;
       speaking: boolean;
+      character?: CharacterId;
     }
   | {
       type: "patient_state";
       sessionId: string;
       state: "idle" | "listening" | "speaking" | "error";
+      character?: CharacterId;
     }
   | {
       type: "patient_transcript_delta";
       sessionId: string;
       text: string;
+      character?: CharacterId;
     }
   | {
       type: "patient_audio";
       sessionId: string;
       audioBase64: string;
+      character?: CharacterId;
     }
   | {
       type: "doctor_utterance";
       sessionId: string;
       userId: string;
       text: string;
+      character?: CharacterId;
     }
   | {
       type: "scenario_changed";
@@ -122,6 +141,7 @@ export type ServerToClientMessage =
         throttled?: boolean;
         fallback?: boolean;
       };
+      orders?: { id: string; type: OrderType; status: "pending" | "complete"; result?: OrderResult; completedAt?: number }[];
     }
   | {
       type: "pong";

@@ -5,7 +5,7 @@ import { log, logError } from "./logger";
 const TTS_MODEL = process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts";
 const TTS_VOICE = process.env.OPENAI_TTS_VOICE || "alloy";
 
-export async function synthesizePatientAudio(text: string): Promise<Buffer | null> {
+export async function synthesizePatientAudio(text: string, voiceOverride?: string): Promise<Buffer | null> {
   const client = getOpenAIClient();
   if (!client) {
     log("TTS skipped: OPENAI_API_KEY not set");
@@ -15,7 +15,7 @@ export async function synthesizePatientAudio(text: string): Promise<Buffer | nul
   try {
     const response = await client.audio.speech.create({
       model: TTS_MODEL,
-      voice: TTS_VOICE,
+      voice: voiceOverride || TTS_VOICE,
       input: text,
     });
     const arrayBuffer = await response.arrayBuffer();

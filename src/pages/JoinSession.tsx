@@ -21,7 +21,7 @@ import { useVoiceState, takeFloorTx, releaseFloor } from "../hooks/useVoiceState
 import { HoldToSpeakButton } from "../components/HoldToSpeakButton";
 import { voicePatientService } from "../services/VoicePatientService";
 import { voiceGatewayClient } from "../services/VoiceGatewayClient";
-import { VoiceConnectionStatus } from "../types/voiceGateway";
+import { VoiceConnectionStatus, CharacterId } from "../types/voiceGateway";
 import { MicStatus } from "../services/VoicePatientService";
 import { ParticipantVoiceStatusBanner } from "../components/ParticipantVoiceStatusBanner";
 
@@ -66,6 +66,7 @@ export default function JoinSession() {
   const [voiceActionPending, setVoiceActionPending] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [transcribing, setTranscribing] = useState(false);
+  const [targetCharacter, setTargetCharacter] = useState<CharacterId>("patient");
   const [connectionStatus, setConnectionStatus] = useState<VoiceConnectionStatus>({
     state: "disconnected",
     lastChangedAt: Date.now(),
@@ -154,7 +155,7 @@ export default function JoinSession() {
       if (!blob || blob.size === 0) return;
       try {
         setTranscribing(true);
-        await voiceGatewayClient.sendDoctorAudio(blob);
+        await voiceGatewayClient.sendDoctorAudio(blob, { character: targetCharacter });
       } catch (err) {
         console.error("Failed to send doctor audio", err);
       } finally {
@@ -162,7 +163,7 @@ export default function JoinSession() {
       }
     });
     return () => unsub();
-  }, [sessionId, userId]);
+  }, [sessionId, userId, targetCharacter]);
 
   useEffect(() => {
     const unsub = voiceGatewayClient.onStatus((status) => setConnectionStatus(status));
@@ -363,7 +364,7 @@ export default function JoinSession() {
     try {
       setVoiceError(null);
       await voicePatientService.startCapture();
-      voiceGatewayClient.startSpeaking();
+      voiceGatewayClient.startSpeaking(targetCharacter);
     } catch (err: any) {
       console.error("Failed to start capture", err);
       if (err?.message?.toLowerCase()?.includes("blocked")) {
@@ -377,7 +378,7 @@ export default function JoinSession() {
 
   const handlePressEnd = async () => {
     voicePatientService.stopCapture();
-    voiceGatewayClient.stopSpeaking();
+    voiceGatewayClient.stopSpeaking(targetCharacter);
   };
 
   const handleRetryVoice = () => {
@@ -533,6 +534,24 @@ export default function JoinSession() {
                 <span className="text-xs text-slate-500">Voice mode is off</span>
               )}
             </div>
+          </div>
+          <div className="mt-3 flex items-center gap-3 flex-wrap text-xs text-slate-300">
+            <label className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+              Target
+            </label>
+            <select
+              value={targetCharacter}
+              onChange={(e) => setTargetCharacter(e.target.value as CharacterId)}
+              className="bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="patient">Patient</option>
+              <option value="nurse">Nurse</option>
+              <option value="tech">Tech</option>
+              <option value="consultant">Consultant</option>
+            </select>
+            <span className="text-[11px] text-slate-500">
+              Your question will be routed to this role.
+            </span>
           </div>
           <div className="mt-3">
             <ParticipantVoiceStatusBanner

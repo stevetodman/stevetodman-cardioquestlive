@@ -82,11 +82,15 @@ export type VoiceCommandType =
   | "resume_ai"
   | "force_reply"
   | "end_turn"
-  | "mute_user";
+  | "mute_user"
+  | "freeze"
+  | "unfreeze"
+  | "skip_stage";
 
 export interface VoiceCommandDoc {
   type: VoiceCommandType;
   createdAt: any;
   createdBy: string;
   payload?: Record<string, any>;
+  character?: string;
 }

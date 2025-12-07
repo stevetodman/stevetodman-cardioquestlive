@@ -27,6 +27,7 @@ import {
   DebriefTurn,
   AnalysisResult,
   VoiceConnectionStatus,
+  CharacterId,
 } from "../types/voiceGateway";
 import { getScenarioSnapshot } from "../data/scenarioSummaries";
 import { SessionTranscriptPanel, TranscriptLogTurn } from "../components/SessionTranscriptPanel";
@@ -141,6 +142,7 @@ export default function PresenterSession() {
     budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
     scenarioId?: PatientScenarioId;
     stageIds?: string[];
+    orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending" | "complete"; result?: any; completedAt?: number }[];
   } | null>(null);
   const [transcriptLog, setTranscriptLog] = useState<TranscriptLogTurn[]>([]);
   const [patientAudioUrl, setPatientAudioUrl] = useState<string | null>(null);
@@ -148,19 +150,117 @@ export default function PresenterSession() {
   const [availableStages, setAvailableStages] = useState<string[]>([]);
   const [selectedStage, setSelectedStage] = useState<string>("");
   const [doctorQuestionText, setDoctorQuestionText] = useState<string>("");
-  const [autoForceReply, setAutoForceReply] = useState(false);
-  const [selectedScenario, setSelectedScenario] =
-    useState<PatientScenarioId>("exertional_chest_pain");
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [debriefResult, setDebriefResult] = useState<AnalysisResult | null>(null);
+const [autoForceReply, setAutoForceReply] = useState(false);
+const [targetCharacter, setTargetCharacter] = useState<CharacterId>("patient");
+const [selectedScenario, setSelectedScenario] =
+  useState<PatientScenarioId>("exertional_chest_pain");
+const [isAnalyzing, setIsAnalyzing] = useState(false);
+const [debriefResult, setDebriefResult] = useState<AnalysisResult | null>(null);
+const [timelineCopyStatus, setTimelineCopyStatus] = useState<"idle" | "copied" | "error">("idle");
+const [timelineFilter, setTimelineFilter] = useState<string>("all");
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
   );
+  const timelineItems = useMemo(() => {
+    const items: { id: string; ts: number; label: string; detail: string }[] = [];
+    transcriptLog.forEach((t) => {
+      items.push({
+        id: `turn-${t.id}`,
+        ts: t.timestamp,
+        label: t.character ? t.character : t.role === "doctor" ? "Doctor" : "Patient",
+        detail: t.text,
+      });
+    });
+    (simState?.orders ?? [])
+      .filter((o) => o.status === "complete")
+      .forEach((o) => {
+        items.push({
+          id: `order-${o.id}`,
+          ts: o.completedAt ?? Date.now(),
+          label: o.type.toUpperCase(),
+          detail:
+            o.result?.type === "vitals"
+              ? `HR ${o.result.hr ?? "—"} BP ${o.result.bp ?? "—"} SpO₂ ${o.result.spo2 ?? "—"}`
+              : o.result?.summary ?? "Result ready",
+        });
+      });
+    return items
+      .sort((a, b) => a.ts - b.ts)
+      .filter((item, idx, arr) => arr.findIndex((it) => it.id === item.id) === idx)
+      .slice(-20);
+  }, [transcriptLog, simState?.orders]);
+  const filteredTimeline = useMemo(
+    () =>
+      timelineFilter === "all"
+        ? timelineItems
+        : timelineItems.filter((item) => item.label.toLowerCase() === timelineFilter),
+    [timelineItems, timelineFilter]
+  );
+  const timelineText = useMemo(() => {
+    return timelineItems
+      .map((item) => {
+        const ts = new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        return `${ts} ${item.label}: ${item.detail}`;
+      })
+      .join("\n");
+  }, [timelineItems]);
+  const debriefReportText = useMemo(() => {
+    if (!debriefResult) return "";
+    const parts: string[] = [];
+    parts.push("# CardioQuest Debrief");
+    if (sessionId) parts.push(`Session: ${sessionId}`);
+    parts.push(`Generated: ${new Date().toISOString()}`);
+    if (debriefResult.summary) {
+      parts.push("## Summary", debriefResult.summary);
+    }
+    if (debriefResult.strengths?.length) {
+      parts.push("## Strengths", debriefResult.strengths.map((s) => `- ${s}`).join("\n"));
+    }
+    if (debriefResult.opportunities?.length) {
+      parts.push("## Opportunities", debriefResult.opportunities.map((s) => `- ${s}`).join("\n"));
+    }
+    if (debriefResult.teachingPoints?.length) {
+      parts.push("## Teaching Points", debriefResult.teachingPoints.map((s) => `- ${s}`).join("\n"));
+    }
+    if (timelineItems.length > 0) {
+      parts.push("## Timeline (last 20 events)", timelineText || "—");
+    }
+    return parts.join("\n\n");
+  }, [debriefResult, sessionId, timelineItems.length, timelineText]);
+  const groupedTranscript = useMemo(() => {
+    const order = ["patient", "nurse", "tech", "consultant", "doctor"];
+    const buckets = new Map<string, TranscriptLogTurn[]>();
+    transcriptLog.forEach((t) => {
+      const key = t.character ?? (t.role === "doctor" ? "doctor" : "patient");
+      buckets.set(key, [...(buckets.get(key) ?? []), t]);
+    });
+    const ordered = order.filter((k) => buckets.has(k)).map((k) => ({ key: k, turns: buckets.get(k)! }));
+    const extras = Array.from(buckets.entries())
+      .filter(([k]) => !order.includes(k))
+      .map(([key, turns]) => ({ key, turns }));
+    return [...ordered, ...extras];
+  }, [transcriptLog]);
+  const roleColor = useCallback((role: string) => {
+    switch (role) {
+      case "nurse":
+        return "text-emerald-300 border-emerald-500/50";
+      case "tech":
+        return "text-sky-300 border-sky-500/50";
+      case "consultant":
+        return "text-indigo-300 border-indigo-500/50";
+      case "doctor":
+        return "text-amber-300 border-amber-500/50";
+      default:
+        return "text-slate-200 border-slate-600/50";
+    }
+  }, []);
   const slideRef = useRef<HTMLDivElement>(null);
   const currentTurnIdRef = useRef<string | null>(null);
+  const currentTurnCharacterRef = useRef<string | undefined>("patient");
   const lastDoctorTurnIdRef = useRef<string | null>(null);
   const lastAutoForcedRef = useRef<string | null>(null);
+  const loggedOrderIdsRef = useRef<Set<string>>(new Set());
   const teams = useTeamScores(sessionId);
   const players = useIndividualScores(sessionId);
   const voice = useVoiceState(sessionId ?? undefined);
@@ -252,12 +352,7 @@ export default function PresenterSession() {
   const handleFreezeToggle = useCallback(
     (next: "freeze" | "unfreeze") => {
       if (!sessionId) return;
-      sendVoiceCommand(sessionId, {
-        type: "voice_command",
-        sessionId,
-        userId: auth?.currentUser?.uid ?? "presenter-local",
-        commandType: next === "freeze" ? "freeze" : "unfreeze",
-      });
+      sendVoiceCommand(sessionId, { type: next === "freeze" ? "freeze" : "unfreeze" });
       setFreezeStatus(next === "freeze" ? "frozen" : "live");
     },
     [sessionId]
@@ -265,12 +360,7 @@ export default function PresenterSession() {
 
   const handleResumeVoice = useCallback(() => {
     if (!sessionId) return;
-    sendVoiceCommand(sessionId, {
-      type: "voice_command",
-      sessionId,
-      userId: auth?.currentUser?.uid ?? "presenter-local",
-      commandType: "resume_ai",
-    });
+    sendVoiceCommand(sessionId, { type: "resume_ai" });
     setFreezeStatus("live");
   }, [sessionId, auth?.currentUser?.uid]);
 
@@ -278,33 +368,36 @@ export default function PresenterSession() {
     if (!sessionId) return;
     const trimmed = doctorQuestionText.trim();
     sendVoiceCommand(sessionId, {
-      type: "voice_command",
-      sessionId,
-      userId: auth?.currentUser?.uid ?? "presenter-local",
-      commandType: "force_reply",
+      type: "force_reply",
       payload: trimmed ? { doctorUtterance: trimmed } : undefined,
+      character: targetCharacter,
     });
-  }, [sessionId, doctorQuestionText]);
+    try {
+      voiceGatewayClient.sendVoiceCommand("force_reply", trimmed ? { doctorUtterance: trimmed } : undefined, targetCharacter);
+    } catch (err) {
+      console.error("Failed to send WS voice command", err);
+    }
+  }, [sessionId, doctorQuestionText, targetCharacter]);
 
   const handleRevealClue = useCallback(() => {
     if (!sessionId) return;
     const hint = doctorQuestionText.trim() || "Hint: ask about symptom timing, triggers, and family history.";
     sendVoiceCommand(sessionId, {
-      type: "voice_command",
-      sessionId,
-      userId: auth?.currentUser?.uid ?? "presenter-local",
-      commandType: "force_reply",
+      type: "force_reply",
       payload: { doctorUtterance: hint },
+      character: targetCharacter,
     });
-  }, [sessionId, doctorQuestionText]);
+    try {
+      voiceGatewayClient.sendVoiceCommand("force_reply", { doctorUtterance: hint }, targetCharacter);
+    } catch (err) {
+      console.error("Failed to send WS voice command", err);
+    }
+  }, [sessionId, doctorQuestionText, targetCharacter]);
 
   const handleSkipStage = useCallback(() => {
     if (!sessionId || !selectedStage) return;
     sendVoiceCommand(sessionId, {
-      type: "voice_command",
-      sessionId,
-      userId: auth?.currentUser?.uid ?? "presenter-local",
-      commandType: "skip_stage",
+      type: "skip_stage",
       payload: { stageId: selectedStage },
     });
   }, [sessionId, selectedStage]);
@@ -357,16 +450,16 @@ export default function PresenterSession() {
       }
       lastAutoForcedRef.current = trimmed ?? null;
       const payload = trimmed ? { doctorUtterance: trimmed } : undefined;
-      sendVoiceCommand(sessionId, { type: "force_reply", payload }).catch((err) =>
+      sendVoiceCommand(sessionId, { type: "force_reply", payload, character: targetCharacter }).catch((err) =>
         console.error("Failed to write voice command to Firestore", err)
       );
       try {
-        voiceGatewayClient.sendVoiceCommand("force_reply", payload);
+        voiceGatewayClient.sendVoiceCommand("force_reply", payload, targetCharacter);
       } catch (err) {
         console.error("Failed to send WS voice command", err);
       }
     },
-    [logDoctorQuestion, sessionId]
+    [logDoctorQuestion, sessionId, targetCharacter]
   );
 
   // keyboard navigation
@@ -420,11 +513,35 @@ export default function PresenterSession() {
       if (!selectedStage && state.stageIds && state.stageIds.length > 0) {
         setSelectedStage(state.stageIds[0]);
       }
+      // Log newly completed orders into transcript for debrief/visibility
+      const completed = (state.orders ?? []).filter((o) => o.status === "complete");
+      const seen = loggedOrderIdsRef.current;
+      const newOnes = completed.filter((o) => !seen.has(o.id));
+      if (newOnes.length > 0) {
+        const entries: TranscriptLogTurn[] = newOnes.map((o) => {
+          let text = `${o.type.toUpperCase()} result ready`;
+          if (o.result?.type === "vitals") {
+            text = `Vitals: HR ${o.result.hr ?? "—"} BP ${o.result.bp ?? "—"} SpO₂ ${o.result.spo2 ?? "—"}`;
+          } else if (o.result?.summary) {
+            text = `${o.type.toUpperCase()}: ${o.result.summary}`;
+          }
+          return {
+            id: `order-${o.id}`,
+            role: "patient",
+            character: o.type,
+            text,
+            timestamp: Date.now(),
+          };
+        });
+        entries.forEach((e) => seen.add(e.id));
+        setTranscriptLog((prev) => [...prev, ...entries]);
+      }
     });
-    const unsubPatient = voiceGatewayClient.onPatientState((state) => {
+    const unsubPatient = voiceGatewayClient.onPatientState((state, character?: string) => {
       setPatientState(state);
 
       if (state === "speaking") {
+        currentTurnCharacterRef.current = character ?? "patient";
         setTranscriptTurns((prev) => {
           const currentId = currentTurnIdRef.current;
           if (currentId) {
@@ -435,7 +552,7 @@ export default function PresenterSession() {
           }
           const newId = makeTurnId();
           currentTurnIdRef.current = newId;
-          return [...prev, { id: newId, role: "patient", text: "", isComplete: false }];
+          return [...prev, { id: newId, role: "patient", character: character ?? "patient", text: "", isComplete: false }];
         });
       } else if (state === "idle" || state === "listening" || state === "error") {
         const currentId = currentTurnIdRef.current;
@@ -462,15 +579,17 @@ export default function PresenterSession() {
                 timestamp: Date.now(),
                 text: finalText,
                 relatedTurnId: related,
+                character: currentTurnCharacterRef.current ?? "patient",
               },
             ]);
             lastDoctorTurnIdRef.current = null;
           }
           currentTurnIdRef.current = null;
+          currentTurnCharacterRef.current = "patient";
         }
       }
     });
-    const unsubTranscript = voiceGatewayClient.onPatientTranscriptDelta((text) => {
+    const unsubTranscript = voiceGatewayClient.onPatientTranscriptDelta((text, character?: string) => {
       setTranscriptTurns((prev) => {
         let turnId = currentTurnIdRef.current;
         const next = [...prev];
@@ -478,15 +597,17 @@ export default function PresenterSession() {
         if (idx === -1) {
           turnId = makeTurnId();
           currentTurnIdRef.current = turnId;
-          next.push({ id: turnId, role: "patient", text: "", isComplete: false });
+          next.push({ id: turnId, role: "patient", character: character ?? currentTurnCharacterRef.current, text: "", isComplete: false });
           idx = next.length - 1;
         }
         const target = next[idx];
-        next[idx] = { ...target, text: `${target.text}${text}` };
+        const effectiveCharacter = character ?? target.character ?? "patient";
+        currentTurnCharacterRef.current = effectiveCharacter;
+        next[idx] = { ...target, character: effectiveCharacter, text: `${target.text}${text}` };
         return next;
       });
     });
-    const unsubDoctor = voiceGatewayClient.onDoctorUtterance((text) => {
+    const unsubDoctor = voiceGatewayClient.onDoctorUtterance((text, _userId, character?: string) => {
       setDoctorQuestionText(text);
       if (autoForceReply) {
         const trimmed = text.trim();
@@ -494,6 +615,13 @@ export default function PresenterSession() {
           lastAutoForcedRef.current = trimmed;
           forceReplyWithQuestion(trimmed);
         }
+      }
+      if (character && character !== "patient") {
+        const id = `doctor-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        setTranscriptLog((prev) => [
+          ...prev,
+          { id, role: "doctor", text, timestamp: Date.now(), relatedTurnId: undefined, character },
+        ]);
       }
     });
     const unsubAudio = voiceGatewayClient.onPatientAudio((url) => setPatientAudioUrl(url));
@@ -784,6 +912,8 @@ export default function PresenterSession() {
               scenarioId={selectedScenario}
               scenarioOptions={scenarioOptions}
               onScenarioChange={handleScenarioSelect}
+              character={targetCharacter}
+              onCharacterChange={setTargetCharacter}
             />
           )}
           {simState && (
@@ -823,6 +953,61 @@ export default function PresenterSession() {
                 <span className="px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/60 text-amber-100">
                   Voice fallback active (text mode)
                 </span>
+              )}
+              {simState.orders && simState.orders.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 w-full">
+                  {simState.orders.slice(-6).map((order) => {
+                    const isDone = order.status === "complete";
+                    const header =
+                      order.type === "vitals"
+                        ? "Vitals"
+                        : order.type === "ekg"
+                        ? "EKG"
+                        : order.type === "labs"
+                        ? "Labs"
+                        : "Imaging";
+                    return (
+                      <div
+                        key={order.id}
+                        className={`rounded-lg border px-3 py-2 text-[12px] ${
+                          isDone ? "border-emerald-500/50 bg-emerald-500/5 text-emerald-100" : "border-slate-700 bg-slate-900/80 text-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="font-semibold">{header}</div>
+                          <div className="text-[10px] uppercase tracking-[0.14em]">
+                            {isDone ? "Complete" : "Pending"}
+                          </div>
+                        </div>
+                        {isDone && order.completedAt && (
+                          <div className="text-[10px] text-slate-400">
+                            {new Date(order.completedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                          </div>
+                        )}
+                        {isDone && order.result?.type === "vitals" && (
+                          <div className="text-slate-300 text-[12px] mt-1">
+                            HR {order.result.hr ?? "—"} · BP {order.result.bp ?? "—"} · SpO₂ {order.result.spo2 ?? "—"}
+                          </div>
+                        )}
+                        {isDone && order.result?.type === "ekg" && (
+                          <div className="text-slate-300 text-[12px] mt-1">
+                            {order.result.summary ?? "EKG ready"}
+                          </div>
+                        )}
+                        {isDone && order.result?.type === "labs" && (
+                          <div className="text-slate-300 text-[12px] mt-1">
+                            {order.result.summary ?? "Labs ready"}
+                          </div>
+                        )}
+                        {isDone && order.result?.type === "imaging" && (
+                          <div className="text-slate-300 text-[12px] mt-1">
+                            {order.result.summary ?? "Imaging ready"}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}
@@ -919,7 +1104,118 @@ export default function PresenterSession() {
       <div className="flex-1 flex flex-col items-center px-4 md:px-6 pb-2 gap-1">
         <div className="w-full max-w-[1800px]">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <SessionTranscriptPanel turns={transcriptLog} sessionId={sessionId} />
+            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-200">Transcript (by role)</div>
+                <div className="text-[10px] text-slate-500">Latest turns per role</div>
+              </div>
+              {groupedTranscript.length === 0 ? (
+                <div className="text-xs text-slate-500">No transcript yet.</div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {groupedTranscript.map((group) => (
+                    <div key={group.key} className="space-y-1">
+                      <div
+                        className={`text-[10px] uppercase tracking-[0.14em] font-semibold px-2 py-1 rounded border ${roleColor(
+                          group.key
+                        )}`}
+                      >
+                        {group.key}
+                      </div>
+                      {group.turns.slice(-3).map((turn) => (
+                        <div
+                          key={turn.id}
+                          className="bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100"
+                        >
+                          <div className="text-[10px] text-slate-500 mb-1">
+                            {new Date(turn.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                          </div>
+                          <div className="leading-snug whitespace-pre-wrap">{turn.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="text-sm font-semibold text-slate-200">Timeline</div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={timelineFilter}
+                      onChange={(e) => setTimelineFilter(e.target.value)}
+                      className="bg-slate-900 border border-slate-700 text-[10px] text-slate-200 rounded px-2 py-1"
+                    >
+                      <option value="all">All</option>
+                      <option value="patient">Patient</option>
+                      <option value="doctor">Doctor</option>
+                      <option value="nurse">Nurse</option>
+                      <option value="tech">Tech</option>
+                      <option value="consultant">Consultant</option>
+                      <option value="VITALS">Vitals</option>
+                      <option value="EKG">EKG</option>
+                      <option value="LABS">Labs</option>
+                      <option value="IMAGING">Imaging</option>
+                    </select>
+                    <div className="text-[10px] text-slate-500">Last 20 events</div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                        await navigator.clipboard.writeText(timelineText);
+                        setTimelineCopyStatus("copied");
+                        setTimeout(() => setTimelineCopyStatus("idle"), 1200);
+                      } catch {
+                        setTimelineCopyStatus("error");
+                        setTimeout(() => setTimelineCopyStatus("idle"), 1200);
+                      }
+                    }}
+                    className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] text-slate-200"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        const blob = new Blob([timelineText], { type: "text/plain" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `cardioquest-timeline-${sessionId ?? "session"}.txt`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                    className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] text-slate-200"
+                  >
+                    Download
+                  </button>
+                  {timelineCopyStatus === "copied" && <span className="text-[10px] text-emerald-300">Copied</span>}
+                  {timelineCopyStatus === "error" && <span className="text-[10px] text-rose-300">Copy failed</span>}
+                </div>
+              </div>
+              {(filteredTimeline.length === 0) ? (
+                <div className="text-xs text-slate-500">No events yet.</div>
+              ) : (
+                <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                  {filteredTimeline.map((item) => (
+                    <div key={item.id} className="flex items-start gap-2 text-sm text-slate-100">
+                      <span className="text-[10px] uppercase tracking-[0.12em] text-slate-500 w-20">
+                        {new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                      </span>
+                      <span className="px-2 py-0.5 rounded border border-slate-700 text-[10px] uppercase tracking-[0.14em]">
+                        {item.label}
+                      </span>
+                      <span className="text-slate-200 leading-snug">{item.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="rounded-xl border border-slate-800/80 bg-slate-900/70 p-3 text-slate-100">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-semibold text-slate-200">Live Captions</div>
@@ -1045,6 +1341,8 @@ export default function PresenterSession() {
               isAnalyzing={isAnalyzing}
               onGenerate={generateDebrief}
               disabled={transcriptLog.length === 0}
+              reportText={debriefReportText}
+              sessionId={sessionId}
             />
           </div>
         </div>

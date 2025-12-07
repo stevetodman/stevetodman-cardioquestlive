@@ -6,6 +6,7 @@ export type TranscriptLogTurn = {
   timestamp: number;
   text: string;
   relatedTurnId?: string;
+  character?: string;
 };
 
 interface SessionTranscriptPanelProps {
@@ -32,7 +33,7 @@ function serialize(turns: TranscriptLogTurn[]) {
         .toString()
         .padStart(2, "0");
       const seconds = (rel % 60).toString().padStart(2, "0");
-      const who = turn.role === "doctor" ? "Doctor" : "Patient";
+      const who = turn.character ? turn.character : turn.role === "doctor" ? "Doctor" : "Patient";
       return `${who} (${minutes}:${seconds}): ${turn.text}`;
     })
     .join("\n\n");
@@ -42,6 +43,18 @@ export function SessionTranscriptPanel({ turns, sessionId }: SessionTranscriptPa
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle");
 
   const textBlob = useMemo(() => serialize(turns), [turns]);
+
+  const groupedTurns = useMemo(() => {
+    const order = ["patient", "nurse", "tech", "consultant", "doctor"];
+    const buckets = new Map<string, TranscriptLogTurn[]>();
+    turns.forEach((t) => {
+      const key = t.character ?? (t.role === "doctor" ? "doctor" : "patient");
+      buckets.set(key, [...(buckets.get(key) ?? []), t]);
+    });
+    return order
+      .filter((k) => buckets.has(k))
+      .map((k) => ({ key: k, turns: buckets.get(k)! }));
+  }, [turns]);
 
   const handleCopy = async () => {
     try {
@@ -99,22 +112,29 @@ export function SessionTranscriptPanel({ turns, sessionId }: SessionTranscriptPa
           {copyStatus === "error" && <span className="text-[11px] text-rose-300">Copy failed</span>}
         </div>
       </div>
-      <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+      <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
         {turns.length === 0 ? (
           <div className="text-xs text-slate-500">No transcript turns yet.</div>
         ) : (
-          turns.map((turn) => (
-            <div
-              key={turn.id}
-              className="bg-slate-900/70 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100"
-            >
-              <div className="text-[11px] uppercase tracking-[0.12em] text-slate-500 mb-1 flex items-center justify-between">
-                <span>{turn.role === "doctor" ? "Doctor" : "Patient"}</span>
-                <span className="text-[10px] text-slate-500">
-                  {formatTimebase(turns, turn.timestamp)}
-                </span>
+          groupedTurns.map((group) => (
+            <div key={group.key} className="space-y-1">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+                {group.key}
               </div>
-              <div className="leading-snug whitespace-pre-wrap">{turn.text}</div>
+              {group.turns.map((turn) => (
+                <div
+                  key={turn.id}
+                  className="bg-slate-900/70 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100"
+                >
+                  <div className="text-[11px] uppercase tracking-[0.12em] text-slate-500 mb-1 flex items-center justify-between">
+                    <span>{turn.character ? turn.character : turn.role === "doctor" ? "Doctor" : "Patient"}</span>
+                    <span className="text-[10px] text-slate-500">
+                      {formatTimebase(turns, turn.timestamp)}
+                    </span>
+                  </div>
+                  <div className="leading-snug whitespace-pre-wrap">{turn.text}</div>
+                </div>
+              ))}
             </div>
           ))
         )}

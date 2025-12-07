@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 export type TranscriptTurn = {
   id: string;
   role: "patient";
+  character?: string;
   text: string;
   isComplete: boolean;
 };
@@ -62,6 +63,33 @@ export function VoicePatientOverlay({
     }
   }, [patientAudioUrl]);
 
+  const groupedTurns = useMemo(() => {
+    const order = ["patient", "nurse", "tech", "consultant"];
+    const map = new Map<string, TranscriptTurn[]>();
+    transcriptTurns.forEach((t) => {
+      const key = t.character ?? "patient";
+      map.set(key, [...(map.get(key) ?? []), t]);
+    });
+    const ordered = order.filter((k) => map.has(k)).map((k) => ({ key: k, turns: map.get(k)! }));
+    const extras = Array.from(map.entries())
+      .filter(([k]) => !order.includes(k))
+      .map(([key, turns]) => ({ key, turns }));
+    return [...ordered, ...extras];
+  }, [transcriptTurns]);
+
+  const badgeClass = (character?: string) => {
+    switch (character) {
+      case "nurse":
+        return "text-emerald-300";
+      case "tech":
+        return "text-sky-300";
+      case "consultant":
+        return "text-indigo-300";
+      default:
+        return "text-slate-300";
+    }
+  };
+
   return (
     <div className="absolute top-4 left-4 z-40 w-[320px] max-w-[80vw]">
       <div className="rounded-2xl bg-slate-950/90 border border-slate-800 shadow-xl shadow-black/40 overflow-hidden">
@@ -115,21 +143,40 @@ export function VoicePatientOverlay({
           </div>
         )}
 
-        <div className="max-h-56 overflow-y-auto px-4 pb-3 space-y-2">
+        <div className="max-h-56 overflow-y-auto px-4 pb-3 space-y-3">
           {transcriptTurns.length === 0 ? (
             <div className="text-xs text-slate-500">No transcript yet.</div>
           ) : (
-            transcriptTurns.map((turn) => (
-              <div
-                key={turn.id}
-                className={`text-sm text-slate-100 bg-slate-900/70 border rounded-lg px-3 py-2 ${
-                  turn.isComplete ? "border-slate-800" : "border-emerald-600/60"
-                }`}
-              >
-                {turn.text || <span className="text-slate-500 italic">Patient is replying…</span>}
-              </div>
-            ))
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {groupedTurns.map((group) => (
+                <div key={group.key} className="space-y-1">
+                  <div className={`text-[10px] uppercase tracking-[0.14em] font-semibold ${badgeClass(group.key)}`}>
+                    {group.key}
+                  </div>
+                  {group.turns.slice(-4).map((turn) => (
+                    <div
+                      key={turn.id}
+                      className={`text-sm text-slate-100 bg-slate-900/70 border rounded-lg px-3 py-2 space-y-0.5 ${
+                        turn.isComplete ? "border-slate-800" : "border-emerald-600/60"
+                      }`}
+                    >
+                      <div className={`text-[10px] uppercase tracking-[0.14em] font-semibold ${badgeClass(turn.character)}`}>
+                        {turn.character ?? "patient"}
+                      </div>
+                      <div>{turn.text || <span className="text-slate-500 italic">Reply in progress…</span>}</div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           )}
+        </div>
+        <div className="px-4 pb-3 flex items-center gap-3 text-[10px] text-slate-500">
+          <span className="uppercase tracking-[0.14em]">Legend:</span>
+          <span className="text-slate-300">patient</span>
+          <span className="text-emerald-300">nurse</span>
+          <span className="text-sky-300">tech</span>
+          <span className="text-indigo-300">consultant</span>
         </div>
 
         {process.env.NODE_ENV !== "production" && (

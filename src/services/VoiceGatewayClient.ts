@@ -7,6 +7,7 @@ import {
   DebriefTurn,
   AnalysisResult,
   VoiceConnectionStatus,
+  CharacterId,
 } from "../types/voiceGateway";
 
 type PatientStateListener = (state: PatientState) => void;
@@ -23,7 +24,7 @@ type SimStateListener = (state: {
   budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
 }) => void;
 type AudioListener = (audioUrl: string) => void;
-type DoctorUtteranceListener = (text: string, userId: string) => void;
+type DoctorUtteranceListener = (text: string, userId: string, character?: CharacterId) => void;
 type ScenarioListener = (scenarioId: PatientScenarioId) => void;
 type AnalysisResultListener = (result: AnalysisResult) => void;
 
@@ -177,25 +178,27 @@ class VoiceGatewayClient {
     }
   }
 
-  startSpeaking() {
+  startSpeaking(character?: CharacterId) {
     if (!this.sessionId || !this.userId) return;
-    this.send({ type: "start_speaking", sessionId: this.sessionId, userId: this.userId });
+    this.send({ type: "start_speaking", sessionId: this.sessionId, userId: this.userId, character });
   }
 
-  stopSpeaking() {
+  stopSpeaking(character?: CharacterId) {
     if (!this.sessionId || !this.userId) return;
-    this.send({ type: "stop_speaking", sessionId: this.sessionId, userId: this.userId });
+    this.send({ type: "stop_speaking", sessionId: this.sessionId, userId: this.userId, character });
   }
 
   sendVoiceCommand(
-    commandType: "pause_ai" | "resume_ai" | "force_reply" | "end_turn" | "mute_user",
-    payload?: Record<string, unknown>
+    commandType: "pause_ai" | "resume_ai" | "force_reply" | "end_turn" | "mute_user" | "freeze" | "unfreeze" | "skip_stage",
+    payload?: Record<string, unknown>,
+    character?: CharacterId
   ) {
     if (!this.sessionId || !this.userId) return;
     this.send({
       type: "voice_command",
       sessionId: this.sessionId,
       userId: this.userId,
+      character,
       commandType,
       payload,
     });
@@ -211,7 +214,7 @@ class VoiceGatewayClient {
     });
   }
 
-  async sendDoctorAudio(blob: Blob) {
+  async sendDoctorAudio(blob: Blob, opts?: { character?: CharacterId }) {
     if (!this.sessionId || !this.userId) return;
     const contentType = blob.type || "audio/webm";
     try {
@@ -220,6 +223,7 @@ class VoiceGatewayClient {
         type: "doctor_audio",
         sessionId: this.sessionId,
         userId: this.userId,
+        character: opts?.character,
         audioBase64: base64,
         contentType,
       });
@@ -323,7 +327,7 @@ class VoiceGatewayClient {
             msg.text?.slice?.(0, 120) ?? ""
           );
         }
-        this.doctorListeners.forEach((cb) => cb(msg.text, msg.userId));
+        this.doctorListeners.forEach((cb) => cb(msg.text, msg.userId, (msg as any).character));
         break;
       }
       case "scenario_changed": {

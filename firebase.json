@@ -22,16 +22,16 @@
   "emulators": {
     "firestore": {
       "host": "127.0.0.1",
-      "port": 8088,
-      "websocketPort": 9188
+      "port": 58088,
+      "websocketPort": 59188
     },
     "hub": {
       "host": "127.0.0.1",
-      "port": 4402
+      "port": 54402
     },
     "logging": {
       "host": "127.0.0.1",
-      "port": 4502
+      "port": 54502
     },
     "auth": {
       "port": 9099

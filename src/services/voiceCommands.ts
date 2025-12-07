@@ -1,10 +1,11 @@
 import { addDoc, collection, db, serverTimestamp } from "../utils/firestore";
 import { auth, ensureSignedIn, isConfigured } from "../firebase";
 import { VoiceCommandType, VoiceCommandDoc } from "../types";
+import { CharacterId } from "../types/voiceGateway";
 
 export async function sendVoiceCommand(
   sessionId: string,
-  cmd: { type: VoiceCommandType; payload?: Record<string, any> }
+  cmd: { type: VoiceCommandType; payload?: Record<string, any>; character?: CharacterId }
 ) {
   if (isConfigured) {
     await ensureSignedIn();
@@ -18,6 +19,9 @@ export async function sendVoiceCommand(
   };
   if (cmd.payload !== undefined) {
     (doc as any).payload = cmd.payload;
+  }
+  if (cmd.character) {
+    (doc as any).character = cmd.character;
   }
   await addDoc(ref, doc as any);
 }

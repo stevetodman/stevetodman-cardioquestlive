@@ -1,5 +1,6 @@
 import { PatientCase, PatientScenarioId, createDefaultPatientCase } from "./patientCase";
-import { buildPatientSystemPrompt } from "./patientPersona";
+import { buildPatientSystemPrompt, buildNursePrompt, buildTechPrompt, buildConsultantPrompt } from "./patientPersona";
+import { CharacterId } from "./messageTypes";
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
@@ -11,6 +12,12 @@ type EngineState = {
 const engines = new Map<string, EngineState>();
 const sessionScenarios = new Map<string, PatientScenarioId>();
 const MAX_HISTORY = 12;
+const CHARACTER_PROMPTS: Record<CharacterId, string> = {
+  patient: "",
+  nurse: buildNursePrompt(),
+  tech: buildTechPrompt(),
+  consultant: buildConsultantPrompt(),
+};
 
 function trimHistory(history: ChatMessage[]): ChatMessage[] {
   // Keep system + last N turns
@@ -63,6 +70,14 @@ export function getOrCreatePatientEngine(sessionId: string) {
       engines.delete(sessionId);
     },
   };
+}
+
+export function getPersonaPrompt(character: CharacterId, caseData?: PatientCase): ChatMessage {
+  if (character === "patient" && caseData) {
+    return { role: "system", content: buildPatientSystemPrompt(caseData) };
+  };
+  const prompt = CHARACTER_PROMPTS[character] || "Respond briefly and helpfully.";
+  return { role: "system", content: prompt };
 }
 
 export type { ChatMessage };

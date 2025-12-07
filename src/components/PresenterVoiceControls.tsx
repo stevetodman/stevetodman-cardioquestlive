@@ -1,6 +1,6 @@
 import React, { ChangeEvent, useEffect, useState } from "react";
 import { VoiceState, VoiceCommandType } from "../types";
-import { PatientScenarioId } from "../types/voiceGateway";
+import { PatientScenarioId, CharacterId } from "../types/voiceGateway";
 import { setVoiceEnabled, releaseFloor, setAIMode } from "../hooks/useVoiceState";
 import { sendVoiceCommand } from "../services/voiceCommands";
 import { voiceGatewayClient } from "../services/VoiceGatewayClient";
@@ -10,25 +10,28 @@ interface PresenterVoiceControlsProps {
   voice: VoiceState;
   doctorQuestion: string;
   onDoctorQuestionChange: (text: string) => void;
-  onForceReply?: (questionText: string) => void;
+  onForceReply?: (questionText: string, character: CharacterId) => void;
   autoForceReply: boolean;
   onToggleAutoForceReply: (enabled: boolean) => void;
   scenarioId: PatientScenarioId;
   scenarioOptions: { id: PatientScenarioId; label: string }[];
   onScenarioChange: (id: PatientScenarioId) => void;
+  character: CharacterId;
+  onCharacterChange: (c: CharacterId) => void;
 }
 
 async function emitCommand(
   sessionId: string,
   type: VoiceCommandType,
-  payload?: Record<string, any> | undefined
+  payload?: Record<string, any> | undefined,
+  character?: CharacterId
 ) {
   // Fire-and-forget Firestore; always attempt WS send
-  sendVoiceCommand(sessionId, { type, payload }).catch((err) => {
+  sendVoiceCommand(sessionId, { type, payload, character }).catch((err) => {
     console.error("Failed to write voice command to Firestore", err);
   });
   try {
-    voiceGatewayClient.sendVoiceCommand(type, payload);
+    voiceGatewayClient.sendVoiceCommand(type, payload, character);
   } catch (err) {
     console.error("Failed to send WS voice command", err);
   }
@@ -45,6 +48,8 @@ export function PresenterVoiceControls({
   scenarioId,
   scenarioOptions,
   onScenarioChange,
+  character,
+  onCharacterChange,
 }: PresenterVoiceControlsProps) {
   const [localQuestion, setLocalQuestion] = useState(doctorQuestion);
 
@@ -73,9 +78,9 @@ export function PresenterVoiceControls({
     const payload =
       localQuestion.trim().length > 0 ? { doctorUtterance: localQuestion.trim() } : undefined;
     if (onForceReply) {
-      onForceReply(payload?.doctorUtterance ?? "");
+      onForceReply(payload?.doctorUtterance ?? "", character);
     } else {
-      emitCommand(sessionId, "force_reply", payload);
+      emitCommand(sessionId, "force_reply", payload, character);
     }
   };
 
@@ -102,6 +107,22 @@ export function PresenterVoiceControls({
             </option>
           ))}
         </select>
+      </div>
+      <div className="flex items-center gap-2 text-[11px] text-slate-300">
+        <label className="uppercase tracking-[0.12em] text-slate-500 font-semibold">
+          Target role
+        </label>
+        <select
+          value={character}
+          onChange={(e) => onCharacterChange(e.target.value as CharacterId)}
+          className="text-sm bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-slate-100"
+        >
+          <option value="patient">Patient</option>
+          <option value="nurse">Nurse</option>
+          <option value="tech">Tech</option>
+          <option value="consultant">Consultant</option>
+        </select>
+        <span className="text-[10px] text-slate-500">Force reply and commands target this role.</span>
       </div>
       <div className="flex flex-wrap gap-2 items-center">
         <button
@@ -185,6 +206,62 @@ export function PresenterVoiceControls({
           className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-rose-600/60 bg-rose-600/10 text-rose-100 hover:border-rose-500"
         >
           End turn
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            emitCommand(
+              sessionId,
+              "force_reply",
+              { doctorUtterance: "Please grab a fresh set of vitals." },
+              "nurse"
+            )
+          }
+          className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
+        >
+          Ask nurse: vitals
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            emitCommand(
+              sessionId,
+              "order",
+              { orderType: "ekg" },
+              "tech"
+            )
+          }
+          className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-sky-600/60 bg-sky-600/10 text-sky-100 hover:border-sky-500"
+        >
+          Ask tech: EKG
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            emitCommand(
+              sessionId,
+              "order",
+              { orderType: "labs" },
+              "nurse"
+            )
+          }
+          className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-indigo-600/60 bg-indigo-600/10 text-indigo-100 hover:border-indigo-500"
+        >
+          Order labs
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            emitCommand(
+              sessionId,
+              "order",
+              { orderType: "imaging" },
+              "tech"
+            )
+          }
+          className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-purple-600/60 bg-purple-600/10 text-purple-100 hover:border-purple-500"
+        >
+          Order imaging
         </button>
       </div>
     </div>

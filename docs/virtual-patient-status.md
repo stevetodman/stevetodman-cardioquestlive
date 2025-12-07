@@ -17,8 +17,9 @@
   Scenario change resets patient engine/persona and clears local transcript/debrief.
 - **Patient responses**: Streaming text deltas; optional TTS playback on presenter side via `patient_audio`.
 - **Interaction safety**: Keyboard navigation (space/arrows) disabled during patient interaction and while typing to prevent slide jumps.
-- **Transcript tools**: Doctor/patient turn log, copy-to-clipboard, download .txt; overlay still shows streaming text.
-- **AI debrief**: “Generate debrief” button sends transcript to gateway for OpenAI analysis → summary, strengths, opportunities, teaching points.
+- **Transcript tools**: Doctor/patient turn log grouped by role, copy-to-clipboard, download .txt; overlay shows streaming text by role.
+- **Orders + multi-character**: Voice commands can target nurse/tech/consultant; orders (vitals/ekg/labs/imaging) tracked in sim_state and rendered as cards with status/results; order completions appear in transcript timeline.
+- **AI debrief**: “Generate debrief” button sends transcript to gateway for OpenAI analysis → summary, strengths, opportunities, teaching points; debrief can be copied/downloaded as Markdown (includes last 20 timeline events).
 
 ## How to Run Locally
 
@@ -63,6 +64,8 @@
   - `src/types/voiceGateway.ts`: Message/type definitions.
 - **Voice gateway**
   - `voice-gateway/src/index.ts`: WS server, message handling, scenarios, STT, TTS, debrief.
+  - Per-role voices supported via env:
+    - `OPENAI_TTS_VOICE_PATIENT`, `OPENAI_TTS_VOICE_NURSE`, `OPENAI_TTS_VOICE_TECH`, `OPENAI_TTS_VOICE_CONSULTANT` (fallback: `OPENAI_TTS_VOICE`).
   - `voice-gateway/src/messageTypes.ts`: Protocol types.
   - `voice-gateway/src/patientCase.ts`, `patientEngine.ts`, `patientPersona.ts`: Cases/personas and per-session engine.
   - `voice-gateway/src/sttClient.ts`, `ttsClient.ts`, `debriefAnalyzer.ts`: OpenAI integrations for STT/TTS/debrief.
@@ -73,6 +76,7 @@
 
 - Improve mobile UX for floor/voice (e.g., banners for permissions/network).
 - Add persistence of debrief/transcripts to Firestore for post-session review.
+- Improve debrief with saved timeline and role evidence, plus presenter export to PDF.
 - More patient scenarios and richer personas; deck-driven scenario selection.
 - Participant-side audio playback fan-out (currently presenter-only).
 - Consider soft locks or presenter override flows for floor control; polish error surfaced to users.

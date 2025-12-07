@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit -p .",
     "sim:harness": "node scripts/sim-harness.js",
     "ws:harness": "node scripts/ws-harness.js",
-    "events:replay": "ts-node scripts/replaySimEvents.ts"
+    "events:replay": "ts-node scripts/replaySimEvents.ts",
+    "test": "cd .. && npm test -- --runInBand voice-gateway/src/__tests__"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

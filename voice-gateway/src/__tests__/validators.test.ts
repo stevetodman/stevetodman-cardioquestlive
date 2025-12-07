@@ -28,4 +28,29 @@ describe("validateMessage", () => {
     });
     expect(msg).toBeTruthy();
   });
+
+  it("accepts voice_command variants handled by the gateway", () => {
+    const base = {
+      type: "voice_command" as const,
+      sessionId: "s1",
+      userId: "u1",
+      payload: { stageId: "stage_2" },
+    };
+    const cmds = ["freeze", "unfreeze", "skip_stage", "pause_ai", "resume_ai", "force_reply"] as const;
+    cmds.forEach((commandType) => {
+      const msg = validateMessage({ ...base, commandType });
+      expect(msg?.type).toBe("voice_command");
+      expect(msg && "commandType" in msg ? (msg as any).commandType : null).toBe(commandType);
+    });
+  });
+
+  it("rejects unknown voice_command types", () => {
+    const msg = validateMessage({
+      type: "voice_command",
+      sessionId: "s1",
+      userId: "u1",
+      commandType: "not_a_command",
+    });
+    expect(msg).toBeNull();
+  });
 });
