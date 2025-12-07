@@ -25,6 +25,7 @@ import { respondForCharacter, chooseCharacter, isUnsafeUtterance } from "./speec
 import { buildTelemetryWaveform, checkAlarms } from "./telemetry";
 import { Runtime } from "./typesRuntime";
 import { createOrderHandler } from "./orders";
+import { shouldAutoReply } from "./autoReplyGuard";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
@@ -687,9 +688,6 @@ async function handleDoctorAudioLegacy(
 function maybeAutoForceReply(sessionId: string, text: string, explicitCharacter?: CharacterId, userId?: string) {
   const trimmed = text.trim();
   if (!trimmed) return;
-  // Basic guardrails: require a minimal utterance and a short cooldown.
-  const words = trimmed.split(/\s+/).length;
-  if (words < 3 || trimmed.length < 12) return;
   if (isUnsafeUtterance(trimmed)) {
     log("auto-reply blocked for safety", sessionId);
     sessionManager.broadcastToPresenters(sessionId, {
@@ -700,34 +698,18 @@ function maybeAutoForceReply(sessionId: string, text: string, explicitCharacter?
     });
     return;
   }
-  const now = Date.now();
-  const last = lastAutoReplyAt.get(sessionId) || 0;
-  if (now - last < commandCooldownMs) return;
-  if (userId) {
-    const key = `${sessionId}:${userId}`;
-    const lastUser = lastAutoReplyByUser.get(key) || 0;
-    if (now - lastUser < commandCooldownMs) return;
-    lastAutoReplyByUser.set(key, now);
-  }
-  const lastUtter = lastDoctorUtterance.get(sessionId);
-  if (lastUtter && lastUtter.text === trimmed && now - lastUtter.ts < 1500) {
-    return;
-  }
-  lastDoctorUtterance.set(sessionId, { text: trimmed, ts: now });
-  const floorHolder = sessionManager.getFloorHolder(sessionId);
-  if (floorHolder && userId && floorHolder !== userId) {
-    return;
-  }
-  lastAutoReplyAt.set(sessionId, now);
+  const allow = shouldAutoReply({
+    sessionId,
+    userId,
+    text: trimmed,
+    explicitCharacter,
+    floorHolder: sessionManager.getFloorHolder(sessionId),
+    commandCooldownMs,
+    maps: { lastAutoReplyAt, lastAutoReplyByUser, lastDoctorUtterance },
+  });
+  if (!allow) return;
   const routed = explicitCharacter ?? chooseCharacter(trimmed);
   handleForceReply(sessionId, "auto", trimmed, routed);
-}
-
-function isUnsafeUtterance(text: string): boolean {
-  const lower = text.toLowerCase();
-  const hasProfanity = /(fuck|shit|bitch|asshole|cunt)/.test(lower);
-  const hasLongNumber = /\b\d{3}[-.\s]?\d{2,3}[-.\s]?\d{4}\b/.test(text);
-  return hasProfanity || hasLongNumber;
 }
 
 function broadcastDoctorUtterance(sessionId: string, userId: string, text: string, character?: CharacterId) {
