@@ -569,6 +569,10 @@ function handleScenarioChange(sessionId: string, scenarioId: PatientScenarioId) 
     "exertional_chest_pain",
     "syncope",
     "palpitations_svt",
+    "myocarditis",
+    "exertional_syncope_hcm",
+    "ductal_shock",
+    "cyanotic_spell",
   ];
   if (!allowed.includes(scenarioId)) {
     log("Ignoring invalid scenarioId", scenarioId);
@@ -859,6 +863,14 @@ function buildSystemPrompt(scenario: PatientScenarioId): string {
       ? "You are a teen with exertional syncope. Answer as the patient with short, concrete answers. Do not diagnose or recommend treatments."
       : scenario === "palpitations_svt"
       ? "You are a teen with recurrent palpitations. Stay in character with short answers, no diagnoses or treatments."
+      : scenario === "myocarditis"
+      ? "You are a pre-teen recovering from a viral illness, now tired with chest discomfort and short of breath. Stay in character and brief."
+      : scenario === "exertional_syncope_hcm"
+      ? "You are a teen athlete with presyncope during sprints and family history of sudden death. Stay in character, short answers."
+      : scenario === "ductal_shock"
+      ? "You are an ill infant; responses are limited to fussing/crying cues. Keep outputs minimal, describing distress simply."
+      : scenario === "cyanotic_spell"
+      ? "You are a toddler who turns blue and sometimes squats to feel better. Very short, simple toddler-like responses."
       : "You are a teen with exertional chest pain. Stay in character with short answers, no diagnoses or treatments.";
   return `${persona}\nKeep answers to 1-3 sentences. If unsure, say you are not sure.`;
 }

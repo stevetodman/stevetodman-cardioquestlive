@@ -319,6 +319,10 @@ const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "savin
     { id: "exertional_chest_pain", label: "Exertional chest pain & palpitations (Taylor)" },
     { id: "syncope", label: "Syncope during exercise" },
     { id: "palpitations_svt", label: "Recurrent palpitations (SVT)" },
+    { id: "myocarditis", label: "Viral prodrome with myocarditis" },
+    { id: "exertional_syncope_hcm", label: "Exertional presyncope (HCM suspicion)" },
+    { id: "ductal_shock", label: "Infant shock (duct-dependent lesion)" },
+    { id: "cyanotic_spell", label: "Cyanotic spell (tet spell-like)" },
   ];
 
   const generateDebrief = useCallback(() => {

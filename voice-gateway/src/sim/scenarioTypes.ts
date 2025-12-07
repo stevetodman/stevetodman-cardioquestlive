@@ -1,4 +1,11 @@
-export type ScenarioId = "syncope" | "exertional_chest_pain" | "palpitations_svt";
+export type ScenarioId =
+  | "syncope"
+  | "exertional_chest_pain"
+  | "palpitations_svt"
+  | "myocarditis"
+  | "exertional_syncope_hcm"
+  | "ductal_shock"
+  | "cyanotic_spell";
 
 export type ActionTrigger =
   | { action: "asked_about_exertion" }

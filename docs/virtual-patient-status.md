@@ -14,6 +14,10 @@
   - `exertional_chest_pain` (Taylor) — chest pain/palpitations with exertion.
   - `syncope` — exertional syncope.
   - `palpitations_svt` — recurrent palpitations/SVT-like episodes.
+  - `myocarditis` — viral prodrome with evolving myocarditis.
+  - `exertional_syncope_hcm` — exertional presyncope with HCM suspicion.
+  - `ductal_shock` — infant shock (duct-dependent lesion).
+  - `cyanotic_spell` — toddler cyanotic spell (tet spell-like).
   Scenario change resets patient engine/persona and clears local transcript/debrief.
 - **Patient responses**: Streaming text deltas; optional TTS playback on presenter side via `patient_audio`.
 - **Interaction safety**: Keyboard navigation (space/arrows) disabled during patient interaction and while typing to prevent slide jumps.

@@ -75,6 +75,96 @@ const summaries: Record<PatientScenarioId, ScenarioSnapshot> = {
       { name: "Echo", status: "pending", summary: "Consider to rule out structural disease." },
     ],
   },
+  myocarditis: {
+    chiefComplaint: "Chest discomfort after viral illness",
+    hpi: [
+      "Fever and myalgias followed by chest discomfort and fatigue.",
+      "Shortness of breath with minimal exertion.",
+      "No prior heart disease; tachycardia out of proportion to fever.",
+    ],
+    exam: [
+      "Tired appearance; possible tachycardia and gallop.",
+      "Mild hepatomegaly; possible rub.",
+      "Lungs clear or mild crackles if decompensating.",
+    ],
+    labs: [
+      { name: "Troponin", status: "result", summary: "Elevated in myocarditis." },
+      { name: "BNP/NT-proBNP", status: "result", summary: "Elevated with ventricular dysfunction." },
+      { name: "CRP/ESR", status: "pending", summary: "Inflammatory markers may be elevated." },
+    ],
+    imaging: [
+      { name: "ECG", status: "result", summary: "Sinus tachycardia; diffuse ST-T changes possible." },
+      { name: "CXR", status: "result", summary: "May show cardiomegaly or pulmonary edema." },
+      { name: "Echo", status: "result", summary: "Can show depressed function." },
+    ],
+  },
+  exertional_syncope_hcm: {
+    chiefComplaint: "Presyncope with intense exercise",
+    hpi: [
+      "Dizziness and chest tightness during sprints; no full LOC yet.",
+      "Occasional palpitations.",
+      "Family history of sudden death in a young relative.",
+    ],
+    exam: [
+      "Possible harsh systolic murmur at LSB increasing with Valsalva/standing.",
+      "Strong pulses; no hepatomegaly.",
+      "May be orthostatic.",
+    ],
+    labs: [
+      { name: "Electrolytes", status: "pending", summary: "Screen if arrhythmia risk." },
+      { name: "Troponin", status: "pending", summary: "Usually normal; order if chest pain." },
+    ],
+    imaging: [
+      { name: "ECG", status: "result", summary: "Possible LVH, deep Q waves, repolarization changes." },
+      { name: "Echo", status: "pending", summary: "Assess LVH, gradients, SAM." },
+      { name: "CXR", status: "pending", summary: "Often normal; may show mild cardiomegaly." },
+    ],
+  },
+  ductal_shock: {
+    chiefComplaint: "Infant in shock",
+    hpi: [
+      "Poor feeding, lethargy, cool extremities.",
+      "Oliguria and tachypnea over hours.",
+      "Possible duct-dependent congenital heart lesion.",
+    ],
+    exam: [
+      "Tachycardia, weak pulses, delayed cap refill.",
+      "Possible differential cyanosis; hepatomegaly.",
+      "Cool extremities, mottling.",
+    ],
+    labs: [
+      { name: "Blood gas/lactate", status: "result", summary: "Metabolic acidosis, elevated lactate." },
+      { name: "Electrolytes", status: "result", summary: "Check glucose/electrolytes before interventions." },
+      { name: "Hemoglobin", status: "pending", summary: "Assess anemia." },
+    ],
+    imaging: [
+      { name: "ECG", status: "result", summary: "Sinus tachycardia; possible RV strain." },
+      { name: "CXR", status: "result", summary: "May show cardiomegaly or pulmonary edema." },
+      { name: "Echo", status: "pending", summary: "Needed to define anatomy; assume limited at bedside." },
+    ],
+  },
+  cyanotic_spell: {
+    chiefComplaint: "Cyanotic spells",
+    hpi: [
+      "Turns blue during crying/playing, sometimes squats.",
+      "Episodes improve when squatting or being held.",
+      "Known congenital heart disease with poor follow-up.",
+    ],
+    exam: [
+      "Cyanosis, clubbing possible.",
+      "Harsh systolic murmur LUSB; increased with agitation.",
+      "Tachypnea during spells; otherwise playful toddler.",
+    ],
+    labs: [
+      { name: "Blood gas", status: "result", summary: "Hypoxemia; may have respiratory alkalosis during spell." },
+      { name: "Hemoglobin", status: "pending", summary: "Assess polycythemia." },
+    ],
+    imaging: [
+      { name: "ECG", status: "result", summary: "RVH pattern possible." },
+      { name: "CXR", status: "result", summary: "Boot-shaped heart possible." },
+      { name: "Echo", status: "pending", summary: "Definitive anatomy; assumed known history." },
+    ],
+  },
 };
 
 export function getScenarioSnapshot(scenarioId: PatientScenarioId | null | undefined): ScenarioSnapshot | null {

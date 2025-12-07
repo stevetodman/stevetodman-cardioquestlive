@@ -1,7 +1,11 @@
 export type PatientScenarioId =
   | "exertional_chest_pain"
   | "syncope"
-  | "palpitations_svt";
+  | "palpitations_svt"
+  | "myocarditis"
+  | "exertional_syncope_hcm"
+  | "ductal_shock"
+  | "cyanotic_spell";
 
 export type PatientCase = {
   id: string;
@@ -98,6 +102,78 @@ export function getPatientCaseForScenario(
         ],
         baselinePersonality: "a bit anxious but generally cooperative and open",
         redFlags: ["chest pain with exertion", "lightheadedness during exercise"],
+      };
+    case "myocarditis":
+      return {
+        id: sessionId,
+        scenarioId,
+        age: 12,
+        sex: "male",
+        name: "Evan",
+        chiefComplaint: "fever then chest discomfort and fatigue",
+        onset: "over the past 3 days after viral symptoms",
+        associatedSymptoms: ["fever", "myalgias", "fatigue", "mild shortness of breath"],
+        relevantPMH: ["previously healthy"],
+        medications: ["ibuprofen as needed"],
+        allergies: ["no known drug allergies"],
+        familyHistory: ["no sudden deaths", "no cardiomyopathy known"],
+        socialHistory: ["middle school student; recent viral contact at home"],
+        baselinePersonality: "tired and subdued; answers briefly",
+        redFlags: ["viral prodrome with chest pain", "tachycardia out of proportion to fever"],
+      };
+    case "exertional_syncope_hcm":
+      return {
+        id: sessionId,
+        scenarioId,
+        age: 15,
+        sex: "female",
+        name: "Leah",
+        chiefComplaint: "near-syncope during intense practice",
+        onset: "episodes over 2 weeks during sprints",
+        associatedSymptoms: ["palpitations", "brief chest tightness", "dizziness"],
+        relevantPMH: ["otherwise healthy"],
+        medications: [],
+        allergies: ["no known drug allergies"],
+        familyHistory: ["uncle died suddenly at 32 playing soccer"],
+        socialHistory: ["competitive track athlete; no substances"],
+        baselinePersonality: "focused but worried about missing season",
+        redFlags: ["exertional presyncope", "family history sudden death"],
+      };
+    case "ductal_shock":
+      return {
+        id: sessionId,
+        scenarioId,
+        age: 6,
+        sex: "male",
+        name: "Noah",
+        chiefComplaint: "poor feeding and lethargy",
+        onset: "worsening over 12 hours",
+        associatedSymptoms: ["cool extremities", "tachypnea", "decreased urine output"],
+        relevantPMH: ["term infant, no surgeries"],
+        medications: [],
+        allergies: ["no known drug allergies"],
+        familyHistory: ["noncontributory"],
+        socialHistory: ["lives with parents; up to date on vaccines"],
+        baselinePersonality: "sleepy, irritable when stimulated",
+        redFlags: ["shock in infant", "possible duct-dependent lesion"],
+      };
+    case "cyanotic_spell":
+      return {
+        id: sessionId,
+        scenarioId,
+        age: 3,
+        sex: "female",
+        name: "Maya",
+        chiefComplaint: "turning blue and squatting after playing",
+        onset: "episodes over the past week",
+        associatedSymptoms: ["breath-holding-looking episodes", "improves with squatting"],
+        relevantPMH: ["known congenital heart disease, poor follow-up"],
+        medications: [],
+        allergies: ["no known drug allergies"],
+        familyHistory: ["noncontributory"],
+        socialHistory: ["toddlers at daycare; otherwise active"],
+        baselinePersonality: "active toddler, frightened during spells",
+        redFlags: ["cyanosis with exertion/crying", "possible tet spell"],
       };
   }
 }

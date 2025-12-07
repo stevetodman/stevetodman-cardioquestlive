@@ -86,6 +86,10 @@ const simStateSchema = z
         z.literal("exertional_chest_pain"),
         z.literal("syncope"),
         z.literal("palpitations_svt"),
+        z.literal("myocarditis"),
+        z.literal("exertional_syncope_hcm"),
+        z.literal("ductal_shock"),
+        z.literal("cyanotic_spell"),
       ])
       .optional(),
     vitals: z

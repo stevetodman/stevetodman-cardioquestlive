@@ -3,7 +3,11 @@ export type ClientRole = "presenter" | "participant";
 export type PatientScenarioId =
   | "exertional_chest_pain"
   | "syncope"
-  | "palpitations_svt";
+  | "palpitations_svt"
+  | "myocarditis"
+  | "exertional_syncope_hcm"
+  | "ductal_shock"
+  | "cyanotic_spell";
 
 export type CharacterId = "patient" | "nurse" | "tech" | "consultant";
 

@@ -127,6 +127,122 @@ const scenarioMap: Record<ScenarioId, ScenarioDef> = {
       },
     ],
   },
+  myocarditis: {
+    id: "myocarditis",
+    version: "1.0.0",
+    persona: "You are a pre-teen recovering from a viral illness, now with chest discomfort and fatigue. Stay in character.",
+    initialStage: "stage_1_baseline",
+    stages: [
+      {
+        id: "stage_1_baseline",
+        vitals: { hr: 118, bp: "98/60", spo2: 97, temp: 38.1 },
+        allowedIntents: ["intent_updateVitals", "intent_revealFinding", "intent_setEmotion", "intent_advanceStage"],
+        transitions: [
+          { to: "stage_2_decomp", when: { any: [{ action: "time_elapsed", seconds: 180 }] } },
+        ],
+      },
+      {
+        id: "stage_2_decomp",
+        vitals: { hr: 135, bp: "86/54", spo2: 95 },
+        allowedIntents: ["intent_updateVitals", "intent_revealFinding", "intent_setEmotion", "intent_advanceStage"],
+        transitions: [
+          { to: "stage_3_support", when: { any: [{ action: "time_elapsed", seconds: 240 }] } },
+        ],
+      },
+      {
+        id: "stage_3_support",
+        vitals: { hr: 112, bp: "96/60", spo2: 96 },
+        allowedIntents: ["intent_updateVitals", "intent_setEmotion"],
+      },
+    ],
+  },
+  exertional_syncope_hcm: {
+    id: "exertional_syncope_hcm",
+    version: "1.0.0",
+    persona: "You are a teen with presyncope during intense exercise. Stay in character; short answers.",
+    initialStage: "stage_1_baseline",
+    stages: [
+      {
+        id: "stage_1_baseline",
+        vitals: { hr: 92, bp: "110/68", spo2: 99 },
+        allowedIntents: ["intent_updateVitals", "intent_revealFinding", "intent_setEmotion", "intent_advanceStage"],
+        transitions: [
+          { to: "stage_2_exertion", when: { any: [{ action: "time_elapsed", seconds: 90 }] } },
+        ],
+      },
+      {
+        id: "stage_2_exertion",
+        vitals: { hr: 130, bp: "104/62", spo2: 99 },
+        allowedIntents: ["intent_updateVitals", "intent_revealFinding", "intent_setEmotion", "intent_advanceStage"],
+        transitions: [
+          { to: "stage_3_presyncope", when: { any: [{ action: "time_elapsed", seconds: 90 }] } },
+        ],
+      },
+      {
+        id: "stage_3_presyncope",
+        vitals: { hr: 140, bp: "88/50", spo2: 99 },
+        allowedIntents: ["intent_updateVitals", "intent_setEmotion"],
+      },
+    ],
+  },
+  ductal_shock: {
+    id: "ductal_shock",
+    version: "1.0.0",
+    persona: "You are an ill infant with poor perfusion; responses are limited to grunts/crying cues.",
+    initialStage: "stage_1_shock",
+    stages: [
+      {
+        id: "stage_1_shock",
+        vitals: { hr: 188, bp: "62/38", spo2: 86 },
+        allowedIntents: ["intent_updateVitals", "intent_advanceStage"],
+        transitions: [
+          { to: "stage_2_improving", when: { any: [{ action: "time_elapsed", seconds: 120 }] } },
+        ],
+      },
+      {
+        id: "stage_2_improving",
+        vitals: { hr: 170, bp: "72/44", spo2: 90 },
+        allowedIntents: ["intent_updateVitals", "intent_advanceStage"],
+        transitions: [
+          { to: "stage_3_stabilized", when: { any: [{ action: "time_elapsed", seconds: 180 }] } },
+        ],
+      },
+      {
+        id: "stage_3_stabilized",
+        vitals: { hr: 150, bp: "78/48", spo2: 94 },
+        allowedIntents: ["intent_updateVitals"],
+      },
+    ],
+  },
+  cyanotic_spell: {
+    id: "cyanotic_spell",
+    version: "1.0.0",
+    persona: "You are a toddler with cyanotic episodes; often squats to feel better.",
+    initialStage: "stage_1_baseline",
+    stages: [
+      {
+        id: "stage_1_baseline",
+        vitals: { hr: 110, bp: "92/58", spo2: 93 },
+        allowedIntents: ["intent_updateVitals", "intent_revealFinding", "intent_setEmotion", "intent_advanceStage"],
+        transitions: [
+          { to: "stage_2_spell", when: { any: [{ action: "time_elapsed", seconds: 120 }] } },
+        ],
+      },
+      {
+        id: "stage_2_spell",
+        vitals: { hr: 150, bp: "88/54", spo2: 78 },
+        allowedIntents: ["intent_updateVitals", "intent_setEmotion", "intent_advanceStage"],
+        transitions: [
+          { to: "stage_3_recovery", when: { any: [{ action: "time_elapsed", seconds: 120 }] } },
+        ],
+      },
+      {
+        id: "stage_3_recovery",
+        vitals: { hr: 120, bp: "90/56", spo2: 88 },
+        allowedIntents: ["intent_updateVitals", "intent_setEmotion"],
+      },
+    ],
+  },
 };
 
 export type ApplyResult = {
