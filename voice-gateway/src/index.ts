@@ -600,7 +600,7 @@ function broadcastSimState(
     type: "sim_state",
     sessionId,
     stageId: state.stageId,
-    scenarioId: state.scenarioId ?? getScenarioForSession(sessionId),
+    scenarioId: (state.scenarioId ?? getScenarioForSession(sessionId)) as PatientScenarioId,
     stageIds: state.stageIds,
     vitals: state.vitals,
     fallback: state.fallback,
