@@ -108,60 +108,58 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
     return;
   }
 
+  // sessionId is guaranteed after the guard above; capture a non-null string for TS
+  const simId = ctx.sessionId as string;
+
   switch (parsed.type) {
     case "start_speaking": {
-      const result = sessionManager.requestFloor(ctx.sessionId, parsed.userId);
+      const result = sessionManager.requestFloor(simId, parsed.userId);
       if (!result.granted) {
         send(ws, { type: "error", message: "floor_taken" });
         return;
       }
       if (result.previous && result.previous !== parsed.userId) {
-        sessionManager.broadcastToSession(ctx.sessionId, {
+        sessionManager.broadcastToSession(simId, {
           type: "participant_state",
-          sessionId: ctx.sessionId,
+          sessionId: simId,
           userId: result.previous,
           speaking: false,
         });
       }
-      sessionManager.broadcastToSession(ctx.sessionId, {
+      sessionManager.broadcastToSession(simId, {
         type: "participant_state",
-        sessionId: ctx.sessionId,
+        sessionId: simId,
         userId: parsed.userId,
         speaking: true,
       });
       break;
     }
     case "stop_speaking": {
-      const released = sessionManager.releaseFloor(ctx.sessionId, parsed.userId);
-      sessionManager.broadcastToSession(ctx.sessionId, {
+      const released = sessionManager.releaseFloor(simId, parsed.userId);
+      sessionManager.broadcastToSession(simId, {
         type: "participant_state",
-        sessionId: ctx.sessionId,
+        sessionId: simId,
         userId: parsed.userId,
         speaking: false,
       });
       if (!released) {
-        log("stop_speaking ignored (not floor holder)", ctx.sessionId, parsed.userId);
+        log("stop_speaking ignored (not floor holder)", simId, parsed.userId);
       }
       break;
     }
     case "doctor_audio": {
-      handleDoctorAudio(ctx.sessionId, parsed.userId, parsed.audioBase64, parsed.contentType);
+      handleDoctorAudio(simId, parsed.userId, parsed.audioBase64, parsed.contentType);
       break;
     }
     case "set_scenario": {
-      handleScenarioChange(ctx.sessionId, parsed.scenarioId);
+      handleScenarioChange(simId, parsed.scenarioId);
       break;
     }
     case "analyze_transcript": {
-      handleAnalyzeTranscript(ctx.sessionId, parsed.turns);
+      handleAnalyzeTranscript(simId, parsed.turns);
       break;
     }
     case "voice_command": {
-      if (!ctx.sessionId) {
-        send(ws, { type: "error", message: "Not joined to a session" });
-        break;
-      }
-      const simId = ctx.sessionId;
       log("Voice command", parsed.commandType, "by", parsed.userId, "session", simId);
       const runtime = ensureRuntime(simId);
       switch (parsed.commandType) {
