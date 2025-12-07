@@ -162,6 +162,20 @@ service cloud.firestore {
           isValidTimeline(request.resource.data);
         allow update, delete: if false;
       }
+
+      match /transcripts/{transcriptId} {
+        function isValidTranscript(data) {
+          return data.createdBy is string &&
+            (data.createdAt is timestamp || data.createdAt is string) &&
+            data.text is string;
+        }
+
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() &&
+          (isSessionOwner(sessionId) || isAdmin()) &&
+          isValidTranscript(request.resource.data);
+        allow update, delete: if false;
+      }
     }
 
     match /configs/{document=**} {

@@ -297,6 +297,40 @@ describeIfEmulator("firestore.rules timeline", () => {
   });
 });
 
+describeIfEmulator("firestore.rules transcripts", () => {
+  const sessionId = "session-transcripts";
+
+  beforeEach(async () => {
+    if (!isEnvReady()) return;
+    await getEnv().withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `sessions/${sessionId}`), baseSession);
+    });
+  });
+
+  test("session owner can create transcript entries; others blocked", async () => {
+    if (!isEnvReady()) return;
+    const ownerDb = getEnv().authenticatedContext(baseSession.createdBy).firestore();
+    const trRef = doc(ownerDb, `sessions/${sessionId}/transcripts/t1`);
+    await assertSucceeds(
+      setDoc(trRef, {
+        createdBy: baseSession.createdBy,
+        createdAt: new Date(),
+        text: "full transcript",
+      })
+    );
+
+    const otherDb = getEnv().authenticatedContext("other-user").firestore();
+    const otherRef = doc(otherDb, `sessions/${sessionId}/transcripts/t2`);
+    await assertFails(
+      setDoc(otherRef, {
+        createdBy: "other-user",
+        createdAt: new Date(),
+        text: "blocked",
+      })
+    );
+  });
+});
+
 describeIfEmulator("firestore.rules configs", () => {
   test("allows authenticated read of configs/deck", async () => {
     if (!isEnvReady()) return;

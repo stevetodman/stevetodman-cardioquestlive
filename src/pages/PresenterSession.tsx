@@ -159,6 +159,7 @@ const [debriefResult, setDebriefResult] = useState<AnalysisResult | null>(null);
 const [timelineCopyStatus, setTimelineCopyStatus] = useState<"idle" | "copied" | "error">("idle");
 const [timelineFilter, setTimelineFilter] = useState<string>("all");
 const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -206,6 +207,15 @@ const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" |
       })
       .join("\n");
   }, [timelineItems]);
+  const transcriptText = useMemo(() => {
+    return transcriptLog
+      .map((t) => {
+        const ts = new Date(t.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        const speaker = t.character ?? t.role ?? "unknown";
+        return `${ts} ${speaker}: ${t.text}`;
+      })
+      .join("\n");
+  }, [transcriptLog]);
   const debriefReportText = useMemo(() => {
     if (!debriefResult) return "";
     const parts: string[] = [];
@@ -247,6 +257,24 @@ const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" |
       setTimeout(() => setTimelineSaveStatus("idle"), 1500);
     }
   }, [sessionId, timelineItems.length, timelineText]);
+
+  const saveTranscriptToSession = useCallback(async () => {
+    if (!sessionId || !transcriptText || transcriptLog.length === 0) return;
+    setTranscriptSaveStatus("saving");
+    try {
+      const trCollection = collection(db, "sessions", sessionId, "transcripts");
+      await addDoc(trCollection, {
+        createdBy: auth.currentUser?.uid ?? "unknown",
+        createdAt: new Date().toISOString(),
+        text: transcriptText,
+      });
+      setTranscriptSaveStatus("saved");
+      setTimeout(() => setTranscriptSaveStatus("idle"), 1500);
+    } catch {
+      setTranscriptSaveStatus("error");
+      setTimeout(() => setTranscriptSaveStatus("idle"), 1500);
+    }
+  }, [sessionId, transcriptLog.length, transcriptText]);
   const groupedTranscript = useMemo(() => {
     const order = ["patient", "nurse", "tech", "consultant", "doctor"];
     const buckets = new Map<string, TranscriptLogTurn[]>();
@@ -1225,10 +1253,24 @@ const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" |
                   >
                     {timelineSaveStatus === "saving" ? "Saving…" : "Save to session"}
                   </button>
+                  <button
+                    type="button"
+                    disabled={!sessionId || transcriptLog.length === 0 || transcriptSaveStatus === "saving"}
+                    onClick={saveTranscriptToSession}
+                    className={`px-2 py-1 rounded border text-[10px] ${
+                      !sessionId || transcriptLog.length === 0
+                        ? "border-slate-800 bg-slate-900 text-slate-600 cursor-not-allowed"
+                        : "border-indigo-600/60 bg-indigo-600/10 text-indigo-100 hover:border-indigo-500"
+                    }`}
+                  >
+                    {transcriptSaveStatus === "saving" ? "Saving transcript…" : "Save transcript"}
+                  </button>
                   {timelineCopyStatus === "copied" && <span className="text-[10px] text-emerald-300">Copied</span>}
                   {timelineCopyStatus === "error" && <span className="text-[10px] text-rose-300">Copy failed</span>}
                   {timelineSaveStatus === "saved" && <span className="text-[10px] text-emerald-300">Saved</span>}
                   {timelineSaveStatus === "error" && <span className="text-[10px] text-rose-300">Save failed</span>}
+                  {transcriptSaveStatus === "saved" && <span className="text-[10px] text-emerald-300">Transcript saved</span>}
+                  {transcriptSaveStatus === "error" && <span className="text-[10px] text-rose-300">Transcript save failed</span>}
                 </div>
               </div>
               {(filteredTimeline.length === 0) ? (
