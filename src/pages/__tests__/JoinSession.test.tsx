@@ -24,6 +24,7 @@ jest.mock("../../services/VoiceGatewayClient", () => ({
     onPatientState: () => () => {},
     onPatientTranscriptDelta: () => () => {},
     onParticipantState: () => () => {},
+    onSimState: () => () => {},
     onStatus: () => () => {},
   },
 }));

@@ -74,6 +74,7 @@ export default function JoinSession() {
     stageId: string;
     vitals: Record<string, unknown>;
     fallback: boolean;
+    budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
   } | null>(null);
   const [micStatus, setMicStatus] = useState<MicStatus>("unknown");
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
@@ -251,6 +252,37 @@ export default function JoinSession() {
     ensureParticipantDoc();
   }, [sessionId, userId]);
 
+  const slides = session ? [...session.slides].sort((a, b) => a.index - b.index) : [];
+  const currentSlide = slides.length > 0 ? slides[session?.currentSlideIndex ?? 0] ?? slides[0] : null;
+
+  const questionsMap = new Map<string, Question>(
+    session ? session.questions.map((q) => [q.id, q]) : []
+  );
+
+  const currentQuestion =
+    currentSlide?.type === "question" && currentSlide.questionId
+      ? questionsMap.get(currentSlide.questionId)
+      : null;
+
+  // Question is "active" for the user if it's the current slide AND the presenter has opened it
+  // Or if it's open but we are just showing results.
+  const isQuestionActive = currentQuestion && session?.currentQuestionId === currentQuestion.id;
+
+  const connectionReady = connectionStatus.state === "ready";
+  const hasFloor = voice.enabled && voice.floorHolderId === userId;
+  const canSpeak =
+    voice.enabled &&
+    hasFloor &&
+    connectionReady &&
+    voice.mode !== "ai-speaking" &&
+    micStatus !== "blocked";
+  const fallbackActive = simState?.fallback === true;
+  const canTakeFloor = voice.enabled && !voice.floorHolderId && connectionReady && !fallbackActive;
+  const floorTakenByOther =
+    voice.enabled && voice.floorHolderId !== null && voice.floorHolderId !== userId;
+  const otherSpeaking = (activeSpeakerId && activeSpeakerId !== userId) || floorTakenByOther;
+  const stageLabel = useMemo(() => simState?.stageId ?? "stage unknown", [simState]);
+
   if (!joinCode) return <div className="p-8 text-center text-slate-400">No join code provided.</div>;
 
   if (loading && !session) {
@@ -277,37 +309,6 @@ export default function JoinSession() {
       </div>
     );
   }
-
-  const slides = [...session.slides].sort((a, b) => a.index - b.index);
-  const currentSlide = slides[session.currentSlideIndex] ?? slides[0];
-
-  const questionsMap = new Map<string, Question>(
-    session.questions.map((q) => [q.id, q])
-  );
-
-  const currentQuestion =
-    currentSlide.type === "question" && currentSlide.questionId
-      ? questionsMap.get(currentSlide.questionId)
-      : null;
-
-  // Question is "active" for the user if it's the current slide AND the presenter has opened it
-  // Or if it's open but we are just showing results.
-  const isQuestionActive = currentQuestion && session.currentQuestionId === currentQuestion.id;
-
-  const connectionReady = connectionStatus.state === "ready";
-  const hasFloor = voice.enabled && voice.floorHolderId === userId;
-  const canSpeak =
-    voice.enabled &&
-    hasFloor &&
-    connectionReady &&
-    voice.mode !== "ai-speaking" &&
-    micStatus !== "blocked";
-  const fallbackActive = simState?.fallback === true;
-  const canTakeFloor = voice.enabled && !voice.floorHolderId && connectionReady && !fallbackActive;
-  const floorTakenByOther =
-    voice.enabled && voice.floorHolderId !== null && voice.floorHolderId !== userId;
-  const otherSpeaking = (activeSpeakerId && activeSpeakerId !== userId) || floorTakenByOther;
-  const stageLabel = useMemo(() => simState?.stageId ?? "stage unknown", [simState]);
 
   const handleTakeFloor = async () => {
     if (!sessionId || !userId) return;
@@ -530,6 +531,7 @@ export default function JoinSession() {
               hasFloor={hasFloor}
               otherSpeaking={otherSpeaking}
               fallback={fallbackActive}
+              throttled={simState?.budget?.throttled}
               onRetryVoice={handleRetryVoice}
               onRecheckMic={handleRecheckMic}
             />

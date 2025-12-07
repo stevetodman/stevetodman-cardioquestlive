@@ -11,6 +11,7 @@ type RealtimePatientClientOptions = {
   onTranscriptDelta: (text: string, isFinal: boolean) => void;
   onToolIntent: (intent: ToolIntent) => void;
   onDisconnect?: () => void;
+  onUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void;
 };
 
 /**
@@ -122,6 +123,14 @@ export class RealtimePatientClient {
       }
       case "response.output_text.done": {
         if (evt.text) this.opts.onTranscriptDelta(evt.text, true);
+        break;
+      }
+      case "response.usage": {
+        const usage = {
+          inputTokens: evt.input_tokens ?? evt.inputTokens,
+          outputTokens: evt.output_tokens ?? evt.outputTokens,
+        };
+        this.opts.onUsage?.(usage);
         break;
       }
       case "response.output_tool_call.done": {

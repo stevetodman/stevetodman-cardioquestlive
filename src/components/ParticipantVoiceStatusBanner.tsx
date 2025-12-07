@@ -8,6 +8,7 @@ type Props = {
   hasFloor: boolean;
   otherSpeaking: boolean;
   fallback?: boolean;
+  throttled?: boolean;
   onRetryVoice?: () => void;
   onRecheckMic?: () => void;
 };
@@ -31,6 +32,7 @@ export function ParticipantVoiceStatusBanner({
   hasFloor,
   otherSpeaking,
   fallback = false,
+  throttled = false,
   onRetryVoice,
   onRecheckMic,
 }: Props) {
@@ -43,6 +45,10 @@ export function ParticipantVoiceStatusBanner({
     tone = "warn";
     title = "Voice fallback (text mode)";
     body = "Patient voice paused. Use typed questions until voice resumes.";
+  } else if (throttled) {
+    tone = "info";
+    title = "Voice throttled";
+    body = "Shorter answers to manage budget.";
   } else if (micStatus === "blocked") {
     tone = "error";
     title = "Microphone blocked";

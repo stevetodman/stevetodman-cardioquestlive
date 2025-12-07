@@ -9,6 +9,7 @@ import type { DeckData, Question, Slide } from "../types";
 import { defaultDeck } from "../data/ductalDeck";
 import { fetchDeck, persistDeck } from "../utils/deckService";
 import { SlidePreview } from "../components/SlidePreview";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 type TemplateKey = "none" | "phenotype" | "poll" | "image" | "teaching";
 
@@ -676,20 +677,27 @@ export default function AdminDeckEditor() {
                       />
                     </div>
 
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Live Preview</span>
-                        <span className="text-[11px] text-slate-500">Presenter styling</span>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Live Preview</span>
+                      <span className="text-[11px] text-slate-500">Presenter styling</span>
+                    </div>
+                    {selectedSlide && (
+                      <div className="text-[11px] text-slate-500">
+                        Rendering sanitized HTML for preview; scripts/styles are stripped.
                       </div>
-                      <div className="rounded-xl border border-slate-800 bg-slate-900/60 shadow-lg shadow-black/20 p-3">
-                        <div className="aspect-video w-full overflow-auto rounded-lg bg-slate-950/80 border border-slate-800">
-                          <div
-                            className="h-full w-full"
-                            dangerouslySetInnerHTML={{ __html: selectedSlide.html }}
-                          />
-                        </div>
+                    )}
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/60 shadow-lg shadow-black/20 p-3">
+                      <div className="aspect-video w-full overflow-auto rounded-lg bg-slate-950/80 border border-slate-800">
+                        <div
+                          className="h-full w-full"
+                          dangerouslySetInnerHTML={{
+                            __html: selectedSlide ? sanitizeHtml(selectedSlide.html) : "",
+                          }}
+                        />
                       </div>
                     </div>
+                  </div>
                   </div>
 
                   {linkedQuestion && (

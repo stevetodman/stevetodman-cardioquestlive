@@ -31,6 +31,7 @@ import {
 import { SessionTranscriptPanel, TranscriptLogTurn } from "../components/SessionTranscriptPanel";
 import { sendVoiceCommand } from "../services/voiceCommands";
 import { DebriefPanel } from "../components/DebriefPanel";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 export default function PresenterSession() {
   const { sessionId } = useParams();
@@ -57,6 +58,7 @@ export default function PresenterSession() {
     stageId: string;
     vitals: Record<string, unknown>;
     fallback: boolean;
+    budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
   } | null>(null);
   const [transcriptLog, setTranscriptLog] = useState<TranscriptLogTurn[]>([]);
   const [patientAudioUrl, setPatientAudioUrl] = useState<string | null>(null);
@@ -115,6 +117,7 @@ export default function PresenterSession() {
 
   const slides = session ? [...session.slides].sort((a, b) => a.index - b.index) : [];
   const currentSlide = session ? slides[session.currentSlideIndex] ?? slides[0] : null;
+  const currentSlideHtml = currentSlide?.html ? sanitizeHtml(currentSlide.html) : "";
 
   const questionsMap = new Map<string, Question>(
     session ? session.questions.map((q) => [q.id, q]) : []
@@ -634,6 +637,28 @@ export default function PresenterSession() {
               <span className="text-[11px] text-slate-400">
                 Vitals: {simState.vitals?.hr ? `HR ${simState.vitals.hr}` : "—"} {simState.vitals?.bp ? `BP ${simState.vitals.bp}` : ""}
               </span>
+              {simState.budget && (
+                <span
+                  className={`px-2 py-1 rounded-lg border ${
+                    simState.budget.fallback
+                      ? "bg-rose-600/10 border-rose-500/60 text-rose-100"
+                      : simState.budget.throttled
+                      ? "bg-amber-500/10 border-amber-500/60 text-amber-100"
+                      : "bg-emerald-500/10 border-emerald-500/50 text-emerald-100"
+                  }`}
+                >
+                  {simState.budget.fallback
+                    ? "Voice: TEXT-ONLY (budget)"
+                    : simState.budget.throttled
+                    ? "Voice: THROTTLED"
+                    : "Voice: ON"}
+                  {typeof simState.budget.usdEstimate === "number" && (
+                    <span className="ml-1 text-[10px] text-slate-400">
+                      ~${simState.budget.usdEstimate.toFixed(2)}
+                    </span>
+                  )}
+                </span>
+              )}
               {simState.fallback && (
                 <span className="px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/60 text-amber-100">
                   Voice fallback active (text mode)
@@ -775,7 +800,7 @@ export default function PresenterSession() {
                 <div
                   className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
                   ref={slideRef}
-                  dangerouslySetInnerHTML={{ __html: currentSlide?.html ?? "" }}
+                  dangerouslySetInnerHTML={{ __html: currentSlideHtml }}
                 />
 
                 {showTeamScores && (teams?.length ?? 0) > 0 && (

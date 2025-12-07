@@ -27,7 +27,6 @@ const allowedTags = new Set([
 const allowedAttributes = new Set([
   "class",
   "id",
-  "style",
   "href",
   "src",
   "alt",
@@ -35,6 +34,8 @@ const allowedAttributes = new Set([
   "aria-label",
   "aria-hidden",
 ]);
+
+const allowedProtocols = ["http:", "https:", "mailto:"];
 
 export function sanitizeHtml(html: string): string {
   if (!html?.trim()) return "";
@@ -63,8 +64,19 @@ export function sanitizeHtml(html: string): string {
         el.removeAttribute(attr.name);
         return;
       }
-      if ((name === "href" || name === "src") && /^javascript:/i.test(attr.value.trim())) {
-        el.removeAttribute(attr.name);
+      if (name === "href" || name === "src") {
+        const value = attr.value.trim();
+        const url = (() => {
+          try {
+            return new URL(value, "http://localhost");
+          } catch {
+            return null;
+          }
+        })();
+        if (!url || !allowedProtocols.includes(url.protocol)) {
+          el.removeAttribute(attr.name);
+          return;
+        }
       }
     });
   });

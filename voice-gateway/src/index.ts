@@ -17,18 +17,23 @@ import { InMemoryEventLog } from "./sim/eventLog";
 import { ScenarioEngine } from "./sim/scenarioEngine";
 import { ToolGate } from "./sim/toolGate";
 import { ToolIntent } from "./sim/types";
+import { CostController } from "./sim/costController";
+import { persistSimState, logSimEvent } from "./persistence";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
 const eventLog = new InMemoryEventLog();
 const realtimeModel = process.env.OPENAI_REALTIME_MODEL || "gpt-4o-mini-realtime-preview";
 const realtimeApiKey = process.env.OPENAI_API_KEY || "";
+const softBudgetUsd = Number(process.env.SOFT_BUDGET_USD || 3.5);
+const hardBudgetUsd = Number(process.env.HARD_BUDGET_USD || 4.5);
 
 type Runtime = {
   realtime?: RealtimePatientClient;
   fallback: boolean;
   scenarioEngine: ScenarioEngine;
   toolGate: ToolGate;
+  cost: CostController;
 };
 
 const runtimes: Map<string, Runtime> = new Map();
@@ -45,13 +50,70 @@ function send(ws: WebSocket, msg: ServerToClientMessage) {
   }
 }
 
+function validateMessage(msg: any): ClientToServerMessage | null {
+  if (!msg || typeof msg !== "object") return null;
+  switch (msg.type) {
+    case "join":
+      if (
+        typeof msg.sessionId === "string" &&
+        typeof msg.userId === "string" &&
+        (msg.role === "presenter" || msg.role === "participant")
+      ) {
+        return msg as ClientToServerMessage;
+      }
+      return null;
+    case "start_speaking":
+    case "stop_speaking":
+      if (typeof msg.sessionId === "string" && typeof msg.userId === "string") return msg as ClientToServerMessage;
+      return null;
+    case "voice_command":
+      if (
+        typeof msg.sessionId === "string" &&
+        typeof msg.userId === "string" &&
+        ["pause_ai", "resume_ai", "force_reply", "end_turn", "mute_user"].includes(msg.commandType)
+      ) {
+        return msg as ClientToServerMessage;
+      }
+      return null;
+    case "doctor_audio":
+      if (
+        typeof msg.sessionId === "string" &&
+        typeof msg.userId === "string" &&
+        typeof msg.audioBase64 === "string" &&
+        typeof msg.contentType === "string"
+      ) {
+        return msg as ClientToServerMessage;
+      }
+      return null;
+    case "set_scenario":
+      if (typeof msg.sessionId === "string" && typeof msg.userId === "string" && typeof msg.scenarioId === "string") {
+        return msg as ClientToServerMessage;
+      }
+      return null;
+    case "analyze_transcript":
+      if (typeof msg.sessionId === "string" && typeof msg.userId === "string" && Array.isArray(msg.turns)) {
+        return msg as ClientToServerMessage;
+      }
+      return null;
+    case "ping":
+      return { type: "ping", sessionId: typeof msg.sessionId === "string" ? msg.sessionId : undefined };
+    default:
+      return null;
+  }
+}
+
 function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.RawData) {
-  let parsed: ClientToServerMessage;
+  let parsedRaw: any;
   try {
-    parsed = JSON.parse(raw.toString());
+    parsedRaw = JSON.parse(raw.toString());
   } catch (err) {
     logError("Invalid JSON", err);
     send(ws, { type: "error", message: "Invalid JSON" });
+    return;
+  }
+  const parsed = validateMessage(parsedRaw);
+  if (!parsed) {
+    send(ws, { type: "error", message: "Invalid message shape" });
     return;
   }
 
@@ -377,6 +439,12 @@ function ensureRuntime(sessionId: string): Runtime {
     fallback: false,
     scenarioEngine: new ScenarioEngine(sessionId, scenarioId),
     toolGate: new ToolGate(),
+    cost: new CostController({
+      softUsd: softBudgetUsd,
+      hardUsd: hardBudgetUsd,
+      onSoftLimit: () => handleBudgetSoftLimit(sessionId),
+      onHardLimit: () => handleBudgetHardLimit(sessionId),
+    }),
   };
   if (realtimeApiKey) {
     runtime.realtime = new RealtimePatientClient({
@@ -414,6 +482,16 @@ function ensureRuntime(sessionId: string): Runtime {
           payload: intent as any,
         });
         handleToolIntent(sessionId, intent);
+      },
+      onUsage: (usage) => {
+        runtime.cost.addUsage({
+          inputTokens: usage.inputTokens ?? 0,
+          outputTokens: usage.outputTokens ?? 0,
+        });
+        broadcastSimState(sessionId, {
+          ...runtime.scenarioEngine.getState(),
+          budget: runtime.cost.getState(),
+        });
       },
       onDisconnect: () => {
         runtime.fallback = true;
@@ -466,17 +544,44 @@ function handleToolIntent(sessionId: string, intent: ToolIntent) {
       payload: evt.payload,
     })
   );
+  logSimEvent(sessionId, { type: "tool.intent.applied", payload: intent as any }).catch(() => {});
   broadcastSimState(sessionId, result.nextState);
 }
 
-function broadcastSimState(sessionId: string, state: { stageId: string; vitals: any; fallback: boolean }) {
+function handleBudgetSoftLimit(sessionId: string) {
+  logSimEvent(sessionId, { type: "budget.soft_limit" }).catch(() => {});
+  console.warn("[budget] soft limit reached", sessionId);
+}
+
+function handleBudgetHardLimit(sessionId: string) {
+  const runtime = runtimes.get(sessionId);
+  logSimEvent(sessionId, { type: "budget.hard_limit" }).catch(() => {});
+  console.warn("[budget] hard limit reached, switching to fallback", sessionId);
+  if (runtime) {
+    runtime.fallback = true;
+    runtime.scenarioEngine.setFallback(true);
+    runtime.realtime?.close();
+    sessionManager.setFallback(sessionId, true);
+    broadcastSimState(sessionId, {
+      ...runtime.scenarioEngine.getState(),
+      fallback: true,
+    });
+  }
+}
+
+function broadcastSimState(
+  sessionId: string,
+  state: { stageId: string; vitals: any; fallback: boolean; budget?: any }
+) {
   sessionManager.broadcastToSession(sessionId, {
     type: "sim_state",
     sessionId,
     stageId: state.stageId,
     vitals: state.vitals,
     fallback: state.fallback,
+    budget: state.budget,
   });
+  persistSimState(sessionId, state as any).catch(() => {});
 }
 
 function buildSystemPrompt(scenario: PatientScenarioId): string {

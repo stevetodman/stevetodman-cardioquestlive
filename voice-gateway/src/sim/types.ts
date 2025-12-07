@@ -62,6 +62,12 @@ export type SimState = {
   stageId: string;
   vitals: Vitals;
   fallback: boolean;
+  budget?: {
+    usdEstimate?: number;
+    voiceSeconds?: number;
+    throttled?: boolean;
+    fallback?: boolean;
+  };
 };
 
 export type CostSnapshot = {

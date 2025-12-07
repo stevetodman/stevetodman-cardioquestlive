@@ -24,8 +24,10 @@ const DEFAULT_URL =
   (typeof globalThis !== "undefined" && (globalThis as any).__VITE_VOICE_GATEWAY_URL) ||
   // Next: Node/env override if present (e.g., VITE_VOICE_GATEWAY_URL)
   (typeof process !== "undefined" && (process as any)?.env?.VITE_VOICE_GATEWAY_URL) ||
-  // Fallback: Cloudflare tunnel URL (works for browser clients, including iPhone)
-  "wss://score-bent-trailer-think.trycloudflare.com/ws/voice";
+  // Fallback: derive from current host (dev/local)
+  (typeof window !== "undefined"
+    ? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:8081/ws/voice`
+    : "ws://localhost:8081/ws/voice");
 
 const WebSocketCtor: typeof WebSocket | undefined =
   typeof WebSocket !== "undefined"

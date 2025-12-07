@@ -127,6 +127,7 @@ export type ServerToClientMessage =
       stageId: string;
       vitals: Record<string, unknown>;
       fallback: boolean;
+      budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
     }
   | {
       type: "pong";
