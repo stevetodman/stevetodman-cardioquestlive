@@ -5,7 +5,7 @@ This document captures the current deterministic voice sim shape, how to exercis
 ### What’s implemented
 - `sim_state` WebSocket message (stageId, stageIds, vitals, fallback, budget) published by the voice-gateway.
 - Frontend consumption:
-  - Presenter: stage/vitals/cost chips, freeze/unfreeze, force reply, reveal clue, skip to stage dropdown, live captions.
+  - Presenter: stage/vitals/cost chips, freeze/unfreeze, force reply, reveal clue, skip to stage dropdown, live captions, patient snapshot card (chief complaint, HPI, exam, labs/imaging) sourced from `src/data/scenarioSummaries.ts`.
   - Participant: status banner shows fallback; PTT disables when fallback is active.
 - Deterministic core scaffolding in gateway:
   - `ScenarioEngine` (in-memory state) and `ToolGate` (validation/rate limits; vitals clamped; stage allowlist check).

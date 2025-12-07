@@ -28,11 +28,89 @@ import {
   AnalysisResult,
   VoiceConnectionStatus,
 } from "../types/voiceGateway";
+import { getScenarioSnapshot } from "../data/scenarioSummaries";
 import { SessionTranscriptPanel, TranscriptLogTurn } from "../components/SessionTranscriptPanel";
 import { sendVoiceCommand } from "../services/voiceCommands";
 import { DebriefPanel } from "../components/DebriefPanel";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
 import { Select } from "../components/Select";
+
+type SnapshotProps = {
+  chiefComplaint: string;
+  hpi: string[];
+  exam: string[];
+  labs: { name: string; status: "pending" | "result"; summary: string }[];
+  imaging: { name: string; status: "pending" | "result"; summary: string }[];
+};
+
+function ScenarioSnapshotCard({ snapshot }: { snapshot: SnapshotProps | null }) {
+  if (!snapshot) return null;
+  const statusBadge = (status: "pending" | "result") =>
+    status === "result"
+      ? "bg-emerald-500/15 text-emerald-100 border-emerald-500/50"
+      : "bg-slate-800 text-slate-200 border-slate-700";
+
+  return (
+    <div className="bg-slate-900/70 border border-slate-800 rounded-xl px-3 py-3 shadow-sm shadow-black/30">
+      <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400 font-semibold mb-1">
+        Patient snapshot
+      </div>
+      <div className="text-sm font-semibold text-slate-50 mb-3">{snapshot.chiefComplaint}</div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-400">HPI highlights</div>
+          <ul className="text-sm text-slate-200 space-y-1 list-disc list-inside">
+            {snapshot.hpi.map((item, idx) => (
+              <li key={`hpi-${idx}`}>{item}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Exam</div>
+          <ul className="text-sm text-slate-200 space-y-1 list-disc list-inside">
+            {snapshot.exam.map((item, idx) => (
+              <li key={`exam-${idx}`}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 mt-3">
+        <div className="space-y-1.5">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Labs</div>
+          <ul className="space-y-1.5">
+            {snapshot.labs.map((lab, idx) => (
+              <li key={`lab-${idx}`} className="text-sm text-slate-200 flex items-start gap-2">
+                <span className={`px-2 py-0.5 rounded-full border text-[11px] ${statusBadge(lab.status)}`}>
+                  {lab.status === "result" ? "result" : "pending"}
+                </span>
+                <div>
+                  <div className="font-semibold">{lab.name}</div>
+                  <div className="text-slate-400 text-[13px] leading-tight">{lab.summary}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Imaging</div>
+          <ul className="space-y-1.5">
+            {snapshot.imaging.map((img, idx) => (
+              <li key={`img-${idx}`} className="text-sm text-slate-200 flex items-start gap-2">
+                <span className={`px-2 py-0.5 rounded-full border text-[11px] ${statusBadge(img.status)}`}>
+                  {img.status === "result" ? "result" : "pending"}
+                </span>
+                <div>
+                  <div className="font-semibold">{img.name}</div>
+                  <div className="text-slate-400 text-[13px] leading-tight">{img.summary}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function PresenterSession() {
   const { sessionId } = useParams();
@@ -60,6 +138,7 @@ export default function PresenterSession() {
     vitals: Record<string, unknown>;
     fallback: boolean;
     budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
+    scenarioId?: PatientScenarioId;
   } | null>(null);
   const [transcriptLog, setTranscriptLog] = useState<TranscriptLogTurn[]>([]);
   const [patientAudioUrl, setPatientAudioUrl] = useState<string | null>(null);
@@ -72,6 +151,10 @@ export default function PresenterSession() {
     useState<PatientScenarioId>("exertional_chest_pain");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [debriefResult, setDebriefResult] = useState<AnalysisResult | null>(null);
+  const snapshot = React.useMemo(
+    () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
+    [selectedScenario, simState?.scenarioId]
+  );
   const slideRef = useRef<HTMLDivElement>(null);
   const currentTurnIdRef = useRef<string | null>(null);
   const lastDoctorTurnIdRef = useRef<string | null>(null);
@@ -925,6 +1008,7 @@ export default function PresenterSession() {
                 </div>
               </div>
             </div>
+            <ScenarioSnapshotCard snapshot={snapshot} />
             <DebriefPanel
               result={debriefResult}
               isAnalyzing={isAnalyzing}
