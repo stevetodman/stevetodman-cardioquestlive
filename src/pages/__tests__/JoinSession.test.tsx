@@ -165,6 +165,15 @@ describe("JoinSession", () => {
   });
 
   test("creates participant doc with defaults and assigns least-loaded team", async () => {
+    const txSet = jest.fn();
+    mockRunTransaction.mockImplementationOnce(async (_db, fn) =>
+      fn({
+        get: async () => ({ exists: () => false, data: () => null }),
+        set: txSet,
+        update: jest.fn(),
+      })
+    );
+
     mockGetDocs.mockImplementation(async (arg: any) => {
       if (typeof arg === "object" && arg?.path?.includes("participants")) {
         return {
@@ -191,7 +200,7 @@ describe("JoinSession", () => {
 
     renderJoin();
     await waitFor(() =>
-      expect(mockSetDoc).toHaveBeenCalledWith(
+      expect(txSet).toHaveBeenCalledWith(
         expect.objectContaining({ path: expect.stringMatching(/participants\/user-123$/) }),
         expect.objectContaining({
           points: 0,
@@ -262,7 +271,7 @@ describe("JoinSession", () => {
       )
     );
 
-    // second submission should not trigger another transaction
+    // transactions: one for ensureParticipantDoc, one for scoring
     mockGetDoc.mockImplementation(async (ref: any) => {
       if (ref.path.includes("/participants/")) {
         return { exists: () => true, data: () => participantState };
@@ -274,7 +283,7 @@ describe("JoinSession", () => {
     });
 
     await user.click(screen.getByRole("button", { name: /A/ })); // incorrect, but second attempt
-    expect(mockRunTransaction).toHaveBeenCalledTimes(1);
+    expect(mockRunTransaction).toHaveBeenCalledTimes(2);
   });
 
   test("incorrect answer resets streak and increments incorrectCount", async () => {
