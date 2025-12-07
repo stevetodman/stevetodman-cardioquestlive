@@ -21,11 +21,10 @@ import { CostController } from "./sim/costController";
 import { persistSimState, logSimEvent, loadSimState } from "./persistence";
 import { validateMessage, validateSimStateMessage } from "./validators";
 import { getAuth } from "./firebaseAdmin";
-import { getOrderResultTemplate } from "./orderTemplates";
 import { respondForCharacter, chooseCharacter, isUnsafeUtterance } from "./speechHelpers";
 import { buildTelemetryWaveform, checkAlarms } from "./telemetry";
-import { assetExists } from "./assetUtils";
 import { Runtime } from "./typesRuntime";
+import { createOrderHandler } from "./orders";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
@@ -41,6 +40,19 @@ const lastAutoReplyAt: Map<string, number> = new Map();
 const lastAutoReplyByUser: Map<string, number> = new Map();
 const lastDoctorUtterance: Map<string, { text: string; ts: number }> = new Map();
 const lastTreatmentAt: Map<string, number> = new Map();
+const alarmSeenAt: Map<
+  string,
+  {
+    spo2Low?: number;
+    hrHigh?: number;
+    hrLow?: number;
+  }
+> = new Map();
+const handleOrder = createOrderHandler({
+  ensureRuntime,
+  sessionManager,
+  broadcastSimState,
+});
 // Default to secure WebSocket auth; only allow insecure for local dev/tunnels when explicitly set.
 const allowInsecureWs = process.env.ALLOW_INSECURE_VOICE_WS === "true";
 if (allowInsecureWs && process.env.NODE_ENV === "production") {
@@ -54,14 +66,6 @@ const scenarioTimers: Map<string, NodeJS.Timeout> = new Map();
 const notifiedOrders: Map<string, Set<string>> = new Map();
 const alertFlags: Map<string, { hypoxia?: boolean }> = new Map();
 const hydratedSessions: Set<string> = new Set();
-const alarmSeenAt: Map<
-  string,
-  {
-    spo2Low?: number;
-    hrHigh?: number;
-    hrLow?: number;
-  }
-> = new Map();
 
 type ClientContext = {
   joined: boolean;
