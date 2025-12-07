@@ -13,7 +13,15 @@ type PatientStateListener = (state: PatientState) => void;
 type TranscriptListener = (text: string) => void;
 type ParticipantStateListener = (info: { userId: string; speaking: boolean }) => void;
 type StatusListener = (status: VoiceConnectionStatus) => void;
-type SimStateListener = (state: { stageId: string; vitals: Record<string, unknown>; fallback: boolean }) => void;
+type SimStateListener = (state: {
+  stageId: string;
+  stageIds?: string[];
+  scenarioId?: PatientScenarioId;
+  vitals: Record<string, unknown>;
+  findings?: string[];
+  fallback: boolean;
+  budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
+}) => void;
 type AudioListener = (audioUrl: string) => void;
 type DoctorUtteranceListener = (text: string, userId: string) => void;
 type ScenarioListener = (scenarioId: PatientScenarioId) => void;
@@ -333,6 +341,7 @@ class VoiceGatewayClient {
             stageIds: msg.stageIds,
             scenarioId: msg.scenarioId,
             vitals: msg.vitals,
+            findings: msg.findings,
             fallback: msg.fallback,
             budget: msg.budget,
           })

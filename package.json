@@ -11,7 +11,8 @@
     "dev:ngrok-hint": "echo \"1) ngrok http 8081; 2) ngrok http 3000; 3) VITE_VOICE_GATEWAY_URL=wss://<gw-url>/ws/voice npm run dev -- --host 0.0.0.0 --port 3000\"",
     "dev:vp": "concurrently -k -n gateway,tunnel,web \"cd voice-gateway && npm start\" \"cloudflared tunnel --url http://localhost:8081\" \"npm run dev -- --host 0.0.0.0 --port 3000\"",
     "dev:vp:quick": "node scripts/dev-vp-quick.cjs",
-    "dev:vp:named": "node scripts/dev-vp-named.cjs"
+    "dev:vp:named": "node scripts/dev-vp-named.cjs",
+    "replay:sim": "cd voice-gateway && npm run events:replay --"
   },
   "dependencies": {
     "dompurify": "^3.1.6",

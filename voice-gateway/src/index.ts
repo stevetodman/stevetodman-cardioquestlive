@@ -157,27 +157,32 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
       break;
     }
     case "voice_command": {
-      log("Voice command", parsed.commandType, "by", parsed.userId, "session", ctx.sessionId);
-      const runtime = ensureRuntime(ctx.sessionId);
+      if (!ctx.sessionId) {
+        send(ws, { type: "error", message: "Not joined to a session" });
+        break;
+      }
+      const simId = ctx.sessionId;
+      log("Voice command", parsed.commandType, "by", parsed.userId, "session", simId);
+      const runtime = ensureRuntime(simId);
       switch (parsed.commandType) {
         case "force_reply": {
           const doctorUtterance =
             typeof parsed.payload?.doctorUtterance === "string"
               ? parsed.payload.doctorUtterance.trim()
               : undefined;
-          handleForceReply(ctx.sessionId, parsed.userId, doctorUtterance);
+          handleForceReply(simId, parsed.userId, doctorUtterance);
           break;
         }
         case "pause_ai":
         case "freeze": {
-          sessionManager.broadcastToSession(ctx.sessionId, {
+          sessionManager.broadcastToSession(simId, {
             type: "patient_state",
-            sessionId: ctx.sessionId,
+            sessionId: simId,
             state: "idle",
           });
           runtime.fallback = true;
-          sessionManager.setFallback(ctx.sessionId, true);
-          broadcastSimState(ctx.sessionId, {
+          sessionManager.setFallback(simId, true);
+          broadcastSimState(simId, {
             ...runtime.scenarioEngine.getState(),
             stageIds: runtime.scenarioEngine.getStageIds(),
             fallback: true,
@@ -187,25 +192,108 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
         }
         case "resume_ai":
         case "unfreeze": {
+          const budget = runtime.cost.getState?.();
+          if (budget?.usdEstimate !== undefined && budget.usdEstimate >= hardBudgetUsd) {
+            log("[budget] resume blocked; hard limit reached", simId);
+            logSimEvent(simId, {
+              type: "budget.resume_blocked",
+              payload: { usdEstimate: budget.usdEstimate },
+            }).catch(() => {});
+            broadcastSimState(simId, {
+              ...runtime.scenarioEngine.getState(),
+              stageIds: runtime.scenarioEngine.getStageIds(),
+              fallback: true,
+              budget,
+            });
+            break;
+          }
+
+          // Recreate realtime client if it was closed due to fallback.
+          if (!runtime.realtime && realtimeApiKey) {
+            runtime.realtime = new RealtimePatientClient({
+              simId,
+              model: realtimeModel,
+              apiKey: realtimeApiKey,
+              systemPrompt: buildSystemPrompt(runtime.scenarioEngine.getState().scenarioId as PatientScenarioId),
+              onAudioOut: (buf) => {
+                sessionManager.broadcastToPresenters(simId, {
+                  type: "patient_audio",
+                  sessionId: simId,
+                  audioBase64: buf.toString("base64"),
+                });
+              },
+              onTranscriptDelta: (text, isFinal) => {
+                sessionManager.broadcastToSession(simId, {
+                  type: "patient_transcript_delta",
+                  sessionId: simId,
+                  text,
+                });
+                eventLog.append({
+                  id: `${Date.now()}-${Math.random()}`,
+                  ts: Date.now(),
+                  simId,
+                  type: isFinal ? "scenario.state.diff" : "tool.intent.received",
+                  payload: { text, final: isFinal },
+                });
+              },
+              onToolIntent: (intent) => {
+                eventLog.append({
+                  id: `${Date.now()}-${Math.random()}`,
+                  ts: Date.now(),
+                  simId,
+                  type: "tool.intent.received",
+                  payload: intent as any,
+                });
+                handleToolIntent(simId, intent);
+              },
+              onUsage: (usage) => {
+                runtime.cost.addUsage({
+                  inputTokens: usage.inputTokens ?? 0,
+                  outputTokens: usage.outputTokens ?? 0,
+                });
+                broadcastSimState(simId, {
+                  ...runtime.scenarioEngine.getState(),
+                  stageIds: runtime.scenarioEngine.getStageIds(),
+                  budget: runtime.cost.getState(),
+                });
+              },
+              onDisconnect: () => {
+                runtime.fallback = true;
+                sessionManager.setFallback(simId, true);
+                runtime.scenarioEngine.setFallback(true);
+                broadcastSimState(simId, {
+                  ...runtime.scenarioEngine.getState(),
+                  stageIds: runtime.scenarioEngine.getStageIds(),
+                });
+                sessionManager.broadcastToPresenters(simId, {
+                  type: "patient_state",
+                  sessionId: simId,
+                  state: "error",
+                });
+              },
+            });
+            runtime.realtime.connect();
+          }
+
           runtime.fallback = false;
-          sessionManager.setFallback(ctx.sessionId, false);
-          sessionManager.broadcastToSession(ctx.sessionId, {
+          sessionManager.setFallback(simId, false);
+          sessionManager.broadcastToSession(simId, {
             type: "patient_state",
-            sessionId: ctx.sessionId,
+            sessionId: simId,
             state: "listening",
           });
-          broadcastSimState(ctx.sessionId, {
+          broadcastSimState(simId, {
             ...runtime.scenarioEngine.getState(),
             stageIds: runtime.scenarioEngine.getStageIds(),
             fallback: false,
-            budget: runtime.cost.getState?.() ?? undefined,
+            budget: budget ?? runtime.cost.getState?.() ?? undefined,
           });
           break;
         }
         case "end_turn": {
-          sessionManager.broadcastToSession(ctx.sessionId, {
+          sessionManager.broadcastToSession(simId, {
             type: "patient_state",
-            sessionId: ctx.sessionId,
+            sessionId: simId,
             state: "idle",
           });
           break;
@@ -214,7 +302,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
           const stageId = typeof parsed.payload?.stageId === "string" ? parsed.payload.stageId : undefined;
           if (stageId) {
             runtime.scenarioEngine.setStage(stageId);
-            broadcastSimState(ctx.sessionId, {
+            broadcastSimState(simId, {
               ...runtime.scenarioEngine.getState(),
               stageIds: runtime.scenarioEngine.getStageIds(),
               fallback: runtime.fallback,
@@ -540,6 +628,7 @@ function handleToolIntent(sessionId: string, intent: ToolIntent) {
   const stageDef = runtime.scenarioEngine.getStageDef(stageId);
   const decision = runtime.toolGate.validate(sessionId, stageDef, intent);
   if (!decision.allowed) {
+    log("[tool] rejected", intent.type, "reason", decision.reason);
     eventLog.append({
       id: `${Date.now()}-${Math.random()}`,
       ts: Date.now(),
@@ -547,8 +636,13 @@ function handleToolIntent(sessionId: string, intent: ToolIntent) {
       type: "tool.intent.rejected",
       payload: { intent, reason: decision.reason },
     });
+    logSimEvent(sessionId, {
+      type: "tool.intent.rejected",
+      payload: { intent, reason: decision.reason },
+    }).catch(() => {});
     return;
   }
+  log("[tool] approved", intent.type, "stage", stageId);
   const result = runtime.scenarioEngine.applyIntent(intent);
   eventLog.append({
     id: `${Date.now()}-${Math.random()}`,
@@ -557,6 +651,7 @@ function handleToolIntent(sessionId: string, intent: ToolIntent) {
     type: "tool.intent.approved",
     payload: intent as any,
   });
+  logSimEvent(sessionId, { type: "tool.intent.approved", payload: intent as any }).catch(() => {});
   result.events.forEach((evt) =>
     eventLog.append({
       id: `${Date.now()}-${Math.random()}`,
@@ -567,7 +662,21 @@ function handleToolIntent(sessionId: string, intent: ToolIntent) {
     })
   );
   logSimEvent(sessionId, { type: "tool.intent.applied", payload: intent as any }).catch(() => {});
-  broadcastSimState(sessionId, result.nextState);
+  const actionHint = (intent as any)?.action ? [(intent as any).action as string] : [];
+  const transitionResult = runtime.scenarioEngine.evaluateAutomaticTransitions(actionHint);
+  const nextState = transitionResult?.nextState ?? result.nextState;
+  if (transitionResult?.events) {
+    transitionResult.events.forEach((evt) =>
+      eventLog.append({
+        id: `${Date.now()}-${Math.random()}`,
+        ts: Date.now(),
+        simId: sessionId,
+        type: evt.type as any,
+        payload: evt.payload,
+      })
+    );
+  }
+  broadcastSimState(sessionId, nextState);
 }
 
 function handleBudgetSoftLimit(sessionId: string) {
@@ -583,6 +692,7 @@ function handleBudgetHardLimit(sessionId: string) {
     runtime.fallback = true;
     runtime.scenarioEngine.setFallback(true);
     runtime.realtime?.close();
+    runtime.realtime = undefined;
     sessionManager.setFallback(sessionId, true);
     broadcastSimState(sessionId, {
       ...runtime.scenarioEngine.getState(),
@@ -594,7 +704,15 @@ function handleBudgetHardLimit(sessionId: string) {
 
 function broadcastSimState(
   sessionId: string,
-  state: { stageId: string; vitals: any; fallback: boolean; budget?: any; stageIds?: string[]; scenarioId?: string }
+  state: {
+    stageId: string;
+    vitals: any;
+    fallback: boolean;
+    budget?: any;
+    stageIds?: string[];
+    scenarioId?: string;
+    findings?: string[];
+  }
 ) {
   sessionManager.broadcastToSession(sessionId, {
     type: "sim_state",
@@ -603,6 +721,7 @@ function broadcastSimState(
     scenarioId: (state.scenarioId ?? getScenarioForSession(sessionId)) as PatientScenarioId,
     stageIds: state.stageIds,
     vitals: state.vitals,
+    findings: state.findings,
     fallback: state.fallback,
     budget: state.budget,
   });

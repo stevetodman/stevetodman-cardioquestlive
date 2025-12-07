@@ -1,4 +1,4 @@
-import { ScenarioDef, ScenarioId, StageDef } from "./scenarioTypes";
+import { ScenarioDef, ScenarioId, StageDef, StageTransition } from "./scenarioTypes";
 import { SimState, ToolIntent, Vitals } from "./types";
 
 const syncopeScenario: ScenarioDef = {
@@ -50,14 +50,82 @@ const syncopeScenario: ScenarioDef = {
 const scenarioMap: Record<ScenarioId, ScenarioDef> = {
   syncope: syncopeScenario,
   exertional_chest_pain: {
-    ...syncopeScenario,
     id: "exertional_chest_pain",
+    version: "1.0.0",
     persona: "You are a teen with exertional chest pain and palpitations. Stay in character.",
+    initialStage: "stage_1_baseline",
+    stages: [
+      {
+        id: "stage_1_baseline",
+        vitals: { hr: 88, bp: "110/70", spo2: 99 },
+        allowedIntents: [
+          "intent_updateVitals",
+          "intent_revealFinding",
+          "intent_setEmotion",
+          "intent_advanceStage",
+        ],
+        transitions: [
+          { to: "stage_2_exertion", when: { any: [{ action: "time_elapsed", seconds: 120 }] } },
+        ],
+      },
+      {
+        id: "stage_2_exertion",
+        vitals: { hr: 125, bp: "104/64", spo2: 99 },
+        allowedIntents: [
+          "intent_updateVitals",
+          "intent_revealFinding",
+          "intent_setEmotion",
+          "intent_advanceStage",
+        ],
+        transitions: [
+          { to: "stage_3_recovery", when: { any: [{ action: "time_elapsed", seconds: 180 }] } },
+        ],
+      },
+      {
+        id: "stage_3_recovery",
+        vitals: { hr: 96, bp: "110/70", spo2: 99 },
+        allowedIntents: ["intent_updateVitals", "intent_setEmotion"],
+      },
+    ],
   },
   palpitations_svt: {
-    ...syncopeScenario,
     id: "palpitations_svt",
+    version: "1.0.0",
     persona: "You are a teen with recurrent palpitations. Stay in character.",
+    initialStage: "stage_1_baseline",
+    stages: [
+      {
+        id: "stage_1_baseline",
+        vitals: { hr: 90, bp: "112/70", spo2: 99 },
+        allowedIntents: [
+          "intent_updateVitals",
+          "intent_revealFinding",
+          "intent_setEmotion",
+          "intent_advanceStage",
+        ],
+        transitions: [
+          { to: "stage_2_episode", when: { any: [{ action: "time_elapsed", seconds: 90 }] } },
+        ],
+      },
+      {
+        id: "stage_2_episode",
+        vitals: { hr: 170, bp: "108/64", spo2: 98 },
+        allowedIntents: [
+          "intent_updateVitals",
+          "intent_revealFinding",
+          "intent_setEmotion",
+          "intent_advanceStage",
+        ],
+        transitions: [
+          { to: "stage_3_post_episode", when: { any: [{ action: "time_elapsed", seconds: 120 }] } },
+        ],
+      },
+      {
+        id: "stage_3_post_episode",
+        vitals: { hr: 102, bp: "112/70", spo2: 99 },
+        allowedIntents: ["intent_updateVitals", "intent_setEmotion"],
+      },
+    ],
   },
 };
 
@@ -81,6 +149,7 @@ export class ScenarioEngine {
       vitals: initialStage.vitals,
       fallback: false,
       findings: [],
+      stageEnteredAt: Date.now(),
     };
   }
 
@@ -99,6 +168,7 @@ export class ScenarioEngine {
       ...this.state,
       stageId: nextStage.id,
       vitals: nextStage.vitals ?? this.state.vitals,
+      stageEnteredAt: Date.now(),
     };
     return true;
   }
@@ -121,8 +191,9 @@ export class ScenarioEngine {
           ...this.state,
           stageId: nextStage.id,
           vitals: nextStage.vitals ?? this.state.vitals,
+          stageEnteredAt: Date.now(),
         };
-        diff = { stageId: nextStage.id, vitals: nextStage.vitals };
+        diff = { stageId: nextStage.id, vitals: nextStage.vitals, stageEnteredAt: this.state.stageEnteredAt };
         events.push({ type: "scenario.stage.changed", payload: { to: nextStage.id } });
       }
     } else if (intent.type === "intent_revealFinding") {
@@ -138,8 +209,61 @@ export class ScenarioEngine {
 
     // Other intents currently produce only audit events.
     events.push({ type: "tool.intent.applied", payload: intent as any });
+    if (Object.keys(diff).length > 0) {
+      events.push({ type: "scenario.state.diff", payload: diff as any });
+    }
 
     return { nextState: this.state, diff, events };
+  }
+
+  evaluateAutomaticTransitions(actions: string[] = [], nowMs = Date.now()): ApplyResult | null {
+    const stage = this.getCurrentStage();
+    if (!stage.transitions || stage.transitions.length === 0 || !this.state.stageEnteredAt) {
+      return null;
+    }
+    const elapsedSec = (nowMs - this.state.stageEnteredAt) / 1000;
+    const actionSet = new Set(actions);
+    for (const transition of stage.transitions) {
+      if (this.isTransitionSatisfied(transition.when, elapsedSec, actionSet)) {
+        const toStage = this.getStageDef(transition.to);
+        if (!toStage) continue;
+        this.state = {
+          ...this.state,
+          stageId: toStage.id,
+          vitals: toStage.vitals ?? this.state.vitals,
+          stageEnteredAt: nowMs,
+        };
+        return {
+          nextState: this.state,
+          diff: { stageId: toStage.id, vitals: toStage.vitals, stageEnteredAt: nowMs },
+          events: [
+            { type: "scenario.transition", payload: { to: toStage.id } },
+            { type: "scenario.state.diff", payload: { stageId: toStage.id, vitals: toStage.vitals } },
+          ],
+        };
+      }
+    }
+    return null;
+  }
+
+  private isTransitionSatisfied(when: StageTransition["when"], elapsedSec: number, actions: Set<string>): boolean {
+    const checkTrigger = (trigger: any): boolean => {
+      if (trigger.action === "time_elapsed" && typeof trigger.seconds === "number") {
+        return elapsedSec >= trigger.seconds;
+      }
+      if (typeof trigger.action === "string") {
+        return actions.has(trigger.action);
+      }
+      return false;
+    };
+
+    if ("any" in when && Array.isArray((when as any).any)) {
+      return (when as any).any.some((t: any) => checkTrigger(t));
+    }
+    if ("all" in when && Array.isArray((when as any).all)) {
+      return (when as any).all.every((t: any) => checkTrigger(t));
+    }
+    return checkTrigger(when as any);
   }
 
   private getCurrentStage(): StageDef {

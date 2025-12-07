@@ -10,12 +10,17 @@ type BudgetState = {
 
 const stateCache: Map<
   string,
-  { stageId?: string; fallback?: boolean; budgetKey?: string; vitalsKey?: string; lastWrite?: number }
+  {
+    stageId?: string;
+    fallback?: boolean;
+    budgetKey?: string;
+    vitalsKey?: string;
+    findingsKey?: string;
+    lastWrite?: number;
+  }
 > = new Map();
 
-function makeKey(obj: Record<string, unknown>): string {
-  return JSON.stringify(obj);
-}
+const makeKey = (obj: any): string => JSON.stringify(obj);
 
 export async function persistSimState(simId: string, state: SimState & { budget?: BudgetState }) {
   const db = getFirestore();
@@ -23,11 +28,13 @@ export async function persistSimState(simId: string, state: SimState & { budget?
   const cache = stateCache.get(simId) ?? {};
   const vitalsKey = makeKey(state.vitals || {});
   const budgetKey = makeKey(state.budget || {});
+  const findingsKey = makeKey(state.findings || []);
   const now = Date.now();
   const shouldSkip =
     cache.stageId === state.stageId &&
     cache.fallback === state.fallback &&
     cache.vitalsKey === vitalsKey &&
+    cache.findingsKey === findingsKey &&
     cache.budgetKey === budgetKey &&
     cache.lastWrite &&
     now - cache.lastWrite < 500;
@@ -38,6 +45,7 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     stageId: state.stageId,
     scenarioId: state.scenarioId,
     vitals: state.vitals,
+    findings: state.findings ?? [],
     fallback: state.fallback,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
@@ -45,7 +53,14 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     payload.budget = state.budget;
   }
   await docRef.set(payload, { merge: true });
-  stateCache.set(simId, { stageId: state.stageId, fallback: state.fallback, vitalsKey, budgetKey, lastWrite: now });
+  stateCache.set(simId, {
+    stageId: state.stageId,
+    fallback: state.fallback,
+    vitalsKey,
+    findingsKey,
+    budgetKey,
+    lastWrite: now,
+  });
 }
 
 export type SimEvent = {

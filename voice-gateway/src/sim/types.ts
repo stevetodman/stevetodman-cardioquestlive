@@ -64,6 +64,7 @@ export type SimState = {
   vitals: Vitals;
   findings?: string[];
   fallback: boolean;
+  stageEnteredAt?: number;
   budget?: {
     usdEstimate?: number;
     voiceSeconds?: number;

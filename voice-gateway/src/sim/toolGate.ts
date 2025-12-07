@@ -41,7 +41,14 @@ export class ToolGate {
         return { allowed: true };
       }
       case "intent_revealFinding":
+        if (!intent.findingId || typeof intent.findingId !== "string") {
+          return { allowed: false, reason: "invalid_finding" };
+        }
+        return { allowed: true };
       case "intent_setEmotion":
+        if (!intent.emotion || typeof intent.emotion !== "string") {
+          return { allowed: false, reason: "invalid_emotion" };
+        }
         return { allowed: true };
       default:
         return { allowed: false, reason: "unknown_intent" };
@@ -49,14 +56,21 @@ export class ToolGate {
   }
 
   private validateVitalsDelta(delta: Record<string, unknown>): boolean {
-    for (const key of Object.keys(delta)) {
+    const keys = Object.keys(delta);
+    for (const key of keys) {
       const value = (delta as any)[key];
+      if (value === undefined) return false;
       if (typeof value !== "number") continue;
       const limits = (VITAL_LIMITS as any)[key];
-      if (limits && (value < limits.min - 50 || value > limits.max + 50)) {
+      if (!limits) {
+        return false;
+      }
+      if (value < limits.min - 50 || value > limits.max + 50) {
         return false;
       }
     }
+    // disallow empty delta
+    if (keys.length === 0) return false;
     return true;
   }
 }

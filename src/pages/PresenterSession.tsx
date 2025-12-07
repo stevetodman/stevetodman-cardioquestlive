@@ -137,6 +137,7 @@ export default function PresenterSession() {
     stageId: string;
     vitals: Record<string, unknown>;
     fallback: boolean;
+    findings?: string[];
     budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
     scenarioId?: PatientScenarioId;
     stageIds?: string[];
@@ -261,6 +262,17 @@ export default function PresenterSession() {
     },
     [sessionId]
   );
+
+  const handleResumeVoice = useCallback(() => {
+    if (!sessionId) return;
+    sendVoiceCommand(sessionId, {
+      type: "voice_command",
+      sessionId,
+      userId: auth?.currentUser?.uid ?? "presenter-local",
+      commandType: "resume_ai",
+    });
+    setFreezeStatus("live");
+  }, [sessionId, auth?.currentUser?.uid]);
 
   const handleForceReply = useCallback(() => {
     if (!sessionId) return;
@@ -779,6 +791,9 @@ export default function PresenterSession() {
               <span className="px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-800">
                 Stage: {simState.stageId || "unknown"}
               </span>
+              <span className="px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-800 text-[11px] text-slate-300">
+                Findings revealed: {simState.findings?.length ?? 0}
+              </span>
               <span className="text-[11px] text-slate-400">
                 Vitals: {simState.vitals?.hr ? `HR ${simState.vitals.hr}` : "—"} {simState.vitals?.bp ? `BP ${simState.vitals.bp}` : ""}
               </span>
@@ -1015,7 +1030,7 @@ export default function PresenterSession() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => handleFreezeToggle("unfreeze")}
+                      onClick={handleResumeVoice}
                       className="px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-700 text-emerald-50 hover:bg-emerald-600"
                     >
                       Resume voice
