@@ -328,7 +328,14 @@ class VoiceGatewayClient {
       }
       case "sim_state": {
         this.simStateListeners.forEach((cb) =>
-          cb({ stageId: msg.stageId, vitals: msg.vitals, fallback: msg.fallback })
+          cb({
+            stageId: msg.stageId,
+            stageIds: msg.stageIds,
+            scenarioId: msg.scenarioId,
+            vitals: msg.vitals,
+            fallback: msg.fallback,
+            budget: msg.budget,
+          })
         );
         break;
       }

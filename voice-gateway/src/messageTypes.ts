@@ -112,12 +112,14 @@ export type ServerToClientMessage =
       sessionId: string;
       stageId: string;
       stageIds?: string[];
+      scenarioId?: PatientScenarioId;
       vitals: Record<string, unknown>;
       fallback: boolean;
       budget?: {
         usdEstimate?: number;
         voiceSeconds?: number;
         throttled?: boolean;
+        fallback?: boolean;
       };
     }
   | {

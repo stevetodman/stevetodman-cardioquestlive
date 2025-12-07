@@ -179,6 +179,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
           sessionManager.setFallback(ctx.sessionId, true);
           broadcastSimState(ctx.sessionId, {
             ...runtime.scenarioEngine.getState(),
+            stageIds: runtime.scenarioEngine.getStageIds(),
             fallback: true,
             budget: runtime.cost.getState?.() ?? undefined,
           });
@@ -195,6 +196,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
           });
           broadcastSimState(ctx.sessionId, {
             ...runtime.scenarioEngine.getState(),
+            stageIds: runtime.scenarioEngine.getStageIds(),
             fallback: false,
             budget: runtime.cost.getState?.() ?? undefined,
           });
@@ -214,6 +216,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
             runtime.scenarioEngine.setStage(stageId);
             broadcastSimState(ctx.sessionId, {
               ...runtime.scenarioEngine.getState(),
+              stageIds: runtime.scenarioEngine.getStageIds(),
               fallback: runtime.fallback,
               budget: runtime.cost.getState?.() ?? undefined,
             });
@@ -505,6 +508,7 @@ function ensureRuntime(sessionId: string): Runtime {
         });
         broadcastSimState(sessionId, {
           ...runtime.scenarioEngine.getState(),
+          stageIds: runtime.scenarioEngine.getStageIds(),
           budget: runtime.cost.getState(),
         });
       },
@@ -582,6 +586,7 @@ function handleBudgetHardLimit(sessionId: string) {
     sessionManager.setFallback(sessionId, true);
     broadcastSimState(sessionId, {
       ...runtime.scenarioEngine.getState(),
+      stageIds: runtime.scenarioEngine.getStageIds(),
       fallback: true,
     });
   }
@@ -589,12 +594,13 @@ function handleBudgetHardLimit(sessionId: string) {
 
 function broadcastSimState(
   sessionId: string,
-  state: { stageId: string; vitals: any; fallback: boolean; budget?: any; stageIds?: string[] }
+  state: { stageId: string; vitals: any; fallback: boolean; budget?: any; stageIds?: string[]; scenarioId?: string }
 ) {
   sessionManager.broadcastToSession(sessionId, {
     type: "sim_state",
     sessionId,
     stageId: state.stageId,
+    scenarioId: state.scenarioId ?? getScenarioForSession(sessionId),
     stageIds: state.stageIds,
     vitals: state.vitals,
     fallback: state.fallback,

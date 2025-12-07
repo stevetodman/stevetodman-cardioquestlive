@@ -36,6 +36,7 @@ export async function persistSimState(simId: string, state: SimState & { budget?
   const docRef = db.collection("sessions").doc(simId);
   const payload: Record<string, unknown> = {
     stageId: state.stageId,
+    scenarioId: state.scenarioId,
     vitals: state.vitals,
     fallback: state.fallback,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),

@@ -139,6 +139,7 @@ export default function PresenterSession() {
     fallback: boolean;
     budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
     scenarioId?: PatientScenarioId;
+    stageIds?: string[];
   } | null>(null);
   const [transcriptLog, setTranscriptLog] = useState<TranscriptLogTurn[]>([]);
   const [patientAudioUrl, setPatientAudioUrl] = useState<string | null>(null);
@@ -698,6 +699,7 @@ export default function PresenterSession() {
     totalQuestions > 0 ? Math.min(1, Math.max(0, questionsAnsweredCount / totalQuestions)) : 0;
   const avgResponsesPerQuestion =
     questionsAnsweredCount > 0 ? totalResponses / questionsAnsweredCount : 0;
+  const fallbackActive = Boolean(simState?.fallback || simState?.budget?.fallback);
   const overlayMode: "idle" | "resident-speaking" | "ai-speaking" | "disabled" | "disconnected" =
     !voice.enabled
       ? "disabled"
@@ -1001,6 +1003,27 @@ export default function PresenterSession() {
                 </div>
               </div>
             </div>
+            {fallbackActive && (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-amber-50">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">Voice paused to protect budget</div>
+                    <div className="text-xs text-amber-100/80">
+                      Continue in text mode or resume voice when ready.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleFreezeToggle("unfreeze")}
+                      className="px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-700 text-emerald-50 hover:bg-emerald-600"
+                    >
+                      Resume voice
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <ScenarioSnapshotCard snapshot={snapshot} />
             <DebriefPanel
               result={debriefResult}
