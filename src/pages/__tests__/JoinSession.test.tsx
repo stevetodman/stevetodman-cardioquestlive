@@ -208,8 +208,8 @@ describe("JoinSession", () => {
           correctCount: 0,
           incorrectCount: 0,
           teamId: "team_ductus",
-        })
-      )
+        }),
+      ])
     );
   });
 
