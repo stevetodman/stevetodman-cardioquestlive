@@ -29,7 +29,13 @@ const realtimeModel = process.env.OPENAI_REALTIME_MODEL || "gpt-4o-mini-realtime
 const realtimeApiKey = process.env.OPENAI_API_KEY || "";
 const softBudgetUsd = Number(process.env.SOFT_BUDGET_USD || 3.5);
 const hardBudgetUsd = Number(process.env.HARD_BUDGET_USD || 4.5);
-const allowInsecureWs = process.env.ALLOW_INSECURE_VOICE_WS !== "false";
+// Default to secure WebSocket auth; only allow insecure for local dev/tunnels when explicitly set.
+const allowInsecureWs = process.env.ALLOW_INSECURE_VOICE_WS === "true";
+if (allowInsecureWs && process.env.NODE_ENV === "production") {
+  log(
+    "[warn] ALLOW_INSECURE_VOICE_WS=true in production; require Firebase ID tokens or set ALLOW_INSECURE_VOICE_WS=false."
+  );
+}
 
 type Runtime = {
   realtime?: RealtimePatientClient;

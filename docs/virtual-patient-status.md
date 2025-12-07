@@ -37,6 +37,7 @@
    - `OPENAI_STT_MODEL` (default `whisper-1`)
    - `OPENAI_DEBRIEF_MODEL` (default `gpt-4.1-mini`)
    - `PORT` (default `8081`)
+   - `ALLOW_INSECURE_VOICE_WS` (default `false`; set `true` only for local dev/tunnels if you cannot pass Firebase ID tokens)
 
 2. **App**
    ```bash
@@ -77,3 +78,4 @@
 - Consider soft locks or presenter override flows for floor control; polish error surfaced to users.
 - For iPhone mic support in dev, run over HTTPS/WSS via quick or named Cloudflare tunnels; see `docs/virtual-patient-https-iphone.md` for quick/named tunnel recipes and the one-command scripts (`dev:vp:quick`, `dev:vp:named`).
 - Deterministic voice sim core: `sim_state` is now published and consumed in UI; see `docs/voice-sim-state-and-harnesses.md` for current harnesses and remaining wiring (Firestore persistence, Realtime smoke, budget guardrails).
+- Voice WS auth is secure by default; clients should join with Firebase ID tokens. Only use `ALLOW_INSECURE_VOICE_WS=true` for local/emulator or quick-tunnel dev.
