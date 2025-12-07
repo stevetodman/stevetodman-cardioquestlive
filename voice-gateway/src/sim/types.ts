@@ -35,6 +35,7 @@ export type EventType =
   | "tool.intent.approved"
   | "tool.intent.rejected"
   | "scenario.stage.changed"
+  | "scenario.finding.revealed"
   | "scenario.state.diff"
   | "fallback.enabled"
   | "fallback.disabled";
@@ -61,6 +62,7 @@ export type SimState = {
   scenarioId: string;
   stageId: string;
   vitals: Vitals;
+  findings?: string[];
   fallback: boolean;
   budget?: {
     usdEstimate?: number;

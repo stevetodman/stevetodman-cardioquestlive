@@ -114,6 +114,7 @@ export type ServerToClientMessage =
       stageIds?: string[];
       scenarioId?: PatientScenarioId;
       vitals: Record<string, unknown>;
+      findings?: string[];
       fallback: boolean;
       budget?: {
         usdEstimate?: number;

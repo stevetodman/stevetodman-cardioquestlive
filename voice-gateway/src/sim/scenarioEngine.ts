@@ -80,6 +80,7 @@ export class ScenarioEngine {
       stageId: initialStage.id,
       vitals: initialStage.vitals,
       fallback: false,
+      findings: [],
     };
   }
 
@@ -123,6 +124,15 @@ export class ScenarioEngine {
         };
         diff = { stageId: nextStage.id, vitals: nextStage.vitals };
         events.push({ type: "scenario.stage.changed", payload: { to: nextStage.id } });
+      }
+    } else if (intent.type === "intent_revealFinding") {
+      const findings = new Set(this.state.findings ?? []);
+      if (intent.findingId) {
+        findings.add(intent.findingId);
+        const nextFindings = Array.from(findings);
+        this.state = { ...this.state, findings: nextFindings };
+        diff = { findings: nextFindings };
+        events.push({ type: "scenario.finding.revealed", payload: { id: intent.findingId } });
       }
     }
 
