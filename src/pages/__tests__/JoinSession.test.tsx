@@ -165,11 +165,11 @@ describe("JoinSession", () => {
   });
 
   test("creates participant doc with defaults and assigns least-loaded team", async () => {
-    const txSet = jest.fn();
+    const created: any[] = [];
     mockRunTransaction.mockImplementationOnce(async (_db, fn) =>
       fn({
         get: async () => ({ exists: () => false, data: () => null }),
-        set: txSet,
+        set: (...args: any[]) => created.push(args),
         update: jest.fn(),
       })
     );
@@ -200,7 +200,7 @@ describe("JoinSession", () => {
 
     renderJoin();
     await waitFor(() =>
-      expect(txSet).toHaveBeenCalledWith(
+      expect(created[0]).toEqual([
         expect.objectContaining({ path: expect.stringMatching(/participants\/user-123$/) }),
         expect.objectContaining({
           points: 0,
