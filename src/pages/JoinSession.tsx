@@ -221,18 +221,24 @@ export default function JoinSession() {
             acc[t.id] = 0;
             return acc;
           }, {});
-          snap.forEach((docSnap: any) => {
+          const applyDoc = (docSnap: any) => {
             const data =
-              typeof docSnap.data === "function"
+              typeof docSnap?.data === "function"
                 ? docSnap.data()
-                : typeof docSnap.data === "object"
+                : typeof docSnap?.data === "object"
                 ? docSnap.data
                 : {};
             const teamId = data?.teamId;
             if (teamId && counts[teamId] !== undefined) {
               counts[teamId] += 1;
             }
-          });
+          };
+          if (typeof (snap as any)?.forEach === "function") {
+            (snap as any).forEach(applyDoc);
+          } else {
+            const docsArray = Array.isArray((snap as any)?.docs) ? (snap as any).docs : [];
+            docsArray.forEach(applyDoc);
+          }
           const chosenTeam =
             [...TEAM_OPTIONS].sort((a, b) => (counts[a.id] ?? 0) - (counts[b.id] ?? 0))[0] ?? TEAM_OPTIONS[0];
 
