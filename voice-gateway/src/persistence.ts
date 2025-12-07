@@ -21,6 +21,7 @@ const stateCache: Map<
     telemetryKey?: string;
     ekgKey?: string;
     treatmentKey?: string;
+    stageEnteredAt?: number;
     lastWrite?: number;
   }
 > = new Map();
@@ -39,6 +40,7 @@ export async function persistSimState(simId: string, state: SimState & { budget?
   const telemetryKey = makeKey(state.telemetryHistory || []);
   const ekgKey = makeKey(state.ekgHistory || []);
   const treatmentKey = makeKey(state.treatmentHistory || []);
+  const stageEnteredAt = state.stageEnteredAt;
   const now = Date.now();
   const shouldSkip =
     cache.stageId === state.stageId &&
@@ -51,6 +53,7 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     cache.telemetryKey === telemetryKey &&
     cache.ekgKey === ekgKey &&
     cache.treatmentKey === treatmentKey &&
+    cache.stageEnteredAt === stageEnteredAt &&
     cache.lastWrite &&
     now - cache.lastWrite < 500;
   if (shouldSkip) return;
@@ -62,6 +65,8 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     vitals: state.vitals,
     findings: state.findings ?? [],
     fallback: state.fallback,
+    stageEnteredAt,
+    telemetry: state.telemetry,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
   if (state.stageIds) {
@@ -97,6 +102,7 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     telemetryKey,
     ekgKey,
     treatmentKey,
+    stageEnteredAt,
     lastWrite: now,
   });
 }
@@ -126,6 +132,7 @@ export async function loadSimState(simId: string): Promise<Partial<SimState> | n
   const snap = await docRef.get();
   if (!snap.exists) return null;
   const data = snap.data() || {};
+  const updatedAtMs = data.updatedAt?.toMillis ? data.updatedAt.toMillis() : Date.now();
   return {
     stageId: data.stageId,
     scenarioId: data.scenarioId,
@@ -139,5 +146,8 @@ export async function loadSimState(simId: string): Promise<Partial<SimState> | n
     ekgHistory: data.ekgHistory,
     telemetryWaveform: data.telemetryWaveform,
     treatmentHistory: data.treatmentHistory,
+    stageEnteredAt: data.stageEnteredAt,
+    telemetry: data.telemetry,
+    updatedAtMs,
   } as Partial<SimState>;
 }

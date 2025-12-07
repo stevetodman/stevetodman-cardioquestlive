@@ -112,6 +112,7 @@ const simStateSchema = z
         lungs: z.string().optional(),
         perfusion: z.string().optional(),
         neuro: z.string().optional(),
+        audioUrl: z.string().optional(),
       })
       .optional(),
     telemetry: z.boolean().optional(),
@@ -119,6 +120,7 @@ const simStateSchema = z
     telemetryWaveform: z.array(z.number()).optional(),
     findings: z.array(z.string()).optional(),
     fallback: z.boolean(),
+    stageEnteredAt: z.number().optional(),
     budget: z
       .object({
         usdEstimate: z.number().optional(),

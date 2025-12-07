@@ -428,6 +428,31 @@ export class ScenarioEngine {
     this.lastTickMs = Date.now();
   }
 
+  hydrate(partial: Partial<SimState> & { updatedAtMs?: number }) {
+    const now = partial.updatedAtMs ?? Date.now();
+    const stageId = partial.stageId && this.getStageDef(partial.stageId) ? partial.stageId : this.state.stageId;
+    const stageDef = this.getStageDef(stageId) ?? this.getCurrentStage();
+    this.state = {
+      ...this.state,
+      scenarioId: partial.scenarioId ?? this.state.scenarioId,
+      stageId,
+      vitals: partial.vitals ?? stageDef.vitals ?? this.state.vitals,
+      exam: partial.exam ?? this.getExam(stageId, (partial.scenarioId as ScenarioId) ?? (this.state.scenarioId as ScenarioId)),
+      rhythmSummary:
+        partial.rhythmSummary ?? this.getRhythm(stageId, (partial.scenarioId as ScenarioId) ?? (this.state.scenarioId as ScenarioId)),
+      telemetry: partial.telemetry ?? this.state.telemetry,
+      telemetryHistory: partial.telemetryHistory ?? this.state.telemetryHistory,
+      ekgHistory: partial.ekgHistory ?? this.state.ekgHistory,
+      treatmentHistory: partial.treatmentHistory ?? this.state.treatmentHistory,
+      findings: partial.findings ?? this.state.findings,
+      orders: partial.orders ?? this.state.orders,
+      stageEnteredAt: partial.stageEnteredAt ?? this.state.stageEnteredAt ?? now,
+      fallback: partial.fallback ?? this.state.fallback,
+      budget: partial.budget ?? this.state.budget,
+    };
+    this.lastTickMs = now;
+  }
+
   getState(): SimState {
     return this.state;
   }
@@ -494,6 +519,7 @@ export class ScenarioEngine {
       if (nextVitals) {
         this.state = { ...this.state, vitals: nextVitals };
         diff = { vitals: nextVitals };
+        events.push({ type: "scenario.state.diff", payload: { vitals: nextVitals } });
       }
     } else if (intent.type === "intent_advanceStage") {
       const nextStage = this.scenario.stages.find((s) => s.id === intent.stageId);
@@ -667,6 +693,14 @@ export class ScenarioEngine {
       if (typeof value !== "number") continue;
       const prev = typeof next[key] === "number" ? (next[key] as number) : 0;
       next[key] = prev + value;
+    }
+    // Allow sbp/dbp per minute deltas for fluids/meds
+    if (typeof (delta as any).sbpPerMin === "number" || typeof (delta as any).dbpPerMin === "number") {
+      const bp = next.bp || current.bp;
+      const [sRaw, dRaw] = (bp ?? "0/0").split("/").map((n) => Number(n));
+      const sbp = sRaw + ((delta as any).sbpPerMin ?? 0) / 60;
+      const dbp = dRaw + ((delta as any).dbpPerMin ?? 0) / 60;
+      next.bp = `${Math.round(sbp)}/${Math.round(dbp)}`;
     }
     return next;
   }

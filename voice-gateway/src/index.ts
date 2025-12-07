@@ -22,6 +22,8 @@ import { persistSimState, logSimEvent, loadSimState } from "./persistence";
 import { validateMessage, validateSimStateMessage } from "./validators";
 import { getAuth } from "./firebaseAdmin";
 import { getOrderResultTemplate } from "./orderTemplates";
+import fs from "fs";
+import path from "path";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
@@ -878,17 +880,12 @@ async function hydrateSimState(sessionId: string, runtime: Runtime) {
   try {
     const persisted = await loadSimState(sessionId);
     if (!persisted) return;
-    if (persisted.ekgHistory) {
-      runtime.scenarioEngine.setEkgHistory(persisted.ekgHistory as any);
-    }
-    if (persisted.telemetryHistory) {
-      runtime.scenarioEngine.setTelemetryHistory(persisted.telemetryHistory as any);
-    }
+    runtime.scenarioEngine.hydrate(persisted as any);
     broadcastSimState(sessionId, {
       ...runtime.scenarioEngine.getState(),
       stageIds: runtime.scenarioEngine.getStageIds(),
-      ekgHistory: persisted.ekgHistory as any,
-      telemetryHistory: persisted.telemetryHistory as any,
+      ekgHistory: runtime.scenarioEngine.getState().ekgHistory,
+      telemetryHistory: runtime.scenarioEngine.getState().telemetryHistory,
       telemetryWaveform: persisted.telemetryWaveform as any,
     });
   } catch (err) {
@@ -1056,6 +1053,7 @@ function broadcastSimState(
     type: "sim_state",
     sessionId,
     stageId: validated.stageId,
+    stageIds: validated.stageIds,
     scenarioId: (validated.scenarioId ?? getScenarioForSession(sessionId)) as PatientScenarioId,
     stageIds: validated.stageIds,
     vitals: validated.vitals ?? {},
@@ -1070,6 +1068,7 @@ function broadcastSimState(
     ekgHistory: (state as any).ekgHistory,
     telemetryHistory: (state as any).telemetryHistory,
     treatmentHistory: (state as any).treatmentHistory,
+    stageEnteredAt: (state as any).stageEnteredAt,
   });
   persistSimState(sessionId, state as any).catch(() => {});
 }
@@ -1103,7 +1102,16 @@ function makeOrder(type: "vitals" | "ekg" | "labs" | "imaging"): { id: string; t
 }
 
 function resolveOrder(order: { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending" | "complete"; result?: OrderResult }, scenario: PatientScenarioId): OrderResult {
-  return getOrderResultTemplate(order.type, scenario);
+  const result = getOrderResultTemplate(order.type, scenario);
+  if ((order.type === "ekg" || order.type === "imaging") && (result as any).imageUrl) {
+    const exists = assetExists((result as any).imageUrl as string);
+    if (!exists) {
+      log(`[asset] missing ${order.type} asset ${((result as any).imageUrl as string)}`);
+      (result as any).imageUrl = undefined;
+      (result as any).summary = `${(result as any).summary ?? "Result ready"} (image unavailable)`;
+    }
+  }
+  return result;
 }
 
 function handleOrder(sessionId: string, orderType: "vitals" | "ekg" | "labs" | "imaging") {
@@ -1191,6 +1199,14 @@ function handleOrder(sessionId: string, orderType: "vitals" | "ekg" | "labs" | "
         state: "idle",
         character: "imaging",
       });
+      if ((result as any).imageUrl === undefined) {
+        sessionManager.broadcastToPresenters(sessionId, {
+          type: "patient_transcript_delta",
+          sessionId,
+          text: "Imaging: image asset not available; showing summary only.",
+          character: "imaging",
+        });
+      }
     }
     logSimEvent(sessionId, {
       type: `order.${orderType}.complete`,
@@ -1416,6 +1432,17 @@ function buildTelemetryWaveform(hr: number): number[] {
     waveform.push(base + spike + noise);
   }
   return waveform;
+}
+
+function assetExists(urlPath: string): boolean {
+  // urlPath expected like "/images/ekg/ekg-baseline.png"
+  const clean = urlPath.startsWith("/") ? urlPath.slice(1) : urlPath;
+  const abs = path.join(process.cwd(), "public", clean);
+  try {
+    return fs.existsSync(abs);
+  } catch {
+    return false;
+  }
 }
 
 function maybeAdvanceStageFromTreatment(runtime: Runtime, treatmentType?: string) {
