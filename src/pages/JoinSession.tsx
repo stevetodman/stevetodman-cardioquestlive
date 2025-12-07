@@ -222,7 +222,12 @@ export default function JoinSession() {
             return acc;
           }, {});
           snap.forEach((docSnap: any) => {
-            const data = docSnap.data?.() ?? docSnap.data?.;
+            const data =
+              typeof docSnap.data === "function"
+                ? docSnap.data()
+                : typeof docSnap.data === "object"
+                ? docSnap.data
+                : {};
             const teamId = data?.teamId;
             if (teamId && counts[teamId] !== undefined) {
               counts[teamId] += 1;
