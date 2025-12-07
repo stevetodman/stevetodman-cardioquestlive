@@ -52,10 +52,19 @@ export function PresenterVoiceControls({
   onCharacterChange,
 }: PresenterVoiceControlsProps) {
   const [localQuestion, setLocalQuestion] = useState(doctorQuestion);
+  const [quickStatus, setQuickStatus] = useState<string>("");
+  const [quickTimer, setQuickTimer] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setLocalQuestion(doctorQuestion);
   }, [doctorQuestion]);
+
+  const noteQuick = (msg: string) => {
+    setQuickStatus(msg);
+    if (quickTimer) clearTimeout(quickTimer);
+    const t = setTimeout(() => setQuickStatus(""), 1200);
+    setQuickTimer(t);
+  };
 
   const handleToggle = async () => {
     await setVoiceEnabled(sessionId, !voice.enabled);
@@ -209,61 +218,61 @@ export function PresenterVoiceControls({
         </button>
         <button
           type="button"
-          onClick={() =>
-            emitCommand(
-              sessionId,
-              "force_reply",
-              { doctorUtterance: "Please grab a fresh set of vitals." },
-              "nurse"
-            )
-          }
+          onClick={() => {
+            emitCommand(sessionId, "force_reply", { doctorUtterance: "Please grab a fresh set of vitals." }, "nurse");
+            noteQuick("Sent to nurse: vitals request");
+          }}
           className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
         >
           Ask nurse: vitals
         </button>
         <button
           type="button"
-          onClick={() =>
-            emitCommand(
-              sessionId,
-              "order",
-              { orderType: "ekg" },
-              "tech"
-            )
-          }
+          onClick={() => {
+            emitCommand(sessionId, "order", { orderType: "ekg" }, "tech");
+            noteQuick("Sent to tech: EKG");
+          }}
           className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-sky-600/60 bg-sky-600/10 text-sky-100 hover:border-sky-500"
         >
           Ask tech: EKG
         </button>
         <button
           type="button"
-          onClick={() =>
-            emitCommand(
-              sessionId,
-              "order",
-              { orderType: "labs" },
-              "nurse"
-            )
-          }
+          onClick={() => {
+            emitCommand(sessionId, "order", { orderType: "labs" }, "nurse");
+            noteQuick("Ordered labs (nurse)");
+          }}
           className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-indigo-600/60 bg-indigo-600/10 text-indigo-100 hover:border-indigo-500"
         >
           Order labs
         </button>
         <button
           type="button"
-          onClick={() =>
-            emitCommand(
-              sessionId,
-              "order",
-              { orderType: "imaging" },
-              "tech"
-            )
-          }
+          onClick={() => {
+            emitCommand(sessionId, "order", { orderType: "imaging" }, "tech");
+            noteQuick("Ordered imaging (tech)");
+          }}
           className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-purple-600/60 bg-purple-600/10 text-purple-100 hover:border-purple-500"
         >
           Order imaging
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            emitCommand(
+              sessionId,
+              "force_reply",
+              { doctorUtterance: "Please join at bedside for cardiology consult." },
+              "consultant"
+            );
+            noteQuick("Pinged consultant");
+          }}
+          className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-amber-600/60 bg-amber-600/10 text-amber-100 hover:border-amber-500"
+        >
+          Call consultant
+        </button>
       </div>
+      {quickStatus && <div className="text-[11px] text-slate-400">{quickStatus}</div>}
     </div>
   );
 }

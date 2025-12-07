@@ -161,6 +161,7 @@ const [timelineCopyStatus, setTimelineCopyStatus] = useState<"idle" | "copied" |
 const [timelineFilter, setTimelineFilter] = useState<string>("all");
 const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+const [timelineSearch, setTimelineSearch] = useState<string>("");
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -195,10 +196,11 @@ const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "savin
   }, [transcriptLog, simState?.orders]);
   const filteredTimeline = useMemo(
     () =>
-      timelineFilter === "all"
+      (timelineFilter === "all"
         ? timelineItems
-        : timelineItems.filter((item) => item.label.toLowerCase() === timelineFilter),
-    [timelineItems, timelineFilter]
+        : timelineItems.filter((item) => item.label.toLowerCase() === timelineFilter)
+      ).filter((item) => (timelineSearch ? `${item.label} ${item.detail}`.toLowerCase().includes(timelineSearch.toLowerCase()) : true)),
+    [timelineItems, timelineFilter, timelineSearch]
   );
   const timelineText = useMemo(() => {
     return timelineItems
@@ -1163,6 +1165,32 @@ const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "savin
           <div className="text-[10px] text-slate-400 font-mono bg-slate-900/80 border border-slate-700 rounded px-2 py-1">
             Join: {session.joinCode}
           </div>
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-200">
+            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
+              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Case</span>
+              <span className="px-2 py-0.5 rounded-full border border-slate-700 text-slate-100 text-xs">
+                {snapshot?.chiefComplaint ?? selectedScenario}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
+              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Voice</span>
+              <span
+                className={`px-2 py-0.5 rounded-full border text-xs ${
+                  freezeStatus === "frozen"
+                    ? "border-amber-500/60 text-amber-100"
+                    : "border-emerald-500/60 text-emerald-100"
+                }`}
+              >
+                {freezeStatus === "frozen" ? "Paused" : "Live"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
+              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Budget</span>
+              <span className="font-mono text-xs text-slate-200">
+                ${simState?.budget?.usdEstimate?.toFixed(2) ?? "0.00"} · {simState?.budget?.voiceSeconds ? `${Math.round(simState.budget.voiceSeconds)}s` : "0s"}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1297,7 +1325,9 @@ const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "savin
             <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-semibold text-slate-200">Orders & Status</div>
-                <div className="text-[10px] text-slate-500">Live sim state</div>
+                <div className="text-[10px] text-slate-500">
+                  {simState?.orders?.length ? `${simState.orders.length} orders` : "Live sim state"}
+                </div>
               </div>
               <div className="space-y-2">
                 {(simState?.orders ?? []).length === 0 && (
@@ -1347,6 +1377,12 @@ const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "savin
                       <option value="LABS">Labs</option>
                       <option value="IMAGING">Imaging</option>
                     </select>
+                    <input
+                      value={timelineSearch}
+                      onChange={(e) => setTimelineSearch(e.target.value)}
+                      placeholder="Search"
+                      className="bg-slate-900 border border-slate-700 text-[10px] text-slate-200 rounded px-2 py-1"
+                    />
                     <div className="text-[10px] text-slate-500">Last 20 events</div>
                     <button
                       type="button"
@@ -1416,7 +1452,7 @@ const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "savin
                 </div>
               </div>
               {(filteredTimeline.length === 0) ? (
-                <div className="text-xs text-slate-500">No events yet.</div>
+                <div className="text-xs text-slate-500">No events match.</div>
               ) : (
                 <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                   {filteredTimeline.map((item) => (
