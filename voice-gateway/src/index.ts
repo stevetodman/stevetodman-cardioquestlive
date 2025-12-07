@@ -26,11 +26,14 @@ import { getOrderResultTemplate } from "./orderTemplates";
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
 const eventLog = new InMemoryEventLog();
+const lastCommandAt: Map<string, number> = new Map();
 const realtimeModel = process.env.OPENAI_REALTIME_MODEL || "gpt-4o-mini-realtime-preview";
 const realtimeApiKey = process.env.OPENAI_API_KEY || "";
 const softBudgetUsd = Number(process.env.SOFT_BUDGET_USD || 3.5);
 const hardBudgetUsd = Number(process.env.HARD_BUDGET_USD || 4.5);
 const scenarioHeartbeatMs = Number(process.env.SCENARIO_HEARTBEAT_MS || 1000);
+const commandCooldownMs = Number(process.env.COMMAND_COOLDOWN_MS || 3000);
+const lastAutoReplyAt: Map<string, number> = new Map();
 // Default to secure WebSocket auth; only allow insecure for local dev/tunnels when explicitly set.
 const allowInsecureWs = process.env.ALLOW_INSECURE_VOICE_WS === "true";
 if (allowInsecureWs && process.env.NODE_ENV === "production") {
@@ -182,6 +185,14 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
       break;
     }
     case "voice_command": {
+      const key = `${simId}:${parsed.commandType}`;
+      const now = Date.now();
+      const last = lastCommandAt.get(key) || 0;
+      if (now - last < commandCooldownMs) {
+        send(ws, { type: "error", message: "Command cooldown, try again momentarily." });
+        return;
+      }
+      lastCommandAt.set(key, now);
       log("Voice command", parsed.commandType, "by", parsed.userId, "session", simId);
       const runtime = ensureRuntime(simId);
       const character = parsed.character as CharacterId | undefined;
@@ -699,7 +710,22 @@ async function handleDoctorAudioLegacy(
       text,
       character,
     });
+    maybeAutoForceReply(sessionId, text, character);
   }
+}
+
+function maybeAutoForceReply(sessionId: string, text: string, explicitCharacter?: CharacterId) {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  // Basic guardrails: require a minimal utterance and a short cooldown.
+  const words = trimmed.split(/\s+/).length;
+  if (words < 3 || trimmed.length < 12) return;
+  const now = Date.now();
+  const last = lastAutoReplyAt.get(sessionId) || 0;
+  if (now - last < commandCooldownMs) return;
+  lastAutoReplyAt.set(sessionId, now);
+  const routed = explicitCharacter ?? chooseCharacter(trimmed);
+  handleForceReply(sessionId, "auto", trimmed, routed);
 }
 
 function ensureRuntime(sessionId: string): Runtime {
@@ -908,6 +934,7 @@ function startScenarioHeartbeat(sessionId: string) {
     const telemetryWaveform = runtime.scenarioEngine.getState().telemetry
       ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
       : undefined;
+    checkAlarms(sessionId, runtime);
     if (result) {
       if (runtime.scenarioEngine.getState().telemetry) {
         const rhythm = runtime.scenarioEngine.getState().rhythmSummary;
@@ -1106,6 +1133,7 @@ function handleExamRequest(sessionId: string) {
     .filter(Boolean)
     .join(" | ");
   const text = summary || "Exam unchanged from prior check.";
+  const audioUrl = (exam as any).audioUrl as string | undefined;
   sessionManager.broadcastToSession(sessionId, {
     type: "patient_state",
     sessionId,
@@ -1125,6 +1153,20 @@ function handleExamRequest(sessionId: string) {
     character: "nurse",
   });
   logSimEvent(sessionId, { type: "exam.requested", payload: { maneuver: maneuver ?? "standard" } }).catch(() => {});
+  if (audioUrl) {
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_audio",
+      sessionId,
+      audioBase64: "",
+      character: "nurse",
+    });
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: `Heart sounds: ${audioUrl}`,
+      character: "nurse",
+    });
+  }
 }
 
 function handleTelemetryToggle(sessionId: string, enabled: boolean) {
@@ -1308,4 +1350,22 @@ function maybeAdvanceStageFromTreatment(runtime: Runtime, treatmentType?: string
   if (scenarioId === "cyanotic_spell" && stageId === "stage_2_spell" && (t.includes("oxygen") || t.includes("knee") || t.includes("position"))) {
     runtime.scenarioEngine.setStage("stage_3_recovery");
   }
+}
+
+function checkAlarms(sessionId: string, runtime: Runtime) {
+  const vitals = runtime.scenarioEngine.getState().vitals || {};
+  const spo2 = vitals.spo2 ?? 100;
+  const hr = vitals.hr ?? 80;
+  const alarms: string[] = [];
+  if (spo2 < 88) alarms.push(`SpO2 low: ${spo2}%`);
+  if (hr > 170) alarms.push(`HR high: ${hr} bpm`);
+  if (hr < 40) alarms.push(`HR low: ${hr} bpm`);
+  if (alarms.length === 0) return;
+  sessionManager.broadcastToPresenters(sessionId, {
+    type: "patient_transcript_delta",
+    sessionId,
+    text: `ALARM: ${alarms.join(" | ")}`,
+    character: "nurse",
+  });
+  logSimEvent(sessionId, { type: "alarm", payload: { alarms } }).catch(() => {});
 }
