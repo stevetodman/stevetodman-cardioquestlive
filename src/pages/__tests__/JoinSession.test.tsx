@@ -38,13 +38,7 @@ const mockGetDoc = jest.fn();
 const mockQuery = jest.fn();
 const mockWhere = jest.fn();
 const mockLimit = jest.fn();
-const mockRunTransaction = jest.fn((_db, fn) =>
-  fn({
-    get: async () => ({ exists: () => false, data: () => null }),
-    set: () => {},
-    update: () => {},
-  })
-);
+const mockRunTransaction = jest.fn();
 
 jest.mock("../../utils/firestore", () => ({
   __esModule: true,
@@ -102,6 +96,13 @@ describe("JoinSession", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRunTransaction.mockImplementation(async (_db, fn) =>
+      fn({
+        get: async () => ({ exists: () => false, data: () => null }),
+        set: jest.fn(),
+        update: jest.fn(),
+      })
+    );
     mockOnAuthStateChanged.mockImplementation((_auth: any, cb: any) => {
       cb({ uid: "user-123" });
       return jest.fn();
@@ -228,13 +229,22 @@ describe("JoinSession", () => {
     });
 
     const updateSpy = jest.fn();
-    mockRunTransaction.mockImplementationOnce(async (_db, fn) =>
-      fn({
-        get: async () => ({ exists: () => true, data: () => participantState }),
-        set: jest.fn(),
-        update: updateSpy,
-      })
-    );
+    // First call (ensureParticipantDoc) uses default mockRunTransaction.
+    mockRunTransaction
+      .mockImplementationOnce(async (_db, fn) =>
+        fn({
+          get: async () => ({ exists: () => false, data: () => null }),
+          set: jest.fn(),
+          update: jest.fn(),
+        })
+      )
+      .mockImplementationOnce(async (_db, fn) =>
+        fn({
+          get: async () => ({ exists: () => true, data: () => participantState }),
+          set: jest.fn(),
+          update: updateSpy,
+        })
+      );
 
     renderJoin();
     await waitFor(() => screen.getByText(/What is the defect/i));
@@ -292,13 +302,21 @@ describe("JoinSession", () => {
     });
 
     const updateSpy = jest.fn();
-    mockRunTransaction.mockImplementationOnce(async (_db, fn) =>
-      fn({
-        get: async () => ({ exists: () => true, data: () => participantState }),
-        set: jest.fn(),
-        update: updateSpy,
-      })
-    );
+    mockRunTransaction
+      .mockImplementationOnce(async (_db, fn) =>
+        fn({
+          get: async () => ({ exists: () => false, data: () => null }),
+          set: jest.fn(),
+          update: jest.fn(),
+        })
+      )
+      .mockImplementationOnce(async (_db, fn) =>
+        fn({
+          get: async () => ({ exists: () => true, data: () => participantState }),
+          set: jest.fn(),
+          update: updateSpy,
+        })
+      );
 
     renderJoin();
     await waitFor(() => screen.getByText(/What is the defect/i));
