@@ -293,6 +293,15 @@ const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "savin
     const colors = ROLE_COLORS[role as keyof typeof ROLE_COLORS] ?? ROLE_COLORS.patient;
     return `${colors.text} ${colors.border}`;
   }, []);
+
+  const timelineBadge = useCallback((label: string) => {
+    const lowered = label.toLowerCase();
+    const colors = ROLE_COLORS[lowered as keyof typeof ROLE_COLORS];
+    if (colors) {
+      return `${colors.border} ${colors.text} px-2 py-0.5 rounded border text-[10px] uppercase tracking-[0.14em]`;
+    }
+    return "px-2 py-0.5 rounded border border-slate-700 text-[10px] uppercase tracking-[0.14em] text-slate-200";
+  }, []);
   const slideRef = useRef<HTMLDivElement>(null);
   const currentTurnIdRef = useRef<string | null>(null);
   const currentTurnCharacterRef = useRef<string | undefined>("patient");
@@ -1415,9 +1424,7 @@ const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "savin
                       <span className="text-[10px] uppercase tracking-[0.12em] text-slate-500 w-20">
                         {new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                       </span>
-                      <span className="px-2 py-0.5 rounded border border-slate-700 text-[10px] uppercase tracking-[0.14em]">
-                        {item.label}
-                      </span>
+                      <span className={timelineBadge(item.label)}>{item.label}</span>
                       <span className="text-slate-200 leading-snug">{item.detail}</span>
                     </div>
                   ))}

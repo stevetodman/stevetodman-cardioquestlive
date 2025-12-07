@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef } from "react";
+import { ROLE_COLORS } from "../types/voiceGateway";
 
 export type TranscriptTurn = {
   id: string;
@@ -78,16 +79,8 @@ export function VoicePatientOverlay({
   }, [transcriptTurns]);
 
   const badgeClass = (character?: string) => {
-    switch (character) {
-      case "nurse":
-        return "text-emerald-300";
-      case "tech":
-        return "text-sky-300";
-      case "consultant":
-        return "text-indigo-300";
-      default:
-        return "text-slate-300";
-    }
+    const colors = ROLE_COLORS[(character as keyof typeof ROLE_COLORS) || "patient"] ?? ROLE_COLORS.patient;
+    return `${colors.text}`;
   };
 
   return (
