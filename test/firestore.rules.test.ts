@@ -105,6 +105,105 @@ describeIfEmulator("firestore.rules sessions", () => {
   });
 });
 
+describeIfEmulator("firestore.rules voice controls", () => {
+  const sessionId = "session-voice";
+
+  beforeEach(async () => {
+    if (!isEnvReady()) return;
+    await getEnv().withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `sessions/${sessionId}`), baseSession);
+    });
+  });
+
+  test("session owner can update voice state and create voice commands", async () => {
+    if (!isEnvReady()) return;
+    const ownerDb = getEnv().authenticatedContext(baseSession.createdBy).firestore();
+    const sessionRef = doc(ownerDb, `sessions/${sessionId}`);
+
+    await assertSucceeds(
+      updateDoc(sessionRef, {
+        voice: {
+          enabled: true,
+          floorHolderId: null,
+          floorHolderName: null,
+          since: null,
+          mode: "idle",
+        },
+      })
+    );
+
+    const cmdRef = doc(ownerDb, `sessions/${sessionId}/voiceCommands/cmd1`);
+    await assertSucceeds(
+      setDoc(cmdRef, {
+        type: "force_reply",
+        createdAt: new Date(),
+        createdBy: baseSession.createdBy,
+        payload: { doctorUtterance: "hello" },
+      })
+    );
+  });
+
+  test("session participant can update voice state", async () => {
+    if (!isEnvReady()) return;
+    const participantId = "participant-1";
+    await getEnv().withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `sessions/${sessionId}/participants/${participantId}`), {
+        userId: participantId,
+        sessionId,
+        teamId: "team_ductus",
+        teamName: "Team Ductus",
+        points: 0,
+        streak: 0,
+        correctCount: 0,
+        incorrectCount: 0,
+        createdAt: new Date(),
+      });
+    });
+
+    const participantDb = getEnv().authenticatedContext(participantId).firestore();
+    const sessionRef = doc(participantDb, `sessions/${sessionId}`);
+
+    await assertSucceeds(
+      updateDoc(sessionRef, {
+        voice: {
+          enabled: true,
+          floorHolderId: participantId,
+          floorHolderName: "Resident",
+          since: new Date(),
+          mode: "resident-speaking",
+        },
+      })
+    );
+  });
+
+  test("non-owner non-participant cannot update voice state or create voice commands", async () => {
+    if (!isEnvReady()) return;
+    const otherDb = getEnv().authenticatedContext("not-owner").firestore();
+    const sessionRef = doc(otherDb, `sessions/${sessionId}`);
+
+    await assertFails(
+      updateDoc(sessionRef, {
+        voice: {
+          enabled: true,
+          floorHolderId: null,
+          floorHolderName: null,
+          since: null,
+          mode: "idle",
+        },
+      })
+    );
+
+    const cmdRef = doc(otherDb, `sessions/${sessionId}/voiceCommands/cmd1`);
+    await assertFails(
+      setDoc(cmdRef, {
+        type: "force_reply",
+        createdAt: new Date(),
+        createdBy: "not-owner",
+      })
+    );
+  });
+});
+
 describeIfEmulator("firestore.rules responses", () => {
   const sessionId = "session-resp";
 

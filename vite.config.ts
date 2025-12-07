@@ -16,7 +16,29 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       host: "0.0.0.0",
+
+      // ⭐ Allow ALL ngrok domains so we never edit this again
+      // Allow all hosts to avoid blocking quick tunnel hostnames
+      allowedHosts: true,
+
+      cors: true,
+
+      // ⭐ Required for ngrok v3 — fixes ERR_NGROK_3200 and 403 responses
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "*",
+        "Cache-Control": "no-cache",
+      },
+
+      proxy: {
+        "/ws/voice": {
+          target: "http://localhost:8081",
+          ws: true,
+          changeOrigin: true,
+        },
+      },
     },
+
     build: {
       rollupOptions: {
         output: {
@@ -32,8 +54,10 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+
     plugins: [react()],
     define: defineEnv,
+
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

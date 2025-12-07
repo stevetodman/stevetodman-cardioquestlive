@@ -1,4 +1,5 @@
 import { Buffer } from "buffer";
+import OpenAI from "openai";
 import { getOpenAIClient } from "./openaiClient";
 import { log, logError } from "./logger";
 
@@ -19,15 +20,12 @@ export async function transcribeDoctorAudio(
   }
 
   try {
-    const file = {
-      data: audioBuffer,
-      name: `doctor-audio.${contentType.split("/")[1] || "webm"}`,
-      type: contentType,
-    };
+    const extension = contentType.split("/")[1] || "webm";
+    const file = await OpenAI.toFile(audioBuffer, `doctor-audio.${extension}`);
     const result = await client.audio.transcriptions.create({
       file,
       model: STT_MODEL,
-    } as any);
+    });
     const text: string | undefined = (result as any)?.text;
     if (!text) {
       log("STT returned empty text");

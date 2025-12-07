@@ -8,6 +8,7 @@ interface HoldToSpeakButtonProps {
   onPressEnd?: () => Promise<void> | void;
   labelIdle?: string;
   labelDisabled?: string;
+  helperText?: string;
   className?: string;
 }
 
@@ -20,6 +21,7 @@ export function HoldToSpeakButton({
   onPressEnd,
   labelIdle = "Hold to speak",
   labelDisabled = "Voice unavailable",
+  helperText,
   className = "",
 }: HoldToSpeakButtonProps) {
   const [state, setState] = useState<HoldState>(disabled ? "disabled" : "idle");
@@ -94,33 +96,40 @@ export function HoldToSpeakButton({
 
   const visualState =
     state === "recording"
-      ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 border-emerald-500"
+      ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 border-emerald-500 scale-[0.995]"
       : state === "requesting"
       ? "bg-sky-600 text-white border-sky-500"
       : disabled
       ? "bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed"
-      : "bg-slate-900 text-slate-200 border-slate-700 hover:border-slate-600";
+      : "bg-slate-900 text-slate-100 border-slate-700 hover:border-slate-600";
 
   return (
-    <button
-      type="button"
-      ref={buttonRef}
-      className={`w-full rounded-xl px-4 py-3 text-sm font-semibold border transition-all active:scale-[0.99] touch-none select-none ${visualState} ${className}`}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
-      onPointerLeave={handlePointerCancel}
-      disabled={disabled}
-    >
-      <div className="flex items-center justify-center gap-2">
-        {state === "recording" && (
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-pulse"></span>
-        )}
-        {state === "requesting" && (
-          <span className="w-2.5 h-2.5 rounded-full bg-sky-300 animate-pulse"></span>
-        )}
-        <span>{label}</span>
-      </div>
-    </button>
+    <div className={`flex flex-col items-center gap-2 ${className}`}>
+      <button
+        type="button"
+        ref={buttonRef}
+        className={`w-full rounded-2xl px-4 py-5 text-base font-semibold border transition-all active:scale-[0.99] touch-none select-none shadow-lg ${visualState}`}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onPointerLeave={handlePointerCancel}
+        disabled={disabled}
+      >
+        <div className="flex items-center justify-center gap-2">
+          {state === "recording" && (
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-200 animate-pulse"></span>
+          )}
+          {state === "requesting" && (
+            <span className="w-2.5 h-2.5 rounded-full bg-sky-200 animate-pulse"></span>
+          )}
+          <span>{label}</span>
+        </div>
+      </button>
+      {helperText && (
+        <div className="text-[12px] text-center text-slate-400 leading-tight px-1">
+          {helperText}
+        </div>
+      )}
+    </div>
   );
 }

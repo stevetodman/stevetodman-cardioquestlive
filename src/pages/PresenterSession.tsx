@@ -22,11 +22,11 @@ import { VoicePatientOverlay, TranscriptTurn } from "../components/VoicePatientO
 import { PresenterVoiceControls } from "../components/PresenterVoiceControls";
 import { voiceGatewayClient } from "../services/VoiceGatewayClient";
 import {
-  GatewayStatus,
   PatientState,
   PatientScenarioId,
   DebriefTurn,
   AnalysisResult,
+  VoiceConnectionStatus,
 } from "../types/voiceGateway";
 import { SessionTranscriptPanel, TranscriptLogTurn } from "../components/SessionTranscriptPanel";
 import { sendVoiceCommand } from "../services/voiceCommands";
@@ -49,7 +49,10 @@ export default function PresenterSession() {
   >([]);
   const [transcriptTurns, setTranscriptTurns] = useState<TranscriptTurn[]>([]);
   const [patientState, setPatientState] = useState<PatientState>("idle");
-  const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus>("disconnected");
+  const [gatewayStatus, setGatewayStatus] = useState<VoiceConnectionStatus>({
+    state: "disconnected",
+    lastChangedAt: Date.now(),
+  });
   const [transcriptLog, setTranscriptLog] = useState<TranscriptLogTurn[]>([]);
   const [patientAudioUrl, setPatientAudioUrl] = useState<string | null>(null);
   const [doctorQuestionText, setDoctorQuestionText] = useState<string>("");
@@ -545,7 +548,7 @@ export default function PresenterSession() {
   const overlayMode: "idle" | "resident-speaking" | "ai-speaking" | "disabled" | "disconnected" =
     !voice.enabled
       ? "disabled"
-      : gatewayStatus !== "connected"
+      : gatewayStatus.state !== "ready"
       ? "disconnected"
       : patientState === "speaking"
       ? "ai-speaking"
@@ -633,14 +636,14 @@ export default function PresenterSession() {
               )}
               <div
                 className={`text-[10px] uppercase tracking-[0.14em] px-2 py-1 rounded-full border ${
-                  gatewayStatus === "connected"
+                  gatewayStatus.state === "ready"
                     ? "border-emerald-500/60 text-emerald-200"
-                    : gatewayStatus === "connecting"
+                    : gatewayStatus.state === "connecting"
                     ? "border-sky-500/60 text-sky-200"
                     : "border-slate-700 text-slate-400"
                 }`}
               >
-                {gatewayStatus}
+                {gatewayStatus.state}
               </div>
               <button
                 type="button"

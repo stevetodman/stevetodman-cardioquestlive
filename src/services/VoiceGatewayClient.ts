@@ -3,25 +3,29 @@ import {
   ClientToServerMessage,
   ServerToClientMessage,
   PatientState,
-  GatewayStatus,
   PatientScenarioId,
   DebriefTurn,
   AnalysisResult,
+  VoiceConnectionStatus,
 } from "../types/voiceGateway";
 
 type PatientStateListener = (state: PatientState) => void;
 type TranscriptListener = (text: string) => void;
 type ParticipantStateListener = (info: { userId: string; speaking: boolean }) => void;
-type StatusListener = (status: GatewayStatus) => void;
+type StatusListener = (status: VoiceConnectionStatus) => void;
 type AudioListener = (audioUrl: string) => void;
 type DoctorUtteranceListener = (text: string, userId: string) => void;
 type ScenarioListener = (scenarioId: PatientScenarioId) => void;
 type AnalysisResultListener = (result: AnalysisResult) => void;
 
 const DEFAULT_URL =
+  // Highest priority: explicit override injected for testing
   (typeof globalThis !== "undefined" && (globalThis as any).__VITE_VOICE_GATEWAY_URL) ||
-  (typeof process !== "undefined" ? process.env.VITE_VOICE_GATEWAY_URL : undefined) ||
-  "ws://localhost:8081/ws/voice";
+  // Next: Node/env override if present (e.g., VITE_VOICE_GATEWAY_URL)
+  (typeof process !== "undefined" && (process as any)?.env?.VITE_VOICE_GATEWAY_URL) ||
+  // Fallback: Cloudflare tunnel URL (works for browser clients, including iPhone)
+  "wss://score-bent-trailer-think.trycloudflare.com/ws/voice";
+
 const WebSocketCtor: typeof WebSocket | undefined =
   typeof WebSocket !== "undefined"
     ? WebSocket
@@ -35,7 +39,7 @@ class VoiceGatewayClient {
   private userId: string | null = null;
   private displayName: string | null = null;
   private role: ClientRole | null = null;
-  private status: GatewayStatus = "disconnected";
+  private connectionStatus: VoiceConnectionStatus = { state: "disconnected", lastChangedAt: Date.now() };
   private patientListeners = new Set<PatientStateListener>();
   private transcriptListeners = new Set<TranscriptListener>();
   private participantListeners = new Set<ParticipantStateListener>();
@@ -46,9 +50,9 @@ class VoiceGatewayClient {
   private analysisListeners = new Set<AnalysisResultListener>();
   private lastAudioUrl: string | null = null;
 
-  private setStatus(next: GatewayStatus) {
-    this.status = next;
-    this.statusListeners.forEach((cb) => cb(next));
+  private setStatus(next: VoiceConnectionStatus) {
+    this.connectionStatus = { ...next, lastChangedAt: Date.now() };
+    this.statusListeners.forEach((cb) => cb(this.connectionStatus));
   }
 
   connect(sessionId: string, userId: string, displayName: string, role: ClientRole) {
@@ -71,9 +75,12 @@ class VoiceGatewayClient {
     this.role = role;
 
     const url = DEFAULT_URL;
+    if (typeof import.meta !== "undefined" && (import.meta as any).env?.DEV) {
+      console.debug("[voice] Connecting to voice gateway:", url);
+    }
     if (!WebSocketCtor) {
       console.warn("WebSocket not available in this environment");
-      this.setStatus("disconnected");
+      this.setStatus({ state: "error", reason: "unsupported" });
       return;
     }
     try {
@@ -81,14 +88,14 @@ class VoiceGatewayClient {
       console.debug("[voice-gateway] Creating socket", url);
     } catch (err) {
       console.error("Failed to create WebSocket", err);
-      this.setStatus("disconnected");
+      this.setStatus({ state: "error", reason: "socket_error" });
       return;
     }
 
-    this.setStatus("connecting");
+    this.setStatus({ state: "connecting" });
 
     this.ws.onopen = () => {
-      this.setStatus("connected");
+      this.setStatus({ state: "ready" });
       console.debug("[voice-gateway] socket open");
       this.send({
         type: "join",
@@ -105,11 +112,12 @@ class VoiceGatewayClient {
 
     this.ws.onerror = (err) => {
       console.error("Voice gateway socket error", err);
+      this.setStatus({ state: "error", reason: "socket_error" });
     };
 
     this.ws.onclose = (event) => {
       console.debug("[voice-gateway] socket close", { code: event.code, reason: event.reason });
-      this.setStatus("disconnected");
+      this.setStatus({ state: "disconnected", reason: "closed" });
       this.ws = null;
     };
   }
@@ -135,7 +143,7 @@ class VoiceGatewayClient {
     this.userId = null;
     this.displayName = null;
     this.role = null;
-    this.setStatus("disconnected");
+    this.setStatus({ state: "disconnected" });
   }
 
   private send(msg: ClientToServerMessage) {
@@ -218,7 +226,7 @@ class VoiceGatewayClient {
 
   onStatus(cb: StatusListener) {
     this.statusListeners.add(cb);
-    cb(this.status);
+    cb(this.connectionStatus);
     return () => this.statusListeners.delete(cb);
   }
 
@@ -284,6 +292,13 @@ class VoiceGatewayClient {
         break;
       }
       case "doctor_utterance": {
+        if (process.env.NODE_ENV !== "production") {
+          console.debug(
+            "[voice-gateway] doctor_utterance",
+            msg.userId,
+            msg.text?.slice?.(0, 120) ?? ""
+          );
+        }
         this.doctorListeners.forEach((cb) => cb(msg.text, msg.userId));
         break;
       }

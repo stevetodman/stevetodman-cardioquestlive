@@ -5,6 +5,7 @@ import PresenterSession from "./pages/PresenterSession";
 import JoinSession from "./pages/JoinSession";
 import AdminDeckEditor from "./pages/AdminDeckEditor";
 import { ensureSignedIn, isConfigured } from "./firebase";
+import { DevGatewayBadge } from "./components/DevGatewayBadge";
 
 function Home() {
     const [joinCode, setJoinCode] = useState("");
@@ -101,6 +102,7 @@ export default function App() {
 
   return (
     <HashRouter>
+      <DevGatewayBadge />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/create-demo" element={<CreateDemoSession />} />

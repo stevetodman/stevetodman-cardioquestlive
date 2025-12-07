@@ -75,3 +75,4 @@
 - More patient scenarios and richer personas; deck-driven scenario selection.
 - Participant-side audio playback fan-out (currently presenter-only).
 - Consider soft locks or presenter override flows for floor control; polish error surfaced to users.
+- For iPhone mic support in dev, run over HTTPS/WSS via quick or named Cloudflare tunnels; see `docs/virtual-patient-https-iphone.md` for quick/named tunnel recipes and the one-command scripts (`dev:vp:quick`, `dev:vp:named`).

@@ -11,6 +11,14 @@ export type DebriefTurn = {
   timestamp?: number;
 };
 
+export type VoiceConnectionState = "disconnected" | "connecting" | "ready" | "error";
+
+export type VoiceConnectionStatus = {
+  state: VoiceConnectionState;
+  reason?: "socket_error" | "closed" | "unsupported" | "unknown";
+  lastChangedAt?: number;
+};
+
 export type AnalysisResult = {
   summary: string;
   strengths: string[];

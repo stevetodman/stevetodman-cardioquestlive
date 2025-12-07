@@ -1,5 +1,8 @@
 type LevelSubscriber = (level: number) => void;
 type TurnCompleteSubscriber = (blob: Blob) => void;
+type PermissionSubscriber = (status: MicStatus) => void;
+
+export type MicStatus = "unknown" | "prompt" | "granted" | "blocked";
 
 const AudioContextCtor: typeof AudioContext | undefined =
   typeof window !== "undefined"
@@ -14,10 +17,12 @@ export class VoicePatientService {
   private rafId: number | null = null;
   private subscribers = new Set<LevelSubscriber>();
   private turnSubscribers = new Set<TurnCompleteSubscriber>();
+  private permissionSubscribers = new Set<PermissionSubscriber>();
   private capturing = false;
   private visibilityHandlerBound: (() => void) | null = null;
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: Blob[] = [];
+  private micStatus: MicStatus = "unknown";
 
   constructor() {
     if (typeof document !== "undefined") {
@@ -27,6 +32,10 @@ export class VoicePatientService {
   }
 
   async ensureMic(): Promise<void> {
+    await this.checkPermission();
+    if (this.micStatus === "blocked") {
+      throw new Error("Microphone blocked");
+    }
     if (this.stream && this.stream.active) return;
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error("Microphone not supported");
@@ -38,7 +47,16 @@ export class VoicePatientService {
         autoGainControl: true,
       },
     };
-    this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+      this.setMicStatus("granted");
+    } catch (err: any) {
+      const name = err?.name || err?.code;
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        this.setMicStatus("blocked");
+      }
+      throw err;
+    }
   }
 
   async startCapture(): Promise<void> {
@@ -140,6 +158,17 @@ export class VoicePatientService {
     return () => this.turnSubscribers.delete(callback);
   }
 
+  onPermissionChange(callback: PermissionSubscriber): () => void {
+    this.permissionSubscribers.add(callback);
+    callback(this.micStatus);
+    return () => this.permissionSubscribers.delete(callback);
+  }
+
+  async recheckPermission(): Promise<MicStatus> {
+    await this.checkPermission();
+    return this.micStatus;
+  }
+
   private emitLevel(level: number) {
     this.subscribers.forEach((cb) => {
       try {
@@ -148,6 +177,35 @@ export class VoicePatientService {
         console.error("Level subscriber error", err);
       }
     });
+  }
+
+  private setMicStatus(status: MicStatus) {
+    this.micStatus = status;
+    this.permissionSubscribers.forEach((cb) => {
+      try {
+        cb(status);
+      } catch (err) {
+        console.error("Permission subscriber error", err);
+      }
+    });
+  }
+
+  private async checkPermission() {
+    if (typeof navigator === "undefined" || !navigator.permissions?.query) {
+      return;
+    }
+    try {
+      const status = await navigator.permissions.query({ name: "microphone" as PermissionName });
+      if (status.state === "granted") this.setMicStatus("granted");
+      else if (status.state === "denied") this.setMicStatus("blocked");
+      else this.setMicStatus("prompt");
+      status.onchange = () => {
+        const next = status.state === "granted" ? "granted" : status.state === "denied" ? "blocked" : "prompt";
+        this.setMicStatus(next);
+      };
+    } catch (err) {
+      // Permissions API not supported or blocked; leave as-is
+    }
   }
 
   private emitTurnComplete(blob: Blob) {

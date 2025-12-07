@@ -16,6 +16,16 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.token.admin == true;
     }
 
+    function isSessionOwner(sessionId) {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/sessions/$(sessionId)).data.createdBy == request.auth.uid;
+    }
+
+    function isSessionParticipant(sessionId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid));
+    }
+
     match /sessions/{sessionId} {
       function hasValidVoice(voice) {
         return voice.enabled is bool &&
@@ -59,11 +69,13 @@ service cloud.firestore {
       allow update: if isAuthenticated()
         && (
           (
-            (resource.data.createdBy == request.auth.uid || isAdmin())
+            (isSessionOwner(sessionId) || isAdmin())
             && isValidSessionUpdate()
           ) ||
           (
-            isVoiceOnlyChange() && hasValidVoice(request.resource.data.voice)
+            (isSessionOwner(sessionId) || isAdmin() || isSessionParticipant(sessionId))
+            && isVoiceOnlyChange()
+            && hasValidVoice(request.resource.data.voice)
           )
         );
 
@@ -130,13 +142,9 @@ service cloud.firestore {
             data.createdBy is string;
         }
 
-        function sessionOwner() {
-          return get(/databases/$(database)/documents/sessions/$(sessionId)).data.createdBy;
-        }
-
         allow read: if isAuthenticated();
         allow create: if isAuthenticated() &&
-          (sessionOwner() == request.auth.uid || isAdmin()) &&
+          (isSessionOwner(sessionId) || isAdmin()) &&
           isValidVoiceCommand(request.resource.data);
         allow update, delete: if false;
       }

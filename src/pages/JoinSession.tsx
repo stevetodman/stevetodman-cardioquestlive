@@ -21,7 +21,9 @@ import { useVoiceState, takeFloorTx, releaseFloor } from "../hooks/useVoiceState
 import { HoldToSpeakButton } from "../components/HoldToSpeakButton";
 import { voicePatientService } from "../services/VoicePatientService";
 import { voiceGatewayClient } from "../services/VoiceGatewayClient";
-import { GatewayStatus } from "../types/voiceGateway";
+import { VoiceConnectionStatus } from "../types/voiceGateway";
+import { MicStatus } from "../services/VoicePatientService";
+import { ParticipantVoiceStatusBanner } from "../components/ParticipantVoiceStatusBanner";
 
 function getLocalUserId(): string {
   const key = "cq_live_user_id";
@@ -64,7 +66,12 @@ export default function JoinSession() {
   const [voiceActionPending, setVoiceActionPending] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [transcribing, setTranscribing] = useState(false);
-  const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus>("disconnected");
+  const [connectionStatus, setConnectionStatus] = useState<VoiceConnectionStatus>({
+    state: "disconnected",
+    lastChangedAt: Date.now(),
+  });
+  const [micStatus, setMicStatus] = useState<MicStatus>("unknown");
+  const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const voice = useVoiceState(sessionId);
   const userDisplayName = auth?.currentUser?.displayName ?? "Resident";
@@ -128,6 +135,12 @@ export default function JoinSession() {
   }, []);
 
   useEffect(() => {
+    const unsub = voicePatientService.onPermissionChange((status) => setMicStatus(status));
+    voicePatientService.recheckPermission().catch(() => {});
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
     const unsub = voicePatientService.onTurnComplete(async (blob) => {
       if (!sessionId || !userId) return;
       if (!blob || blob.size === 0) return;
@@ -144,7 +157,18 @@ export default function JoinSession() {
   }, [sessionId, userId]);
 
   useEffect(() => {
-    const unsub = voiceGatewayClient.onStatus((status) => setGatewayStatus(status));
+    const unsub = voiceGatewayClient.onStatus((status) => setConnectionStatus(status));
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = voiceGatewayClient.onParticipantState(({ userId: speakerId, speaking }) => {
+      setActiveSpeakerId((prev) => {
+        if (!speaking && prev === speakerId) return null;
+        if (speaking) return speakerId;
+        return prev;
+      });
+    });
     return () => unsub();
   }, []);
 
@@ -260,13 +284,25 @@ export default function JoinSession() {
   // Or if it's open but we are just showing results.
   const isQuestionActive = currentQuestion && session.currentQuestionId === currentQuestion.id;
 
-  const canSpeak = voice.enabled && voice.floorHolderId === userId && voice.mode !== "ai-speaking";
-  const canTakeFloor = voice.enabled && !voice.floorHolderId;
+  const connectionReady = connectionStatus.state === "ready";
+  const hasFloor = voice.enabled && voice.floorHolderId === userId;
+  const canSpeak =
+    voice.enabled &&
+    hasFloor &&
+    connectionReady &&
+    voice.mode !== "ai-speaking" &&
+    micStatus !== "blocked";
+  const canTakeFloor = voice.enabled && !voice.floorHolderId && connectionReady;
   const floorTakenByOther =
     voice.enabled && voice.floorHolderId !== null && voice.floorHolderId !== userId;
+  const otherSpeaking = (activeSpeakerId && activeSpeakerId !== userId) || floorTakenByOther;
 
   const handleTakeFloor = async () => {
     if (!sessionId || !userId) return;
+    if (!connectionReady) {
+      setVoiceError("Voice is not connected yet.");
+      return;
+    }
     setVoiceActionPending(true);
     setVoiceError(null);
     console.log("[voice] takeFloor tapped", { sessionId, userId });
@@ -297,14 +333,38 @@ export default function JoinSession() {
 
   const handlePressStart = async () => {
     if (!canSpeak) return;
-    await voicePatientService.ensureMic();
-    await voicePatientService.startCapture();
-    voiceGatewayClient.startSpeaking();
+    try {
+      setVoiceError(null);
+      await voicePatientService.startCapture();
+      voiceGatewayClient.startSpeaking();
+    } catch (err: any) {
+      console.error("Failed to start capture", err);
+      if (err?.message?.toLowerCase()?.includes("blocked")) {
+        setMicStatus("blocked");
+        setVoiceError("Microphone is blocked. Allow mic access and re-check.");
+      } else {
+        setVoiceError("Could not start microphone. Check permissions and try again.");
+      }
+    }
   };
 
   const handlePressEnd = async () => {
     voicePatientService.stopCapture();
     voiceGatewayClient.stopSpeaking();
+  };
+
+  const handleRetryVoice = () => {
+    if (!sessionId || !userId) return;
+    voiceGatewayClient.disconnect();
+    voiceGatewayClient.connect(sessionId, userId, userDisplayName, "participant");
+  };
+
+  const handleRecheckMic = async () => {
+    try {
+      await voicePatientService.recheckPermission();
+    } catch {
+      // ignore
+    }
   };
 
   const handleChoice = async (choiceIndex: number) => {
@@ -384,14 +444,14 @@ export default function JoinSession() {
         </div>
         <div
           className={`text-[10px] uppercase tracking-[0.16em] px-2 py-1 rounded-full border ${
-            gatewayStatus === "connected"
+            connectionStatus.state === "ready"
               ? "border-emerald-500/60 text-emerald-200"
-              : gatewayStatus === "connecting"
+              : connectionStatus.state === "connecting"
               ? "border-sky-500/60 text-sky-200"
               : "border-slate-700 text-slate-400"
           }`}
         >
-          Voice: {gatewayStatus}
+          Voice: {connectionStatus.state}
         </div>
       </header>
 
@@ -447,13 +507,42 @@ export default function JoinSession() {
               )}
             </div>
           </div>
+          <div className="mt-3">
+            <ParticipantVoiceStatusBanner
+              connection={connectionStatus}
+              micStatus={micStatus}
+              hasFloor={hasFloor}
+              otherSpeaking={otherSpeaking}
+              onRetryVoice={handleRetryVoice}
+              onRecheckMic={handleRecheckMic}
+            />
+          </div>
           <div className="mt-3 space-y-2">
             <HoldToSpeakButton
               disabled={!canSpeak}
               onPressStart={handlePressStart}
               onPressEnd={handlePressEnd}
-              labelIdle="Hold to speak"
-              labelDisabled={voice.enabled ? "You don't have the floor" : "Voice off"}
+              labelIdle="Hold to ask your question"
+              labelDisabled={
+                !voice.enabled
+                  ? "Voice off"
+                  : micStatus === "blocked"
+                  ? "Mic blocked"
+                  : !connectionReady
+                  ? "Voice not ready"
+                  : otherSpeaking
+                  ? "Another resident is speaking"
+                  : "You don't have the floor"
+              }
+              helperText={
+                canSpeak
+                  ? "Recording… release when you're done."
+                  : micStatus === "blocked"
+                  ? "Enable microphone in browser settings."
+                  : otherSpeaking
+                  ? "Wait for the other resident to finish."
+                  : "Take the floor to speak."
+              }
             />
             {voiceError && <div className="text-[11px] text-rose-300">{voiceError}</div>}
             <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">

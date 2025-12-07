@@ -276,9 +276,10 @@ async function handleDoctorAudio(
 ) {
   try {
     const audioBuffer = Buffer.from(audioBase64, "base64");
+    log("Doctor audio received", sessionId, "bytes:", audioBuffer.length);
     const text = await transcribeDoctorAudio(audioBuffer, contentType);
     if (text && text.trim().length > 0) {
-      log("Doctor utterance transcribed", sessionId);
+      log("STT transcript", sessionId, text.slice(0, 120));
       sessionManager.broadcastToPresenters(sessionId, {
         type: "doctor_utterance",
         sessionId,
