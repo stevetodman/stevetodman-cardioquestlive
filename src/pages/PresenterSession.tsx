@@ -7,7 +7,7 @@
  */
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import { doc, onSnapshot, updateDoc, db, collection, query, where } from "../utils/firestore"; // Updated import
+import { doc, onSnapshot, updateDoc, db, collection, query, where, addDoc } from "../utils/firestore"; // Updated import
 import { SessionData } from "../types";
 import { ResponsesChart } from "../components/ResponsesChart";
 import { useTeamScores } from "../hooks/useTeamScores";
@@ -158,6 +158,7 @@ const [isAnalyzing, setIsAnalyzing] = useState(false);
 const [debriefResult, setDebriefResult] = useState<AnalysisResult | null>(null);
 const [timelineCopyStatus, setTimelineCopyStatus] = useState<"idle" | "copied" | "error">("idle");
 const [timelineFilter, setTimelineFilter] = useState<string>("all");
+const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -228,6 +229,24 @@ const [timelineFilter, setTimelineFilter] = useState<string>("all");
     }
     return parts.join("\n\n");
   }, [debriefResult, sessionId, timelineItems.length, timelineText]);
+
+  const saveTimelineToSession = useCallback(async () => {
+    if (!sessionId || !timelineText || timelineItems.length === 0) return;
+    setTimelineSaveStatus("saving");
+    try {
+      const tlCollection = collection(db, "sessions", sessionId, "timeline");
+      await addDoc(tlCollection, {
+        createdBy: auth.currentUser?.uid ?? "unknown",
+        createdAt: new Date().toISOString(),
+        text: timelineText,
+      });
+      setTimelineSaveStatus("saved");
+      setTimeout(() => setTimelineSaveStatus("idle"), 1500);
+    } catch {
+      setTimelineSaveStatus("error");
+      setTimeout(() => setTimelineSaveStatus("idle"), 1500);
+    }
+  }, [sessionId, timelineItems.length, timelineText]);
   const groupedTranscript = useMemo(() => {
     const order = ["patient", "nurse", "tech", "consultant", "doctor"];
     const buckets = new Map<string, TranscriptLogTurn[]>();
@@ -1194,8 +1213,22 @@ const [timelineFilter, setTimelineFilter] = useState<string>("all");
                   >
                     Download
                   </button>
+                  <button
+                    type="button"
+                    disabled={!sessionId || timelineItems.length === 0 || timelineSaveStatus === "saving"}
+                    onClick={saveTimelineToSession}
+                    className={`px-2 py-1 rounded border text-[10px] ${
+                      !sessionId || timelineItems.length === 0
+                        ? "border-slate-800 bg-slate-900 text-slate-600 cursor-not-allowed"
+                        : "border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
+                    }`}
+                  >
+                    {timelineSaveStatus === "saving" ? "Saving…" : "Save to session"}
+                  </button>
                   {timelineCopyStatus === "copied" && <span className="text-[10px] text-emerald-300">Copied</span>}
                   {timelineCopyStatus === "error" && <span className="text-[10px] text-rose-300">Copy failed</span>}
+                  {timelineSaveStatus === "saved" && <span className="text-[10px] text-emerald-300">Saved</span>}
+                  {timelineSaveStatus === "error" && <span className="text-[10px] text-rose-300">Save failed</span>}
                 </div>
               </div>
               {(filteredTimeline.length === 0) ? (

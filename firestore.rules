@@ -148,6 +148,20 @@ service cloud.firestore {
           isValidVoiceCommand(request.resource.data);
         allow update, delete: if false;
       }
+
+      match /timeline/{timelineId} {
+        function isValidTimeline(data) {
+          return data.createdBy is string &&
+            (data.createdAt is timestamp || data.createdAt is string) &&
+            data.text is string;
+        }
+
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() &&
+          (isSessionOwner(sessionId) || isAdmin()) &&
+          isValidTimeline(request.resource.data);
+        allow update, delete: if false;
+      }
     }
 
     match /configs/{document=**} {

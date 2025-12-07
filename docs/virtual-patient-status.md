@@ -17,7 +17,7 @@
   Scenario change resets patient engine/persona and clears local transcript/debrief.
 - **Patient responses**: Streaming text deltas; optional TTS playback on presenter side via `patient_audio`.
 - **Interaction safety**: Keyboard navigation (space/arrows) disabled during patient interaction and while typing to prevent slide jumps.
-- **Transcript tools**: Doctor/patient turn log grouped by role, copy-to-clipboard, download .txt; overlay shows streaming text by role.
+- **Transcript tools**: Doctor/patient turn log grouped by role, copy-to-clipboard, download .txt, and save timeline snapshot to the session (owner only); overlay shows streaming text by role.
 - **Orders + multi-character**: Voice commands can target nurse/tech/consultant; orders (vitals/ekg/labs/imaging) tracked in sim_state and rendered as cards with status/results; order completions appear in transcript timeline.
 - **AI debrief**: “Generate debrief” button sends transcript to gateway for OpenAI analysis → summary, strengths, opportunities, teaching points; debrief can be copied/downloaded as Markdown (includes last 20 timeline events).
 
