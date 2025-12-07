@@ -74,6 +74,7 @@ export type SimState = {
   telemetryWaveform?: number[];
   telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
   ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
+  treatmentHistory?: { ts: number; treatmentType: string; note?: string }[];
   findings?: string[];
   fallback: boolean;
   stageEnteredAt?: number;

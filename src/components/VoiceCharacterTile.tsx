@@ -12,6 +12,7 @@ const AVATAR_MAP: Record<CharacterId, string> = {
   parent: "/avatars/parent.png",
   nurse: "/avatars/nurse.png",
   tech: "/avatars/tech.png",
+  imaging: "/avatars/imaging.png",
   consultant: "/avatars/consultant.png",
 };
 
@@ -51,4 +52,3 @@ export function VoiceCharacterTile({ character, state, displayName }: Props) {
     </div>
   );
 }
-

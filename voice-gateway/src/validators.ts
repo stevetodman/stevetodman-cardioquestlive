@@ -175,6 +175,15 @@ const simStateSchema = z
         })
       )
       .optional(),
+    treatmentHistory: z
+      .array(
+        z.object({
+          ts: z.number(),
+          treatmentType: z.string(),
+          note: z.string().optional(),
+        })
+      )
+      .optional(),
   })
   .passthrough();
 

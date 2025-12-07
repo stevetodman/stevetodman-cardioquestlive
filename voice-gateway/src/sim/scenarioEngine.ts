@@ -466,6 +466,10 @@ export class ScenarioEngine {
     this.state = { ...this.state, telemetryHistory: history };
   }
 
+  setTreatmentHistory(history: { ts: number; treatmentType: string; note?: string }[]) {
+    this.state = { ...this.state, treatmentHistory: history };
+  }
+
   setStage(stageId: string): boolean {
     const nextStage = this.getStageDef(stageId);
     if (!nextStage) return false;

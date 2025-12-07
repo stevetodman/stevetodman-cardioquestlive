@@ -9,7 +9,7 @@ export type PatientScenarioId =
   | "ductal_shock"
   | "cyanotic_spell";
 
-export type CharacterId = "patient" | "parent" | "nurse" | "tech" | "consultant";
+export type CharacterId = "patient" | "parent" | "nurse" | "tech" | "consultant" | "imaging";
 
 export const ROLE_COLORS: Record<
   CharacterId | "doctor" | "patient",
@@ -19,6 +19,7 @@ export const ROLE_COLORS: Record<
   parent: { text: "text-rose-200", border: "border-rose-500/50", bg: "bg-rose-900/40" },
   nurse: { text: "text-emerald-200", border: "border-emerald-500/50", bg: "bg-emerald-900/40" },
   tech: { text: "text-sky-200", border: "border-sky-500/50", bg: "bg-sky-900/40" },
+  imaging: { text: "text-teal-200", border: "border-teal-500/50", bg: "bg-teal-900/40" },
   consultant: { text: "text-indigo-200", border: "border-indigo-500/50", bg: "bg-indigo-900/40" },
   doctor: { text: "text-amber-200", border: "border-amber-500/60", bg: "bg-amber-900/30" },
 };

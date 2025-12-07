@@ -21,6 +21,7 @@ import { auth } from "../firebase";
 import { VoicePatientOverlay, TranscriptTurn } from "../components/VoicePatientOverlay";
 import { PresenterVoiceControls } from "../components/PresenterVoiceControls";
 import { VoiceCharacterTile } from "../components/VoiceCharacterTile";
+import { VitalsMonitor } from "../components/VitalsMonitor";
 import { voiceGatewayClient } from "../services/VoiceGatewayClient";
 import {
   PatientState,
@@ -222,6 +223,14 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
               : o.result?.summary ?? "Result ready",
         });
       });
+    (simState?.treatmentHistory ?? []).forEach((th, idx) => {
+      items.push({
+        id: `treatment-${idx}-${th.ts ?? Date.now()}`,
+        ts: th.ts ?? Date.now(),
+        label: "Treatment",
+        detail: `${th.treatmentType}${th.note ? `: ${th.note}` : ""}`,
+      });
+    });
     if (simState?.exam) {
       items.push({
         id: `exam-${simState.stageId}-${Date.now()}`,
@@ -260,14 +269,26 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
       .join("\n");
   }, [timelineItems]);
   const transcriptText = useMemo(() => {
-    return transcriptLog
-      .map((t) => {
-        const ts = new Date(t.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-        const speaker = t.character ?? t.role ?? "unknown";
-        return `${ts} ${speaker}: ${t.text}`;
-      })
-      .join("\n");
-  }, [transcriptLog]);
+    const parts: string[] = [];
+    transcriptLog.forEach((t) => {
+      const ts = new Date(t.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const speaker = t.character ?? t.role ?? "unknown";
+      parts.push(`${ts} ${speaker}: ${t.text}`);
+    });
+    (simState?.treatmentHistory ?? []).forEach((th) => {
+      const ts = th.ts ? new Date(th.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+      parts.push(`${ts} Treatment: ${th.treatmentType}${th.note ? ` (${th.note})` : ""}`);
+    });
+    (simState?.telemetryHistory ?? []).forEach((h) => {
+      const ts = h.ts ? new Date(h.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+      parts.push(`${ts} Telemetry: ${h.rhythm ?? "update"}${h.note ? ` (${h.note})` : ""}`);
+    });
+    (simState?.ekgHistory ?? []).forEach((e) => {
+      const ts = e.ts ? new Date(e.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+      parts.push(`${ts} EKG: ${e.summary ?? "strip"}`);
+    });
+    return parts.join("\n");
+  }, [transcriptLog, simState?.treatmentHistory, simState?.telemetryHistory, simState?.ekgHistory]);
   const debriefReportText = useMemo(() => {
     if (!debriefResult) return "";
     const parts: string[] = [];
@@ -1132,6 +1153,11 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
                   )}
                 </div>
               )}
+              <VitalsMonitor
+                vitals={simState.vitals as any}
+                telemetryWaveform={simState.telemetryWaveform as any}
+                telemetryOn={simState.telemetry}
+              />
               {simState.orders && simState.orders.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 w-full">
                   {simState.orders.slice(-6).map((order) => {

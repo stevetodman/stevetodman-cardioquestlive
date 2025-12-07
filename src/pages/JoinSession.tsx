@@ -573,6 +573,7 @@ export default function JoinSession() {
               <option value="patient">Patient</option>
               <option value="nurse">Nurse</option>
               <option value="tech">Tech</option>
+              <option value="imaging">Imaging</option>
               <option value="consultant">Consultant</option>
             </select>
             <span className="text-[11px] text-slate-500">

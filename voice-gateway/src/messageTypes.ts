@@ -1,6 +1,6 @@
 export type ClientRole = "presenter" | "participant";
 
-export type CharacterId = "patient" | "parent" | "nurse" | "tech" | "consultant";
+export type CharacterId = "patient" | "parent" | "nurse" | "tech" | "consultant" | "imaging";
 
 export type OrderType = "vitals" | "ekg" | "labs" | "imaging";
 
@@ -165,6 +165,7 @@ export type ServerToClientMessage =
       orders?: { id: string; type: OrderType; status: "pending" | "complete"; result?: OrderResult; completedAt?: number }[];
       ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
       telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
+      treatmentHistory?: { ts: number; treatmentType: string; note?: string }[];
     }
   | {
       type: "pong";

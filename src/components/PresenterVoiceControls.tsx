@@ -130,6 +130,7 @@ export function PresenterVoiceControls({
           <option value="parent">Parent</option>
           <option value="nurse">Nurse</option>
           <option value="tech">Tech</option>
+          <option value="imaging">Imaging</option>
           <option value="consultant">Consultant</option>
         </select>
         <span className="text-[10px] text-slate-500">Force reply and commands target this role.</span>

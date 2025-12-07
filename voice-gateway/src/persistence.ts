@@ -20,6 +20,7 @@ const stateCache: Map<
     ordersKey?: string;
     telemetryKey?: string;
     ekgKey?: string;
+    treatmentKey?: string;
     lastWrite?: number;
   }
 > = new Map();
@@ -37,6 +38,7 @@ export async function persistSimState(simId: string, state: SimState & { budget?
   const stageIdsKey = makeKey(state.stageIds || []);
   const telemetryKey = makeKey(state.telemetryHistory || []);
   const ekgKey = makeKey(state.ekgHistory || []);
+  const treatmentKey = makeKey(state.treatmentHistory || []);
   const now = Date.now();
   const shouldSkip =
     cache.stageId === state.stageId &&
@@ -48,6 +50,7 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     cache.stageIdsKey === stageIdsKey &&
     cache.telemetryKey === telemetryKey &&
     cache.ekgKey === ekgKey &&
+    cache.treatmentKey === treatmentKey &&
     cache.lastWrite &&
     now - cache.lastWrite < 500;
   if (shouldSkip) return;
@@ -79,6 +82,9 @@ export async function persistSimState(simId: string, state: SimState & { budget?
   if (state.telemetryWaveform) {
     payload.telemetryWaveform = state.telemetryWaveform;
   }
+  if (state.treatmentHistory) {
+    payload.treatmentHistory = state.treatmentHistory;
+  }
   await docRef.set(payload, { merge: true });
   stateCache.set(simId, {
     stageId: state.stageId,
@@ -90,6 +96,7 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     stageIdsKey,
     telemetryKey,
     ekgKey,
+    treatmentKey,
     lastWrite: now,
   });
 }
@@ -131,5 +138,6 @@ export async function loadSimState(simId: string): Promise<Partial<SimState> | n
     telemetryHistory: data.telemetryHistory,
     ekgHistory: data.ekgHistory,
     telemetryWaveform: data.telemetryWaveform,
+    treatmentHistory: data.treatmentHistory,
   } as Partial<SimState>;
 }

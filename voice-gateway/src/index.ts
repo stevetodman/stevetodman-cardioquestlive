@@ -64,6 +64,7 @@ const CHARACTER_VOICE_MAP: Partial<Record<CharacterId, string>> = {
   nurse: process.env.OPENAI_TTS_VOICE_NURSE,
   tech: process.env.OPENAI_TTS_VOICE_TECH,
   consultant: process.env.OPENAI_TTS_VOICE_CONSULTANT,
+  imaging: process.env.OPENAI_TTS_VOICE_TECH,
 };
 
 function send(ws: WebSocket, msg: ServerToClientMessage) {
@@ -416,6 +417,8 @@ function respondForCharacter(character: CharacterId, doctorUtterance?: string, o
       return prompt || (orderSummary ? orderSummary : "On it. I'll grab vitals now and update you.");
     case "tech":
       return prompt || (orderSummary ? orderSummary : "I'll get the EKG leads on and hand you a strip shortly.");
+    case "imaging":
+      return prompt || (orderSummary ? orderSummary : "I'll get the chest X-ray; give me a moment to process it.");
     case "consultant":
       return prompt || (orderSummary ? `Recent results: ${orderSummary}` : "Monitor closely and get an EKG; we can adjust after results.");
     case "patient":
@@ -961,6 +964,7 @@ function broadcastSimState(
     orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending" | "complete"; result?: OrderResult; completedAt?: number }[];
     ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
     telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
+    treatmentHistory?: { ts: number; treatmentType: string; note?: string }[];
   }
 ) {
   const validated = validateSimStateMessage(state);
@@ -985,6 +989,7 @@ function broadcastSimState(
     orders: validated.orders,
     ekgHistory: (state as any).ekgHistory,
     telemetryHistory: (state as any).telemetryHistory,
+    treatmentHistory: (state as any).treatmentHistory,
   });
   persistSimState(sessionId, state as any).catch(() => {});
 }
@@ -1230,10 +1235,16 @@ function handleTreatment(sessionId: string, treatmentType?: string) {
     ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
     : undefined;
   maybeAdvanceStageFromTreatment(runtime, treatmentType);
+  const history = runtime.scenarioEngine.getState().treatmentHistory ?? [];
+  runtime.scenarioEngine.setTreatmentHistory([
+    ...history,
+    { ts: Date.now(), treatmentType: treatmentType ?? "unknown", note },
+  ]);
   broadcastSimState(sessionId, {
     ...runtime.scenarioEngine.getState(),
     stageIds: runtime.scenarioEngine.getStageIds(),
     telemetryWaveform,
+    treatmentHistory: runtime.scenarioEngine.getState().treatmentHistory,
   });
   if (note) {
     sessionManager.broadcastToSession(sessionId, {
