@@ -11,6 +11,17 @@ export type PatientScenarioId =
 
 export type CharacterId = "patient" | "nurse" | "tech" | "consultant";
 
+export const ROLE_COLORS: Record<
+  CharacterId | "doctor" | "patient",
+  { text: string; border: string; bg?: string }
+> = {
+  patient: { text: "text-slate-100", border: "border-slate-600", bg: "bg-slate-800/70" },
+  nurse: { text: "text-emerald-200", border: "border-emerald-500/50", bg: "bg-emerald-900/40" },
+  tech: { text: "text-sky-200", border: "border-sky-500/50", bg: "bg-sky-900/40" },
+  consultant: { text: "text-indigo-200", border: "border-indigo-500/50", bg: "bg-indigo-900/40" },
+  doctor: { text: "text-amber-200", border: "border-amber-500/60", bg: "bg-amber-900/30" },
+};
+
 export type DebriefTurn = {
   role: "doctor" | "patient";
   text: string;

@@ -28,6 +28,7 @@ import {
   AnalysisResult,
   VoiceConnectionStatus,
   CharacterId,
+  ROLE_COLORS,
 } from "../types/voiceGateway";
 import { getScenarioSnapshot } from "../data/scenarioSummaries";
 import { SessionTranscriptPanel, TranscriptLogTurn } from "../components/SessionTranscriptPanel";
@@ -289,18 +290,8 @@ const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "savin
     return [...ordered, ...extras];
   }, [transcriptLog]);
   const roleColor = useCallback((role: string) => {
-    switch (role) {
-      case "nurse":
-        return "text-emerald-300 border-emerald-500/50";
-      case "tech":
-        return "text-sky-300 border-sky-500/50";
-      case "consultant":
-        return "text-indigo-300 border-indigo-500/50";
-      case "doctor":
-        return "text-amber-300 border-amber-500/50";
-      default:
-        return "text-slate-200 border-slate-600/50";
-    }
+    const colors = ROLE_COLORS[role as keyof typeof ROLE_COLORS] ?? ROLE_COLORS.patient;
+    return `${colors.text} ${colors.border}`;
   }, []);
   const slideRef = useRef<HTMLDivElement>(null);
   const currentTurnIdRef = useRef<string | null>(null);
@@ -511,6 +502,20 @@ const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "savin
       }
     },
     [logDoctorQuestion, sessionId, targetCharacter]
+  );
+
+  const handleScenarioChange = useCallback(
+    (id: PatientScenarioId) => {
+      setSelectedScenario(id);
+      if (sessionId) {
+        try {
+          voiceGatewayClient.sendSetScenario(id);
+        } catch (err) {
+          console.error("Failed to send scenario change", err);
+        }
+      }
+    },
+    [sessionId]
   );
 
   // keyboard navigation
@@ -1152,9 +1157,76 @@ const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "savin
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center px-4 md:px-6 pb-2 gap-1">
-        <div className="w-full max-w-[1800px]">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div className="flex-1 flex flex-col items-center px-4 md:px-6 pb-2 gap-2">
+        <div className="w-full max-w-[1800px] grid grid-cols-1 xl:grid-cols-[1.7fr_1fr] gap-3 items-start">
+          <div className="flex flex-col gap-3">
+            <div className="relative flex-1 min-h-[62vh] max-h-[78vh]">
+              {showSummary ? (
+                <div className="absolute inset-0 rounded-2xl overflow-hidden">
+                  <SessionSummary
+                    teams={teams}
+                    players={players}
+                    participantCount={participantCount}
+                    overallAccuracy={overallAccuracy}
+                    totalQuestions={totalQuestions}
+                    questionsAnsweredCount={questionsAnsweredCount}
+                    questionsAnsweredPct={questionsAnsweredPct}
+                    totalResponses={totalResponses}
+                    avgResponsesPerQuestion={avgResponsesPerQuestion}
+                    questionStats={questionStats}
+                  />
+                </div>
+              ) : (
+                <>
+                  <VoicePatientOverlay
+                    voiceMode={(overlayMode as any) ?? "idle"}
+                    enabled={voice.enabled}
+                    floorHolderName={voice.floorHolderName ?? undefined}
+                    transcriptTurns={transcriptTurns}
+                    patientAudioUrl={patientAudioUrl}
+                    onClearTranscript={() => setTranscriptTurns([])}
+                  />
+                  <div
+                    className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
+                    ref={slideRef}
+                    dangerouslySetInnerHTML={{ __html: currentSlideHtml }}
+                  />
+
+                  {showTeamScores && (teams?.length ?? 0) > 0 && (
+                    <div className="absolute top-4 right-4 z-30 pointer-events-none">
+                      <TeamScoreboard teams={teams} />
+                    </div>
+                  )}
+
+                  {showIndividualScores && (players?.length ?? 0) > 0 && (
+                    <div className="absolute bottom-4 right-4 z-30 pointer-events-none">
+                      <IndividualScoreboard players={players} />
+                    </div>
+                  )}
+
+                  {showResultsOverlay && currentQuestion && (
+                    <div className="absolute inset-x-3 bottom-3 pointer-events-none">
+                      <div className="bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 shadow-lg shadow-black/30 pointer-events-auto">
+                        <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
+                          <span className="uppercase tracking-[0.12em] text-slate-300">Poll Results</span>
+                          <span className="font-mono text-[10px]">
+                            {isQuestionOpen ? "Open" : "Closed"} {isShowingResults ? "· Showing results" : ""}
+                          </span>
+                        </div>
+                        <ResponsesChart
+                          sessionId={sessionId}
+                          questionId={currentQuestion.id}
+                          options={currentQuestion.options}
+                          correctIndex={currentQuestion.correctIndex ?? 0}
+                          showResults={isShowingResults}
+                          mode="presenter"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
             <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-semibold text-slate-200">Transcript (by role)</div>
@@ -1188,6 +1260,63 @@ const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "savin
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
+              <div className="text-sm font-semibold text-slate-200 flex items-center justify-between">
+                <span>Voice & Roles</span>
+                <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                  {freezeStatus === "frozen" ? "Voice paused" : "Voice live"}
+                </div>
+              </div>
+              <PresenterVoiceControls
+                sessionId={sessionId!}
+                voice={voice}
+                doctorQuestion={doctorQuestionText}
+                onDoctorQuestionChange={setDoctorQuestionText}
+                onForceReply={handleForceReply}
+                autoForceReply={autoForceReply}
+                onToggleAutoForceReply={setAutoForceReply}
+                scenarioId={selectedScenario}
+                scenarioOptions={scenarioOptions}
+                onScenarioChange={handleScenarioChange}
+                character={targetCharacter}
+                onCharacterChange={setTargetCharacter}
+              />
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-200">Orders & Status</div>
+                <div className="text-[10px] text-slate-500">Live sim state</div>
+              </div>
+              <div className="space-y-2">
+                {(simState?.orders ?? []).length === 0 && (
+                  <div className="text-xs text-slate-500">No orders yet.</div>
+                )}
+                {(simState?.orders ?? []).map((o) => (
+                  <div
+                    key={o.id}
+                    className="flex items-start gap-2 rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-2 text-sm"
+                  >
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-[0.14em] ${
+                        o.status === "complete"
+                          ? "bg-emerald-500/15 text-emerald-100 border border-emerald-500/40"
+                          : "bg-slate-800 text-slate-300 border border-slate-700"
+                      }`}
+                    >
+                      {o.type} {o.status}
+                    </span>
+                    <div className="text-slate-100 leading-snug">
+                      {o.result?.summary ||
+                        (o.result?.type === "vitals"
+                          ? `HR ${o.result.hr ?? "—"} BP ${o.result.bp ?? "—"} SpO₂ ${o.result.spo2 ?? "—"}`
+                          : "In progress")}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
                 <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1423,76 +1552,6 @@ const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "savin
               reportText={debriefReportText}
               sessionId={sessionId}
             />
-          </div>
-        </div>
-        <div className="w-full max-w-[1800px] flex flex-col flex-1 gap-1.5">
-          {/* Presenter layout: bias height toward the slide; chart overlays inside the slide for polls */}
-          <div className="relative flex-1 min-h-[62vh] max-h-[78vh]">
-            {showSummary ? (
-              <div className="absolute inset-0 rounded-2xl overflow-hidden">
-                <SessionSummary
-                  teams={teams}
-                  players={players}
-                  participantCount={participantCount}
-                  overallAccuracy={overallAccuracy}
-                  totalQuestions={totalQuestions}
-                  questionsAnsweredCount={questionsAnsweredCount}
-                  questionsAnsweredPct={questionsAnsweredPct}
-                  totalResponses={totalResponses}
-                  avgResponsesPerQuestion={avgResponsesPerQuestion}
-                  questionStats={questionStats}
-                />
-              </div>
-            ) : (
-              <>
-                <VoicePatientOverlay
-                  voiceMode={(overlayMode as any) ?? "idle"}
-                  enabled={voice.enabled}
-                  floorHolderName={voice.floorHolderName}
-                  transcriptTurns={transcriptTurns}
-                  patientAudioUrl={patientAudioUrl ?? undefined}
-                  onClearTranscript={handleClearTranscript}
-                />
-                <div
-                  className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
-                  ref={slideRef}
-                  dangerouslySetInnerHTML={{ __html: currentSlideHtml }}
-                />
-
-                {showTeamScores && (teams?.length ?? 0) > 0 && (
-                  <div className="absolute top-4 right-4 z-30 pointer-events-none">
-                    <TeamScoreboard teams={teams} />
-                  </div>
-                )}
-
-                {showIndividualScores && (players?.length ?? 0) > 0 && (
-                  <div className="absolute bottom-4 right-4 z-30 pointer-events-none">
-                    <IndividualScoreboard players={players} />
-                  </div>
-                )}
-
-                {showResultsOverlay && currentQuestion && (
-                  <div className="absolute inset-x-3 bottom-3 pointer-events-none">
-                    <div className="bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 shadow-lg shadow-black/30 pointer-events-auto">
-                      <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
-                        <span className="uppercase tracking-[0.12em] text-slate-300">Poll Results</span>
-                        <span className="font-mono text-[10px]">
-                          {isQuestionOpen ? "Open" : "Closed"} {isShowingResults ? "· Showing results" : ""}
-                        </span>
-                      </div>
-                      <ResponsesChart
-                        sessionId={sessionId}
-                        questionId={currentQuestion.id}
-                        options={currentQuestion.options}
-                        correctIndex={currentQuestion.correctIndex ?? 0}
-                        showResults={isShowingResults}
-                        mode="presenter"
-                      />
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
           </div>
         </div>
       </div>
