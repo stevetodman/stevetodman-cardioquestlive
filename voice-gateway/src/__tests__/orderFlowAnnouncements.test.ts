@@ -5,6 +5,14 @@ import { ToolGate } from "../sim/toolGate";
 import { CostController } from "../sim/costController";
 import { Runtime } from "../typesRuntime";
 
+jest.mock("../persistence", () => {
+  const actual = jest.requireActual("../persistence");
+  return {
+    ...actual,
+    logSimEvent: jest.fn(() => Promise.resolve()),
+  };
+});
+
 function makeDeps() {
   const sm = {
     broadcastToSession: jest.fn(),
