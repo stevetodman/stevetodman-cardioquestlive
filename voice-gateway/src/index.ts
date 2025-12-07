@@ -668,6 +668,13 @@ async function handleDoctorAudio(
     if (runtime.realtime) {
       runtime.realtime.sendAudioChunk(audioBuffer);
       runtime.realtime.commitAudio();
+      void transcribeDoctorAudio(audioBuffer, contentType)
+        .then((text) => {
+          if (text && text.trim().length > 0) {
+            broadcastDoctorUtterance(sessionId, userId, text, character);
+          }
+        })
+        .catch((err) => logError("Realtime doctor STT failed", err));
       return;
     }
     await handleDoctorAudioLegacy(sessionId, userId, audioBuffer, contentType, character);
@@ -703,14 +710,7 @@ async function handleDoctorAudioLegacy(
   const text = await transcribeDoctorAudio(audioBuffer, contentType);
   if (text && text.trim().length > 0) {
     log("STT transcript", sessionId, text.slice(0, 120));
-    sessionManager.broadcastToPresenters(sessionId, {
-      type: "doctor_utterance",
-      sessionId,
-      userId,
-      text,
-      character,
-    });
-    maybeAutoForceReply(sessionId, text, character);
+    broadcastDoctorUtterance(sessionId, userId, text, character);
   }
 }
 
@@ -726,6 +726,17 @@ function maybeAutoForceReply(sessionId: string, text: string, explicitCharacter?
   lastAutoReplyAt.set(sessionId, now);
   const routed = explicitCharacter ?? chooseCharacter(trimmed);
   handleForceReply(sessionId, "auto", trimmed, routed);
+}
+
+function broadcastDoctorUtterance(sessionId: string, userId: string, text: string, character?: CharacterId) {
+  sessionManager.broadcastToPresenters(sessionId, {
+    type: "doctor_utterance",
+    sessionId,
+    userId,
+    text,
+    character,
+  });
+  maybeAutoForceReply(sessionId, text, character);
 }
 
 function ensureRuntime(sessionId: string): Runtime {
