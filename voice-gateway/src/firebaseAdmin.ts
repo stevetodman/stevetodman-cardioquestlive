@@ -17,6 +17,11 @@ export function getFirestore(): admin.firestore.Firestore | null {
       app = admin.apps[0]!;
     }
     firestoreInstance = admin.firestore(app);
+    try {
+      firestoreInstance.settings({ ignoreUndefinedProperties: true });
+    } catch {
+      // ignore if already set or unsupported in this env
+    }
     return firestoreInstance;
   } catch (err) {
     console.warn("[firestore] firebase-admin init failed; persistence disabled", err);

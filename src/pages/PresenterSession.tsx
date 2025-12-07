@@ -5,7 +5,7 @@
  * - In-slide poll results overlay, gated by showResults and responseTotal > 0 to avoid empty overlays.
  * Keyboard nav (arrows/Space) and in-slide nav buttons drive slide changes.
  */
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { doc, onSnapshot, updateDoc, db, collection, query, where } from "../utils/firestore"; // Updated import
 import { SessionData } from "../types";
@@ -151,7 +151,7 @@ export default function PresenterSession() {
     useState<PatientScenarioId>("exertional_chest_pain");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [debriefResult, setDebriefResult] = useState<AnalysisResult | null>(null);
-  const snapshot = React.useMemo(
+  const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
   );
