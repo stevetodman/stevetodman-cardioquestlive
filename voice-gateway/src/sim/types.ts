@@ -65,6 +65,14 @@ export type SimState = {
   findings?: string[];
   fallback: boolean;
   stageEnteredAt?: number;
+  stageIds?: string[];
+  orders?: {
+    id: string;
+    type: "vitals" | "ekg" | "labs" | "imaging";
+    status: "pending" | "complete";
+    result?: Record<string, unknown>;
+    completedAt?: number;
+  }[];
   budget?: {
     usdEstimate?: number;
     voiceSeconds?: number;

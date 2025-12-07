@@ -13,9 +13,11 @@ const stateCache: Map<
   {
     stageId?: string;
     fallback?: boolean;
+    stageIdsKey?: string;
     budgetKey?: string;
     vitalsKey?: string;
     findingsKey?: string;
+    ordersKey?: string;
     lastWrite?: number;
   }
 > = new Map();
@@ -29,6 +31,8 @@ export async function persistSimState(simId: string, state: SimState & { budget?
   const vitalsKey = makeKey(state.vitals || {});
   const budgetKey = makeKey(state.budget || {});
   const findingsKey = makeKey(state.findings || []);
+  const ordersKey = makeKey(state.orders || []);
+  const stageIdsKey = makeKey(state.stageIds || []);
   const now = Date.now();
   const shouldSkip =
     cache.stageId === state.stageId &&
@@ -36,6 +40,8 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     cache.vitalsKey === vitalsKey &&
     cache.findingsKey === findingsKey &&
     cache.budgetKey === budgetKey &&
+    cache.ordersKey === ordersKey &&
+    cache.stageIdsKey === stageIdsKey &&
     cache.lastWrite &&
     now - cache.lastWrite < 500;
   if (shouldSkip) return;
@@ -49,8 +55,14 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     fallback: state.fallback,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
+  if (state.stageIds) {
+    payload.stageIds = state.stageIds;
+  }
   if (state.budget) {
     payload.budget = state.budget;
+  }
+  if (state.orders) {
+    payload.orders = state.orders;
   }
   await docRef.set(payload, { merge: true });
   stateCache.set(simId, {
@@ -59,6 +71,8 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     vitalsKey,
     findingsKey,
     budgetKey,
+    ordersKey,
+    stageIdsKey,
     lastWrite: now,
   });
 }
