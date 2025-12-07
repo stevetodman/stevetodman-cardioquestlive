@@ -319,13 +319,6 @@ export default function PresenterSession() {
     setTranscriptTurns([]);
   }, []);
 
-  const handleAddMockLine = useCallback(() => {
-    setTranscriptTurns((prev) => [
-      ...prev,
-      { id: makeTurnId(), role: "patient", text: `Mock line ${prev.length + 1}`, isComplete: true },
-    ]);
-  }, [makeTurnId]);
-
   const logDoctorQuestion = useCallback(
     (text?: string) => {
       const questionText = text?.trim();
@@ -1044,7 +1037,6 @@ export default function PresenterSession() {
                   transcriptTurns={transcriptTurns}
                   patientAudioUrl={patientAudioUrl ?? undefined}
                   onClearTranscript={handleClearTranscript}
-                  onAddMockTranscript={handleAddMockLine}
                 />
                 <div
                   className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
