@@ -181,6 +181,7 @@ const [lastNpcInterjectAt, setLastNpcInterjectAt] = useState<number>(0);
 const [showTelemetryPopout, setShowTelemetryPopout] = useState(false);
 const [assessmentResponse, setAssessmentResponse] = useState<string>("");
 const [assessmentPromptOpen, setAssessmentPromptOpen] = useState(false);
+const [lastContextStage, setLastContextStage] = useState<string | null>(null);
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -199,6 +200,34 @@ const [assessmentPromptOpen, setAssessmentPromptOpen] = useState(false);
     // Reset assessment timer on stage change
     if (simState?.stageEnteredAt) {
       setLastAssessmentAt(simState.stageEnteredAt);
+    }
+    if (simState?.stageId && simState.stageId !== lastContextStage) {
+      const ts = Date.now();
+      const contextByScenario: Record<string, Record<string, string>> = {
+        kawasaki: {
+          stage_1_fever: "Parent: \"She’s been febrile and fussy all day.\"",
+          stage_2_incomplete: "Parent: \"Her hands look red and swollen.\"",
+        },
+        coarctation_shock: {
+          stage_1_shock: "Nurse: \"Leg pulses feel weak compared to arms.\"",
+          stage_2_after_bolus: "Nurse: \"BP is a bit better up top; legs still cool.\"",
+        },
+        arrhythmogenic_syncope: {
+          stage_1_baseline: "Parent: \"He collapsed during practice and seems anxious.\"",
+          stage_2_irritable: "Nurse: \"Telemetry is picking up some irregular beats.\"",
+          stage_3_vtach_risk: "Nurse: \"Rhythm looks more unstable—be ready.\"",
+        },
+      };
+      const scenarioContext = contextByScenario[simState.scenarioId ?? ""] ?? {};
+      const msg = scenarioContext[simState.stageId] ?? null;
+      if (msg) {
+        setTranscriptLog((prev) => [
+          ...prev,
+          { id: `ctx-${ts}`, timestamp: ts, text: msg, character: "nurse" },
+        ]);
+        setTimelineExtras((prev) => [...prev, { id: `ctx-tl-${ts}`, ts, label: "NPC", detail: msg }]);
+      }
+      setLastContextStage(simState.stageId);
     }
   }, [simState?.stageEnteredAt]);
   useEffect(() => {
