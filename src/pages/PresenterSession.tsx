@@ -184,6 +184,7 @@ const [assessmentPromptOpen, setAssessmentPromptOpen] = useState(false);
 const [lastContextStage, setLastContextStage] = useState<string | null>(null);
 const [assessmentDifferential, setAssessmentDifferential] = useState<string[]>([]);
 const [assessmentPlan, setAssessmentPlan] = useState<string[]>([]);
+const [npcCooldowns, setNpcCooldowns] = useState<Record<string, number>>({});
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -274,40 +275,67 @@ const [assessmentPlan, setAssessmentPlan] = useState<string[]>([]);
     return () => clearInterval(interval);
   }, [assessmentEnabled, lastAssessmentAt]);
   useEffect(() => {
-    // Lightweight NPC interjection for deteriorating vitals / distress
+    // Stage-aware NPC interjection with cooldowns and distress cues
     const vitals = simState?.vitals ?? {};
     const now = Date.now();
     if (!vitals) return;
-    const alarms: string[] = [];
     const hr = (vitals as any).hr as number | undefined;
     const spo2 = (vitals as any).spo2 as number | undefined;
     const temp = (vitals as any).temp as number | undefined;
-    if (spo2 && spo2 < 88) alarms.push("SpO₂ dropping, patient looks worse.");
-    if (hr && hr > 170) alarms.push("Heart rate is very fast.");
-    if (temp && temp > 38.5) alarms.push("Parent: \"They're burning up—please help.\"");
-    if (hr && hr > 150 && !spo2) alarms.push("Nurse: \"Patient looks anxious and is breathing faster.\"");
-    if (alarms.length > 0 && now - lastNpcInterjectAt > 60000) {
-      setLastNpcInterjectAt(now);
-      setTranscriptLog((prev) => [
-        ...prev,
-        {
-          id: `npc-${now}`,
-          timestamp: now,
-          text: alarms.join(" "),
-          character: "nurse",
-        },
-      ]);
-      setTimelineExtras((prev) => [
-        ...prev,
-        {
-          id: `npc-timeline-${now}`,
-          ts: now,
-          label: "NPC",
-          detail: alarms.join(" "),
-        },
-      ]);
-    }
-  }, [simState?.vitals, lastNpcInterjectAt]);
+
+    const stageScripts: Record<string, string[]> = {
+      stage_1_fever: ['Parent: "She’s so warm—can we cool her down?"'],
+      stage_2_incomplete: ['Parent: "Her lips still look red—what’s next?"'],
+      stage_1_shock: ['Nurse: "Weak femoral pulses; BP low in legs."'],
+      stage_2_after_bolus: ['Nurse: "Upper BP better, legs still cool."'],
+      stage_3_vtach_risk: ['Nurse: "Telemetry shows more irregular beats—prepare meds?"'],
+      stage_2_irritable: ['Nurse: "He’s anxious and asking if he will pass out again."'],
+      stage_2_spell: ['Parent: "He is squatting again and breathing fast."'],
+    };
+
+    const distress: string[] = [];
+    if (spo2 && spo2 < 88) distress.push("SpO₂ dropping, patient looks worse.");
+    if (hr && hr > 170) distress.push("Heart rate is very fast.");
+    if (temp && temp > 38.5) distress.push('Parent: "They’re burning up—please help."');
+    if (hr && hr > 150 && !spo2) distress.push('Nurse: "Patient looks anxious and is breathing faster."');
+
+    const stageKey = simState?.stageId ?? "";
+    const stageLines = stageScripts[stageKey] ?? [];
+    const messages = [...stageLines, ...distress];
+    if (messages.length === 0) return;
+
+    const canEmit = messages.filter((msg) => {
+      const last = npcCooldowns[msg] ?? 0;
+      return now - last > 60000;
+    });
+    if (canEmit.length === 0) return;
+
+    setNpcCooldowns((prev) => {
+      const next = { ...prev };
+      canEmit.forEach((msg) => (next[msg] = now));
+      return next;
+    });
+
+    setLastNpcInterjectAt(now);
+    setTranscriptLog((prev) => [
+      ...prev,
+      {
+        id: `npc-${now}`,
+        timestamp: now,
+        text: canEmit.join(" "),
+        character: "nurse",
+      },
+    ]);
+    setTimelineExtras((prev) => [
+      ...prev,
+      {
+        id: `npc-timeline-${now}`,
+        ts: now,
+        label: "NPC",
+        detail: canEmit.join(" "),
+      },
+    ]);
+  }, [simState?.vitals, lastNpcInterjectAt, simState?.stageId, npcCooldowns]);
   const ekgHistory = useMemo(() => {
     if ((simState as any)?.ekgHistory) return (simState as any).ekgHistory;
     const ekgs = (simState?.orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
