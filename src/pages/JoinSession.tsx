@@ -105,8 +105,9 @@ const [voiceError, setVoiceError] = useState<string | null>(null);
 const [showExam, setShowExam] = useState(false);
 const [showEkg, setShowEkg] = useState(false);
 const [toast, setToast] = useState<{ message: string; ts: number } | null>(null);
-  const [lastFloorHolder, setLastFloorHolder] = useState<string | null>(null);
-  const [lastFallback, setLastFallback] = useState<boolean | null>(null);
+const [lastFloorHolder, setLastFloorHolder] = useState<string | null>(null);
+const [lastFallback, setLastFallback] = useState<boolean | null>(null);
+  const [assessmentRequest, setAssessmentRequest] = useState<{ ts: number; stage?: string } | null>(null);
   const voice = useVoiceState(sessionId);
   const userDisplayName = auth?.currentUser?.displayName ?? "Resident";
   useEffect(() => {
@@ -228,9 +229,21 @@ const [toast, setToast] = useState<{ message: string; ts: number } | null>(null)
   }, []);
 
   useEffect(() => {
-    const unsub = voiceGatewayClient.onSimState((state) => setSimState(state));
+    const unsub = voiceGatewayClient.onSimState((state) => {
+      setSimState(state);
+      // Detect assessment prompt from timeline extras (label Assessment)
+      const lastAssessment = (state as any)?.timelineExtras
+        ? ((state as any).timelineExtras as any[])
+            .filter((t) => t.label === "Assessment")
+            .slice(-1)[0]
+        : null;
+      if (lastAssessment && (!assessmentRequest || lastAssessment.ts !== assessmentRequest.ts)) {
+        setAssessmentRequest({ ts: lastAssessment.ts, stage: state.stageId });
+        setToast({ message: "Presenter requests assessment", ts: Date.now() });
+      }
+    });
     return () => unsub();
-  }, []);
+  }, [assessmentRequest]);
 
   useEffect(() => {
     const unsub = voiceGatewayClient.onParticipantState(({ userId: speakerId, speaking }) => {
@@ -549,6 +562,28 @@ const [toast, setToast] = useState<{ message: string; ts: number } | null>(null)
         {toast && (
           <div className="bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-2 text-[12px] text-slate-100 shadow-md shadow-black/30">
             {toast.message}
+          </div>
+        )}
+        {assessmentRequest && (
+          <div className="bg-amber-500/10 border border-amber-500/40 rounded-lg px-3 py-2 text-[12px] text-amber-100 shadow-sm shadow-amber-900/30 flex items-center justify-between">
+            <div>
+              <div className="font-semibold">Presenter requests assessment</div>
+              <div className="text-[11px] text-amber-200/90">
+                Stage: {assessmentRequest.stage ?? "unknown"}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const ts = Date.now();
+                setAssessmentRequest(null);
+                voiceGatewayClient.sendVoiceCommand("assessment_ack" as any, { ts }).catch(() => {});
+                setToast({ message: "Assessment acknowledged", ts });
+              }}
+              className="px-2 py-1 rounded border border-amber-500/60 text-[11px] text-amber-100 hover:border-amber-400"
+            >
+              Got it
+            </button>
           </div>
         )}
         <section className="bg-slate-900 rounded-xl p-4 border border-slate-800 shadow-lg">

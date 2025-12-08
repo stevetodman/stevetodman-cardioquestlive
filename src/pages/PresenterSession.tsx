@@ -674,6 +674,16 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
         );
       });
     }
+    const assessmentAcks = sortedTimeline.filter((t) => t.label === "Assessment" && t.detail.toLowerCase().includes("ack"));
+    if (assessmentAcks.length > 0) {
+      lines.push("");
+      lines.push("## Assessment Acknowledgements");
+      assessmentAcks.forEach((ev) => {
+        lines.push(
+          `[${new Date(ev.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}] ${ev.detail}`
+        );
+      });
+    }
     return lines.join("\n");
   }, [sessionId, simState, selectedScenario, scoringSummary, transcriptLog, timelineItems]);
   const debriefReportText = useMemo(() => {
