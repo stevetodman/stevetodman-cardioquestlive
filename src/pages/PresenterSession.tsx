@@ -177,6 +177,7 @@ const [activeCharacter, setActiveCharacter] = useState<{ character: CharacterId;
 const [assessmentEnabled, setAssessmentEnabled] = useState(true);
 const [lastAssessmentAt, setLastAssessmentAt] = useState<number>(Date.now());
 const [lastNpcInterjectAt, setLastNpcInterjectAt] = useState<number>(0);
+const [showTelemetryPopout, setShowTelemetryPopout] = useState(false);
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -401,6 +402,15 @@ const [lastNpcInterjectAt, setLastNpcInterjectAt] = useState<number>(0);
             timestamp: ts,
             text: `${type === "heart" ? "Heart" : "Lung"} sounds played`,
             character: "tech",
+          },
+        ]);
+        setTimelineItems((prev) => [
+          ...prev,
+          {
+            id: `exam-audio-tl-${type}-${ts}`,
+            ts,
+            label: "Exam",
+            detail: `${type === "heart" ? "Heart" : "Lung"} sounds played`,
           },
         ]);
       } catch (err) {
@@ -1387,6 +1397,17 @@ const [lastNpcInterjectAt, setLastNpcInterjectAt] = useState<number>(0);
                 telemetryWaveform={simState.telemetryWaveform as any}
                 telemetryOn={simState.telemetry}
               />
+              {simState.telemetry && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowTelemetryPopout(true)}
+                    className="px-2 py-1 text-[12px] rounded-lg border border-slate-700 text-slate-100 hover:border-slate-500"
+                  >
+                    Pop-out rhythm
+                  </button>
+                </div>
+              )}
               {simState.orders && simState.orders.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 w-full">
                   {simState.orders.slice(-6).map((order) => {
@@ -2108,6 +2129,40 @@ const [lastNpcInterjectAt, setLastNpcInterjectAt] = useState<number>(0);
           </div>
         </div>
       </div>
+      {showTelemetryPopout && simState?.telemetry && simState.telemetryWaveform && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-3xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <div className="text-sm font-semibold text-slate-50">Telemetry</div>
+                <div className="text-[12px] text-slate-400">{simState.rhythmSummary ?? "Live rhythm"}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTelemetryPopout(false)}
+                className="text-xs text-slate-400 hover:text-slate-200"
+              >
+                Close
+              </button>
+            </div>
+            <svg viewBox={`0 0 ${simState.telemetryWaveform.length} 2`} className="w-full h-40 bg-slate-900 rounded-lg border border-slate-800">
+              <polyline
+                fill="none"
+                stroke="#34d399"
+                strokeWidth="0.08"
+                points={simState.telemetryWaveform.map((v: number, idx: number) => `${idx},${1 - v}`).join(" ")}
+              />
+            </svg>
+            {latestEkgMeta && (
+              <div className="mt-2 text-[12px] text-slate-400 space-y-0.5">
+                {latestEkgMeta.rate && <div>Rate: {latestEkgMeta.rate}</div>}
+                {latestEkgMeta.intervals && <div>Intervals: {latestEkgMeta.intervals}</div>}
+                {latestEkgMeta.axis && <div>Axis: {latestEkgMeta.axis}</div>}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
