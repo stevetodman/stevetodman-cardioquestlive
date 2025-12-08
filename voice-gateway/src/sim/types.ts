@@ -61,6 +61,7 @@ export type SimState = {
   simId: string;
   scenarioId: string;
   stageId: string;
+  updatedAtMs?: number;
   vitals: Vitals;
   exam?: {
     general?: string;

@@ -111,35 +111,40 @@ export class RealtimePatientClient {
       return;
     }
 
-    switch (evt.type) {
-      case "response.audio.delta": {
-        const buf = Buffer.from(evt.audio, "base64");
-        this.opts.onAudioOut(buf);
-        break;
+    try {
+      switch (evt.type) {
+        case "response.audio.delta": {
+          if (typeof evt.audio !== "string" || evt.audio.length === 0) return;
+          const buf = Buffer.from(evt.audio, "base64");
+          this.opts.onAudioOut(buf);
+          break;
+        }
+        case "response.output_text.delta": {
+          if (evt.delta) this.opts.onTranscriptDelta(evt.delta, false);
+          break;
+        }
+        case "response.output_text.done": {
+          if (evt.text) this.opts.onTranscriptDelta(evt.text, true);
+          break;
+        }
+        case "response.usage": {
+          const usage = {
+            inputTokens: evt.input_tokens ?? evt.inputTokens,
+            outputTokens: evt.output_tokens ?? evt.outputTokens,
+          };
+          this.opts.onUsage?.(usage);
+          break;
+        }
+        case "response.output_tool_call.done": {
+          const intent = this.parseToolIntent(evt);
+          if (intent) this.opts.onToolIntent(intent);
+          break;
+        }
+        default:
+          break;
       }
-      case "response.output_text.delta": {
-        if (evt.delta) this.opts.onTranscriptDelta(evt.delta, false);
-        break;
-      }
-      case "response.output_text.done": {
-        if (evt.text) this.opts.onTranscriptDelta(evt.text, true);
-        break;
-      }
-      case "response.usage": {
-        const usage = {
-          inputTokens: evt.input_tokens ?? evt.inputTokens,
-          outputTokens: evt.output_tokens ?? evt.outputTokens,
-        };
-        this.opts.onUsage?.(usage);
-        break;
-      }
-      case "response.output_tool_call.done": {
-        const intent = this.parseToolIntent(evt);
-        if (intent) this.opts.onToolIntent(intent);
-        break;
-      }
-      default:
-        break;
+    } catch (err) {
+      logError("[realtime] failed to handle message", err);
     }
   }
 

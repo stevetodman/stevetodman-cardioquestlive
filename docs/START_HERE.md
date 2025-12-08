@@ -24,10 +24,9 @@ Use this page as the on-ramp to the project. It links the right docs by role and
 
 ```bash
 npm install
-VITE_USE_EMULATORS=true npm run dev   # web app with emulators
-# In another terminal (optional): firebase emulators:start --only firestore,auth
-# Voice gateway (optional):
-cd voice-gateway && npm install && npm run build && npm start
+npm run dev:stack:local   # emulators + voice gateway + web on 127.0.0.1:5173
+# Then create a session at http://127.0.0.1:5173/#/create-demo and join with the code shown.
+# Allow microphone for 127.0.0.1 in your browser for voice; tap "Re-check mic" if blocked.
 ```
 
 Key routes: Presenter `/#/create-demo` → `/#/presenter/:sessionId`; Student `/#/join/CODE`; Admin `/#/admin`.

@@ -154,8 +154,10 @@ const simStateSchema = z
                   intervals: z.string().optional(),
                 })
                 .optional(),
+              abnormal: z.string().optional(),
+              nextAction: z.string().optional(),
+              rationale: z.string().optional(),
             })
-            .partial()
             .optional(),
           completedAt: z.number().optional(),
         })

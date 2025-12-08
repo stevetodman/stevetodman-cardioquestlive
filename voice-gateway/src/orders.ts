@@ -70,9 +70,10 @@ export function createOrderHandler(deps: OrderDeps) {
       );
       const stateRef: any = runtime.scenarioEngine.getState();
       if (orderType === "ekg") {
+        const ekgSummary = result.summary ?? "EKG complete.";
         stateRef.telemetry = true;
-        stateRef.rhythmSummary = result.summary;
-        const entry = { ts: Date.now(), summary: result.summary, imageUrl: (result as any).imageUrl };
+        stateRef.rhythmSummary = ekgSummary;
+        const entry = { ts: Date.now(), summary: ekgSummary, imageUrl: (result as any).imageUrl };
         const updatedHistory = [...(runtime.scenarioEngine.getState().ekgHistory ?? []), entry].slice(-3);
         runtime.scenarioEngine.setEkgHistory(updatedHistory);
       }

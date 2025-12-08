@@ -12,6 +12,7 @@
     "dev:vp": "concurrently -k -n gateway,tunnel,web \"cd voice-gateway && npm start\" \"cloudflared tunnel --url http://localhost:8081\" \"npm run dev -- --host 0.0.0.0 --port 3000\"",
     "dev:vp:quick": "node scripts/dev-vp-quick.cjs",
     "dev:vp:named": "node scripts/dev-vp-named.cjs",
+    "dev:stack:local": "concurrently -k -n emu,gw,web \"firebase emulators:start --only firestore,auth --project cardioquest-live-test\" \"cd voice-gateway && ALLOW_INSECURE_VOICE_WS=true npm run build && ALLOW_INSECURE_VOICE_WS=true npm start\" \"npm run dev -- --host 127.0.0.1 --port 5173 --strictPort --clearScreen false\"",
     "replay:sim": "cd voice-gateway && npm run events:replay --",
     "test:gateway": "cd voice-gateway && npm test",
     "test:rules": "firebase emulators:exec --only firestore --project cardioquest-live-test \"npm test -- --runInBand test/firestore.rules.test.ts\"",

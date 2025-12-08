@@ -977,7 +977,6 @@ function broadcastSimState(
     stageId: validated.stageId,
     stageIds: validated.stageIds,
     scenarioId: (validated.scenarioId ?? getScenarioForSession(sessionId)) as PatientScenarioId,
-    stageIds: validated.stageIds,
     vitals: validated.vitals ?? {},
     exam: validated.exam ?? {},
     telemetry: validated.telemetry,

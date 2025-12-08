@@ -74,12 +74,9 @@ Deeper dive: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 **Typical workflow**
 
 ```bash
-# Terminal 1: Firestore + Auth (and Functions if needed) emulators
-firebase emulators:start --only firestore,auth --project cardioquest-live-test
-
-# Terminal 2: Vite dev server using emulators
-VITE_USE_EMULATORS=true npm run dev
-# Open http://localhost:3000 (or your Vite port)
+# One-shot stack (emulators + gateway + web; keeps ports aligned)
+npm run dev:stack:local
+# Then in the browser: http://127.0.0.1:5173/#/create-demo → create session → join code.
 ```
 
 **Voice gateway / AI patient**
@@ -98,6 +95,12 @@ Env for gateway (in `voice-gateway/.env`):
 - `OPENAI_TTS_MODEL` (default `gpt-4o-mini-tts`)
 - `OPENAI_TTS_VOICE` (default `alloy`)
 - `PORT` (default `8081`)
+Mic access: allow microphone for `127.0.0.1` in your browser, then tap **Re-check mic** in participant view.
+
+**Common local gotchas**
+- Connection refused to Firestore/gateway → restart stack (`npm run dev:stack:local`) and keep the terminal running.
+- Mic blocked → allow microphone for 127.0.0.1 in browser/system settings, then use **Re-check mic**.
+- Voice fallback/unavailable → ensure stack is running and presenter clicks **Enable voice** then **Release floor**.
 
 **App entry points**
 - Presenter: `/#/create-demo` (creates a session) → `/#/presenter/:sessionId`

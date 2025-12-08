@@ -276,42 +276,30 @@ const [lastFallback, setLastFallback] = useState<boolean | null>(null);
     setSelectedChoice(null);
   }, [session?.currentQuestionId]);
 
-  // Ensure participant doc exists and assign a team (transaction to avoid race)
+  // Ensure participant doc exists and assign a team (use transaction for creation; team counts from a snapshot)
   useEffect(() => {
     async function ensureParticipantDoc() {
       if (!sessionId || !userId) return;
       const participantRef = doc(db, "sessions", sessionId, "participants", userId);
       try {
+        // Snapshot current participants to balance teams (transactions do not support collection reads).
+        const snap = await getDocs(collection(db, "sessions", sessionId, "participants"));
+        const counts = TEAM_OPTIONS.reduce<Record<string, number>>((acc, t) => {
+          acc[t.id] = 0;
+          return acc;
+        }, {});
+        snap.forEach((docSnap) => {
+          const data = docSnap.data() as ParticipantDoc;
+          if (data?.teamId && counts[data.teamId] !== undefined) {
+            counts[data.teamId] += 1;
+          }
+        });
+        const chosenTeam =
+          [...TEAM_OPTIONS].sort((a, b) => (counts[a.id] ?? 0) - (counts[b.id] ?? 0))[0] ?? TEAM_OPTIONS[0];
+
         await runTransaction(db, async (tx) => {
           const existing = await tx.get(participantRef);
           if (existing.exists()) return;
-
-          // Compute least-loaded team inside the transaction to avoid races.
-          const snap = await tx.get(collection(db, "sessions", sessionId, "participants"));
-          const counts = TEAM_OPTIONS.reduce<Record<string, number>>((acc, t) => {
-            acc[t.id] = 0;
-            return acc;
-          }, {});
-          const applyDoc = (docSnap: any) => {
-            const data =
-              typeof docSnap?.data === "function"
-                ? docSnap.data()
-                : typeof docSnap?.data === "object"
-                ? docSnap.data
-                : {};
-            const teamId = data?.teamId;
-            if (teamId && counts[teamId] !== undefined) {
-              counts[teamId] += 1;
-            }
-          };
-          if (typeof (snap as any)?.forEach === "function") {
-            (snap as any).forEach(applyDoc);
-          } else {
-            const docsArray = Array.isArray((snap as any)?.docs) ? (snap as any).docs : [];
-            docsArray.forEach(applyDoc);
-          }
-          const chosenTeam =
-            [...TEAM_OPTIONS].sort((a, b) => (counts[a.id] ?? 0) - (counts[b.id] ?? 0))[0] ?? TEAM_OPTIONS[0];
 
           const participantDoc: ParticipantDoc = {
             userId,

@@ -18,6 +18,7 @@ const CHARACTER_PROMPTS: Record<CharacterId, string> = {
   nurse: buildNursePrompt(),
   tech: buildTechPrompt(),
   consultant: buildConsultantPrompt(),
+  imaging: "You are an imaging tech providing succinct study updates and summaries.",
 };
 
 function trimHistory(history: ChatMessage[]): ChatMessage[] {

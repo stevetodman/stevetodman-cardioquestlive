@@ -4,12 +4,21 @@ export type CharacterId = "patient" | "parent" | "nurse" | "tech" | "consultant"
 
 export type OrderType = "vitals" | "ekg" | "labs" | "imaging";
 
-export type OrderResult =
-  | { type: "vitals"; hr?: number; bp?: string; rr?: number; spo2?: number; temp?: number }
-  | { type: "ekg"; summary: string; imageUrl?: string; meta?: { rate?: string; axis?: string; intervals?: string } }
-  | { type: "labs"; summary: string }
-  | { type: "imaging"; summary: string };
-  
+export type OrderResult = {
+  type: OrderType;
+  summary?: string;
+  hr?: number;
+  bp?: string;
+  rr?: number;
+  spo2?: number;
+  temp?: number;
+  imageUrl?: string;
+  meta?: { rate?: string; axis?: string; intervals?: string };
+  abnormal?: string;
+  nextAction?: string;
+  rationale?: string;
+};
+ 
 
 export type ClientToServerMessage =
   | {
@@ -152,6 +161,7 @@ export type ServerToClientMessage =
       sessionId: string;
       stageId: string;
       stageIds?: string[];
+      stageEnteredAt?: number;
       scenarioId?: PatientScenarioId;
       vitals: Record<string, unknown>;
       exam?: Record<string, string | undefined>;
