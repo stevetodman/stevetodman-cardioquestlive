@@ -336,6 +336,29 @@ const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exporte
     });
     return parts.join("\n");
   }, [transcriptLog, simState?.treatmentHistory, simState?.telemetryHistory, simState?.ekgHistory]);
+  const handlePlayExamAudio = useCallback(
+    async (type: "heart" | "lung") => {
+      const url = type === "heart" ? examAudio.heart : examAudio.lung;
+      if (!url) return;
+      try {
+        const audio = new Audio(url);
+        await audio.play();
+        const ts = Date.now();
+        setTranscriptLog((prev) => [
+          ...prev,
+          {
+            id: `exam-audio-${type}-${ts}`,
+            timestamp: ts,
+            text: `${type === "heart" ? "Heart" : "Lung"} sounds played`,
+            character: "tech",
+          },
+        ]);
+      } catch (err) {
+        console.error(err);
+      }
+    },
+    [examAudio]
+  );
   const buildExportText = useCallback(() => {
     const lines: string[] = [];
     lines.push("# CardioQuest Session Export");
@@ -1822,6 +1845,24 @@ const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exporte
                   >
                     {transcriptSaveStatus === "saving" ? "Saving transcript…" : "Save transcript"}
                   </button>
+                  {examAudio.heart && (
+                    <button
+                      type="button"
+                      onClick={() => handlePlayExamAudio("heart")}
+                      className="px-2 py-1 rounded border border-pink-500/60 bg-pink-500/10 text-pink-100 text-[10px] hover:border-pink-400"
+                    >
+                      Play heart sounds
+                    </button>
+                  )}
+                  {examAudio.lung && (
+                    <button
+                      type="button"
+                      onClick={() => handlePlayExamAudio("lung")}
+                      className="px-2 py-1 rounded border border-sky-500/60 bg-sky-500/10 text-sky-100 text-[10px] hover:border-sky-400"
+                    >
+                      Play lung sounds
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={exportStatus === "exporting" || timelineItems.length === 0}

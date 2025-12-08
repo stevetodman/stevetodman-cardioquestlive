@@ -113,6 +113,8 @@ const simStateSchema = z
         perfusion: z.string().optional(),
         neuro: z.string().optional(),
         audioUrl: z.string().optional(),
+        heartAudioUrl: z.string().optional(),
+        lungAudioUrl: z.string().optional(),
       })
       .optional(),
     telemetry: z.boolean().optional(),

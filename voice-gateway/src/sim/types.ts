@@ -68,6 +68,8 @@ export type SimState = {
     lungs?: string;
     perfusion?: string;
     neuro?: string;
+    heartAudioUrl?: string;
+    lungAudioUrl?: string;
   };
   telemetry?: boolean;
   rhythmSummary?: string;
