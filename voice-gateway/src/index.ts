@@ -1,6 +1,5 @@
 import "dotenv/config";
-import http from "http";
-import WebSocket, { WebSocketServer } from "ws";
+import WebSocket from "ws";
 import { SessionManager } from "./sessionManager";
 import { CharacterId, ClientToServerMessage, OrderResult, ServerToClientMessage } from "./messageTypes";
 import { log, logError, logEvent } from "./logger";
@@ -26,6 +25,7 @@ import { buildTelemetryWaveform, checkAlarms } from "./telemetry";
 import { Runtime } from "./typesRuntime";
 import { createOrderHandler } from "./orders";
 import { shouldAutoReply } from "./autoReplyGuard";
+import { createTransport, send, ClientContext } from "./transport";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
@@ -68,12 +68,6 @@ const notifiedOrders: Map<string, Set<string>> = new Map();
 const alertFlags: Map<string, { hypoxia?: boolean }> = new Map();
 const hydratedSessions: Set<string> = new Set();
 
-type ClientContext = {
-  joined: boolean;
-  sessionId: string | null;
-  role: "presenter" | "participant" | null;
-};
-
 const CHARACTER_VOICE_MAP: Partial<Record<CharacterId, string>> = {
   patient: process.env.OPENAI_TTS_VOICE_PATIENT,
   nurse: process.env.OPENAI_TTS_VOICE_NURSE,
@@ -81,12 +75,6 @@ const CHARACTER_VOICE_MAP: Partial<Record<CharacterId, string>> = {
   consultant: process.env.OPENAI_TTS_VOICE_CONSULTANT,
   imaging: process.env.OPENAI_TTS_VOICE_TECH,
 };
-
-function send(ws: WebSocket, msg: ServerToClientMessage) {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(msg));
-  }
-}
 
 async function verifyAuthToken(authToken: string | undefined, claimedUserId: string): Promise<boolean> {
   if (allowInsecureWs) return true;
@@ -399,31 +387,13 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
 }
 
 function main() {
-  const server = http.createServer();
-  const wss = new WebSocketServer({ server, path: "/ws/voice" });
-
-  wss.on("connection", (ws) => {
-    const ctx: ClientContext = { joined: false, sessionId: null, role: null };
-
-    ws.on("message", (data) => {
-      void handleMessage(ws, ctx, data);
-    });
-
-    ws.on("close", () => {
-      if (ctx.joined && ctx.sessionId && ctx.role) {
-        sessionManager.removeClient(ctx.sessionId, ctx.role, ws);
-        log("Client disconnected", ctx.sessionId, ctx.role);
-        logEvent("ws.disconnect", { sessionId: ctx.sessionId, role: ctx.role });
-      }
-    });
-
-    ws.on("error", (err) => {
-      logError("Socket error", err);
-    });
-  });
-
-  server.listen(PORT, () => {
-    log(`Voice gateway listening on :${PORT} (path: /ws/voice)`);
+  createTransport({
+    port: PORT,
+    handleMessage,
+    sessionManager,
+    log,
+    logError,
+    logEvent,
   });
 }
 

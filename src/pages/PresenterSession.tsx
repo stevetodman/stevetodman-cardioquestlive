@@ -158,6 +158,8 @@ export default function PresenterSession() {
   const [availableStages, setAvailableStages] = useState<string[]>([]);
   const [selectedStage, setSelectedStage] = useState<string>("");
   const [doctorQuestionText, setDoctorQuestionText] = useState<string>("");
+  const [budgetAlert, setBudgetAlert] = useState<{ level: "soft" | "hard"; message: string } | null>(null);
+  const [alarmNotice, setAlarmNotice] = useState<string | null>(null);
 const [autoForceReply, setAutoForceReply] = useState(false);
 const [targetCharacter, setTargetCharacter] = useState<CharacterId>("patient");
 const [selectedScenario, setSelectedScenario] =
@@ -650,6 +652,15 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
       if (!selectedStage && state.stageIds && state.stageIds.length > 0) {
         setSelectedStage(state.stageIds[0]);
       }
+      if (state.budget?.throttled) {
+        setBudgetAlert({ level: "soft", message: "AI usage near limit; responses may slow." });
+      } else if (state.budget?.fallback) {
+        setBudgetAlert({ level: "hard", message: "AI paused due to budget cap. Resume when ready." });
+      } else {
+        setBudgetAlert(null);
+      }
+      const alarmFinding = (state.findings ?? []).find((f: string) => typeof f === "string" && f.startsWith("ALARM:"));
+      setAlarmNotice(alarmFinding || null);
       // Log newly completed orders into transcript for debrief/visibility
       const completed = (state.orders ?? []).filter((o) => o.status === "complete");
       const seen = loggedOrderIdsRef.current;
@@ -820,6 +831,8 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
     return () => {
       mounted = false;
       voiceGatewayClient.disconnect();
+      setBudgetAlert(null);
+      setAlarmNotice(null);
     };
   }, [sessionId]);
 
@@ -1383,14 +1396,30 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
                 {voiceLocked ? "Locked" : freezeStatus === "frozen" ? "Paused" : "Live"}
               </span>
             </div>
-            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
-              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Budget</span>
-              <span className="font-mono text-xs text-slate-200">
-                ${simState?.budget?.usdEstimate?.toFixed(2) ?? "0.00"} · {simState?.budget?.voiceSeconds ? `${Math.round(simState.budget.voiceSeconds)}s` : "0s"}
+          <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
+            <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Budget</span>
+            <span className="font-mono text-xs text-slate-200">
+              ${simState?.budget?.usdEstimate?.toFixed(2) ?? "0.00"} · {simState?.budget?.voiceSeconds ? `${Math.round(simState.budget.voiceSeconds)}s` : "0s"}
+            </span>
+            {budgetAlert && (
+              <span
+                className={`px-2 py-0.5 rounded-full border text-[10px] ${
+                  budgetAlert.level === "hard"
+                    ? "border-red-600 text-red-200 bg-red-900/50"
+                    : "border-amber-500 text-amber-100 bg-amber-900/40"
+                }`}
+              >
+                ! {budgetAlert.message}
               </span>
-            </div>
+            )}
+            {alarmNotice && (
+              <span className="px-2 py-0.5 rounded-full border text-[10px] border-red-600 text-red-200 bg-red-900/40">
+                ! {alarmNotice.replace("ALARM: ", "")}
+              </span>
+            )}
           </div>
         </div>
+      </div>
       </div>
 
       <div className="flex-1 flex flex-col items-center px-4 md:px-6 pb-2 gap-2">
