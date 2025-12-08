@@ -4,6 +4,7 @@ import { ServerToClientMessage } from "./messageTypes";
 import { SessionManager } from "./sessionManager";
 
 const MAX_WS_PAYLOAD_BYTES = Number(process.env.MAX_WS_PAYLOAD_BYTES || 262144); // ~256KB guardrail
+const HEALTH_PATH = "/health";
 
 export type ClientContext = {
   joined: boolean;
@@ -22,6 +23,16 @@ export function createTransport(opts: {
   const { port, handleMessage, sessionManager, log, logEvent, logError } = opts;
   const server = http.createServer();
   const wss = new WebSocket.Server({ server, path: "/ws/voice" });
+
+  server.on("request", (req, res) => {
+    if (req.url === HEALTH_PATH) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
 
   wss.on("connection", (ws) => {
     const ctx: ClientContext = { joined: false, sessionId: null, role: null };

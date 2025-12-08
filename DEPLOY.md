@@ -28,6 +28,7 @@ Lightweight guidance for running the presenter/student app and the voice gateway
 - Expose a simple HTTP 200 endpoint via your process manager or load balancer to detect liveness.
 - Alarms: alert on process down, repeated `budget.hard_limit`, and excessive 5xx from the gateway.
 - CI (GitHub Actions): runs gateway tests, page tests, and Firestore rules on push/PR.
+- Health endpoint: `GET /health` responds `{ ok: true }`.
 
 ## Deploy outline
 1) Set env vars in your platform (see above).
