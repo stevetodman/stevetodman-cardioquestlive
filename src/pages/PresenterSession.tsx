@@ -1489,8 +1489,11 @@ const [lastContextStage, setLastContextStage] = useState<string | null>(null);
                     <span>Telemetry</span>
                     <span className="text-[10px] text-slate-500">Presenter only</span>
                   </div>
-                  <div className="text-sm text-emerald-100">
-                    {simState.rhythmSummary ?? "Rhythm available"}
+                  <div className="flex items-center gap-2 text-sm text-emerald-100">
+                    <span>{simState.rhythmSummary ?? "Rhythm available"}</span>
+                    <span className="px-2 py-0.5 rounded-full border border-emerald-500/40 text-[10px] text-emerald-200">
+                      {simState.telemetryHistory?.slice(-1)[0]?.rhythm ?? "Live"}
+                    </span>
                   </div>
                   {simState.telemetryWaveform && simState.telemetryWaveform.length > 0 && (
                     <svg viewBox={`0 0 ${simState.telemetryWaveform.length} 2`} className="w-full h-16 mt-2">
