@@ -9,6 +9,7 @@
 - Run `npm run test:gateway` for gateway/unit behavior.
 - Run page tests: `npm test -- --runInBand src/pages/__tests__/JoinSession.test.tsx src/pages/__tests__/PresenterSessionSummary.test.tsx`.
 - Run rules tests when ports are available: `npm run test:rules`.
+- If ports are blocked, use env overrides: `FIRESTORE_PORT=62088 FIRESTORE_WS_PORT=62188 FIREBASE_HUB_PORT=62402 FIREBASE_LOGGING_PORT=62502 npm run test:rules:ports` (adjust ports as needed).
 - Add a small behavior test when introducing a new flow (routing, alarms, orders, budgets, safety).
 
 ## Code style

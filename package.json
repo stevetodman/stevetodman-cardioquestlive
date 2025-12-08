@@ -14,7 +14,8 @@
     "dev:vp:named": "node scripts/dev-vp-named.cjs",
     "replay:sim": "cd voice-gateway && npm run events:replay --",
     "test:gateway": "cd voice-gateway && npm test",
-    "test:rules": "firebase emulators:exec --only firestore --project cardioquest-live-test \"npm test -- --runInBand test/firestore.rules.test.ts\""
+    "test:rules": "firebase emulators:exec --only firestore --project cardioquest-live-test \"npm test -- --runInBand test/firestore.rules.test.ts\"",
+    "test:rules:ports": "node scripts/gen-emu-config.cjs && firebase emulators:exec --config .firebase.emu.generated.json --only firestore --project cardioquest-live-test \"npm test -- --runInBand test/firestore.rules.test.ts\""
   },
   "dependencies": {
     "dompurify": "^3.1.6",
