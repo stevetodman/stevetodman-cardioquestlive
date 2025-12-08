@@ -243,6 +243,71 @@ const scenarioMap: Record<ScenarioId, ScenarioDef> = {
       },
     ],
   },
+  kawasaki: {
+    id: "kawasaki",
+    version: "1.0.0",
+    persona: "You are a febrile preschooler with rash and red eyes. Irritable and tired.",
+    initialStage: "stage_1_fever",
+    stages: [
+      {
+        id: "stage_1_fever",
+        vitals: { hr: 130, bp: "96/60", spo2: 98, temp: 39.2 },
+        allowedIntents: ["intent_updateVitals", "intent_revealFinding", "intent_advanceStage"],
+        transitions: [{ to: "stage_2_incomplete", when: { any: [{ action: "time_elapsed", seconds: 180 }] } }],
+      },
+      {
+        id: "stage_2_incomplete",
+        vitals: { hr: 122, bp: "98/62", spo2: 98, temp: 38.4 },
+        allowedIntents: ["intent_updateVitals", "intent_revealFinding", "intent_advanceStage"],
+      },
+    ],
+  },
+  coarctation_shock: {
+    id: "coarctation_shock",
+    version: "1.0.0",
+    persona: "You are a young infant in low-output shock; minimal verbal cues.",
+    initialStage: "stage_1_shock",
+    stages: [
+      {
+        id: "stage_1_shock",
+        vitals: { hr: 182, bp: "78/40", spo2: 88, rr: 48 },
+        allowedIntents: ["intent_updateVitals", "intent_revealFinding", "intent_advanceStage"],
+        transitions: [{ to: "stage_2_after_bolus", when: { any: [{ action: "time_elapsed", seconds: 180 }] } }],
+      },
+      {
+        id: "stage_2_after_bolus",
+        vitals: { hr: 168, bp: "84/48", spo2: 90, rr: 42 },
+        allowedIntents: ["intent_updateVitals", "intent_revealFinding", "intent_advanceStage"],
+      },
+    ],
+  },
+  arrhythmogenic_syncope: {
+    id: "arrhythmogenic_syncope",
+    version: "1.0.0",
+    persona: "You are a teen who collapsed during sports; short, anxious answers.",
+    initialStage: "stage_1_baseline",
+    stages: [
+      {
+        id: "stage_1_baseline",
+        vitals: { hr: 96, bp: "110/68", spo2: 99 },
+        allowedIntents: ["intent_updateVitals", "intent_revealFinding", "intent_advanceStage"],
+        transitions: [{ to: "stage_2_irritable", when: { any: [{ action: "time_elapsed", seconds: 120 }] } }],
+      },
+      {
+        id: "stage_2_irritable",
+        vitals: { hr: 112, bp: "104/64", spo2: 99 },
+        exam: { cardio: "Occasional irregular beats; no murmur", general: "Anxious" },
+        allowedIntents: ["intent_updateVitals", "intent_revealFinding", "intent_advanceStage"],
+        transitions: [{ to: "stage_3_vtach_risk", when: { any: [{ action: "time_elapsed", seconds: 120 }] } }],
+      },
+      {
+        id: "stage_3_vtach_risk",
+        vitals: { hr: 140, bp: "92/58", spo2: 98 },
+        rhythm: "Possible VT runs",
+        allowedIntents: ["intent_updateVitals", "intent_setEmotion"],
+      },
+    ],
+  },
 };
 
 const examTemplates: Record<
@@ -361,6 +426,48 @@ const examTemplates: Record<
       neuro: "Fussy but alert.",
     },
   },
+  kawasaki: {
+    baseline: {
+      general: "Febrile, irritable preschooler.",
+      cardio: "Tachycardic, no murmur.",
+      lungs: "Clear.",
+      perfusion: "Warm, swollen hands/feet.",
+    },
+    decomp: {
+      general: "Less febrile, still irritable.",
+      cardio: "Tachycardic, no murmur.",
+      lungs: "Clear.",
+      perfusion: "Warm.",
+    },
+  },
+  coarctation_shock: {
+    baseline: {
+      general: "Ill infant, cool legs.",
+      cardio: "Tachycardic; weak femoral pulses.",
+      lungs: "Tachypneic, coarse sounds.",
+      perfusion: "Delayed cap refill lower extremities.",
+    },
+    decomp: {
+      general: "Slightly improved alertness after fluids.",
+      cardio: "Femoral pulses weak; upper stronger.",
+      lungs: "Tachypnea improving.",
+      perfusion: "Arms warm, legs cooler.",
+    },
+  },
+  arrhythmogenic_syncope: {
+    baseline: {
+      general: "Anxious teen, otherwise stable.",
+      cardio: "Occasional irregular beats; no murmur.",
+      lungs: "Clear.",
+      perfusion: "Warm, strong pulses.",
+    },
+    decomp: {
+      general: "More anxious, lightheaded.",
+      cardio: "Frequent irregular beats.",
+      lungs: "Clear.",
+      perfusion: "Warm.",
+    },
+  },
 };
 
 const rhythmTemplates: Record<
@@ -394,6 +501,19 @@ const rhythmTemplates: Record<
   cyanotic_spell: {
     baseline: "Sinus 100s, RVH/right axis",
     spell: "Sinus 150s, RV strain pattern",
+  },
+  kawasaki: {
+    baseline: "Sinus tachy due to fever",
+    decomp: "Sinus tachy, no ischemic changes expected",
+  },
+  coarctation_shock: {
+    baseline: "Sinus tachy 180s, possible RV strain",
+    decomp: "Sinus tachy 170s, low amplitude complexes",
+  },
+  arrhythmogenic_syncope: {
+    baseline: "Sinus with occasional PVCs",
+    decomp: "Sinus with runs of VT possible",
+    episode: "Nonsustained VT",
   },
 };
 
