@@ -171,6 +171,7 @@ const [timelineFilter, setTimelineFilter] = useState<string>("all");
   const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 const [timelineSearch, setTimelineSearch] = useState<string>("");
+const [timelineExtras, setTimelineExtras] = useState<{ id: string; ts: number; label: string; detail: string }[]>([]);
 const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exported" | "error">("idle");
 const [voiceLocked, setVoiceLocked] = useState(false);
 const [activeCharacter, setActiveCharacter] = useState<{ character: CharacterId; state: PatientState } | null>(null);
@@ -178,6 +179,7 @@ const [assessmentEnabled, setAssessmentEnabled] = useState(true);
 const [lastAssessmentAt, setLastAssessmentAt] = useState<number>(Date.now());
 const [lastNpcInterjectAt, setLastNpcInterjectAt] = useState<number>(0);
 const [showTelemetryPopout, setShowTelemetryPopout] = useState(false);
+const [assessmentResponse, setAssessmentResponse] = useState<string>("");
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -204,7 +206,7 @@ const [showTelemetryPopout, setShowTelemetryPopout] = useState(false);
       const now = Date.now();
       if (now - lastAssessmentAt >= 180000) {
         const ts = now;
-        setTimelineItems((prev) => [
+        setTimelineExtras((prev) => [
           ...prev,
           {
             id: `assessment-${ts}`,
@@ -307,11 +309,12 @@ const [showTelemetryPopout, setShowTelemetryPopout] = useState(false);
           .join(" | "),
       });
     }
+    timelineExtras.forEach((extra) => items.push(extra));
     return items
       .sort((a, b) => a.ts - b.ts)
       .filter((item, idx, arr) => arr.findIndex((it) => it.id === item.id) === idx)
       .slice(-20);
-  }, [transcriptLog, simState?.orders]);
+  }, [transcriptLog, simState?.orders, timelineExtras]);
   const filteredTimeline = useMemo(
     () =>
       (timelineFilter === "all"
@@ -395,21 +398,21 @@ const [showTelemetryPopout, setShowTelemetryPopout] = useState(false);
         const audio = new Audio(url);
         await audio.play();
         const ts = Date.now();
-        setTranscriptLog((prev) => [
-          ...prev,
-          {
-            id: `exam-audio-${type}-${ts}`,
-            timestamp: ts,
-            text: `${type === "heart" ? "Heart" : "Lung"} sounds played`,
-            character: "tech",
-          },
-        ]);
-        setTimelineItems((prev) => [
-          ...prev,
-          {
-            id: `exam-audio-tl-${type}-${ts}`,
-            ts,
-            label: "Exam",
+      setTranscriptLog((prev) => [
+        ...prev,
+        {
+          id: `exam-audio-${type}-${ts}`,
+          timestamp: ts,
+          text: `${type === "heart" ? "Heart" : "Lung"} sounds played`,
+          character: "tech",
+        },
+      ]);
+      setTimelineExtras((prev) => [
+        ...prev,
+        {
+          id: `exam-audio-tl-${type}-${ts}`,
+          ts,
+          label: "Exam",
             detail: `${type === "heart" ? "Heart" : "Lung"} sounds played`,
           },
         ]);
@@ -1925,6 +1928,58 @@ const [showTelemetryPopout, setShowTelemetryPopout] = useState(false);
                   />
                   Timed assessment prompts
                 </label>
+                <div className="flex flex-col gap-1 text-[10px] text-slate-200">
+                  <label className="text-slate-400">Log assessment response</label>
+                  <textarea
+                    value={assessmentResponse}
+                    onChange={(e) => setAssessmentResponse(e.target.value)}
+                    placeholder="Document differential, plan, next steps…"
+                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[12px] text-slate-100 h-16 resize-none"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={!assessmentResponse.trim()}
+                      onClick={() => {
+                        if (!assessmentResponse.trim()) return;
+                        const ts = Date.now();
+                        setTimelineExtras((prev) => [
+                          ...prev,
+                          {
+                            id: `assessment-response-${ts}`,
+                            ts,
+                            label: "Assessment",
+                            detail: assessmentResponse.trim(),
+                          },
+                        ]);
+                        setTranscriptLog((prev) => [
+                          ...prev,
+                          {
+                            id: `assessment-response-log-${ts}`,
+                            timestamp: ts,
+                            text: assessmentResponse.trim(),
+                            character: "doctor",
+                          },
+                        ]);
+                        setAssessmentResponse("");
+                      }}
+                      className={`px-2 py-1 rounded border text-[10px] ${
+                        assessmentResponse.trim()
+                          ? "border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
+                          : "border-slate-800 bg-slate-900 text-slate-600 cursor-not-allowed"
+                      }`}
+                    >
+                      Save assessment
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAssessmentResponse("")}
+                      className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] text-slate-300"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
                 {examAudio.heart && (
                   <button
                     type="button"
