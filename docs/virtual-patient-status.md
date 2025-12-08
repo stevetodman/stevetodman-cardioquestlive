@@ -1,96 +1,39 @@
 # CardioQuest Live — Virtual Patient Status (Checkpoint)
 
-## Overview
+## What’s working now (voice/AI)
 
-- **CardioQuest Live**: React/Firestore app for presenter-led pediatric cardiology sessions with live slides, polling, and gamified scoring for residents.
-- **Voice Gateway**: Separate Node/TypeScript WebSocket service (`voice-gateway/`) handling real-time voice/control plane, OpenAI STT/TTS, and AI patient responses.
-- **Virtual patient feature set**: Residents speak via push-to-talk; audio is transcribed (STT) into the doctor question box, then a Force Reply (manual or auto) sends the question to the AI patient engine. Patient replies stream as text and (optionally) as TTS audio. All turns are logged for transcript export and AI debrief.
+- Multi-role NPCs (patient/parent/nurse/tech/consultant) with per-role replies; auto-reply with safety/rate limits.
+- Orders: vitals/ekg/labs/imaging with history and strip URLs; imaging/EKG assets fall back to summary if missing.
+- Telemetry: live waveform, rhythm history, alarms with debounce; presenter vitals monitor.
+- Treatments: basic effects with decay and cooldown to prevent rapid re-dosing; scenario transitions for SVT/ductal/cyanotic cases.
+- Persistence: telemetry/EKG histories and timing hydrated on reconnect.
+- Debrief: AI summary/strengths/opportunities/teaching points from transcript.
 
-## Implemented Features (bullet list)
+## How to run (short)
 
-- **STT pipeline**: Resident push-to-talk → `doctor_audio` WS → OpenAI STT → `doctor_utterance` → doctor question textbox auto-fill (editable).
-- **Force Reply modes**: Manual click or optional “Auto Force Reply after resident question” toggle. Both reuse the same logging + WS/Firestore command path.
-- **Patient scenarios**: Presenter-selectable cases per session:
-  - `exertional_chest_pain` (Taylor) — chest pain/palpitations with exertion.
-  - `syncope` — exertional syncope.
-  - `palpitations_svt` — recurrent palpitations/SVT-like episodes.
-  - `myocarditis` — viral prodrome with evolving myocarditis.
-  - `exertional_syncope_hcm` — exertional presyncope with HCM suspicion.
-  - `ductal_shock` — infant shock (duct-dependent lesion).
-  - `cyanotic_spell` — toddler cyanotic spell (tet spell-like).
-  Scenario change resets patient engine/persona and clears local transcript/debrief.
-- **Patient responses**: Streaming text deltas; optional TTS playback on presenter side via `patient_audio`.
-- **Interaction safety**: Keyboard navigation (space/arrows) disabled during patient interaction and while typing to prevent slide jumps.
-- **Transcript tools**: Doctor/patient turn log grouped by role, copy-to-clipboard, download .txt, save timeline snapshot to the session (owner only), and save full transcript to the session; overlay shows streaming text by role.
-- **Orders + multi-character**: Voice commands can target nurse/tech/consultant; orders (vitals/ekg/labs/imaging) tracked in sim_state and rendered as cards with status/results; order completions appear in transcript timeline.
-- **AI debrief**: “Generate debrief” button sends transcript to gateway for OpenAI analysis → summary, strengths, opportunities, teaching points; debrief can be copied/downloaded as Markdown (includes last 20 timeline events).
+Voice gateway:
+```bash
+cd voice-gateway
+npm install
+npm run build
+npm start   # ws://localhost:8081/ws/voice
+```
+Env (set in voice-gateway/.env): `OPENAI_API_KEY`, optional `OPENAI_TTS_VOICE_*`, `OPENAI_MODEL`, `PORT` (default 8081), `ALLOW_INSECURE_VOICE_WS=false` (set true only for local/tunnels without Firebase auth).
 
-## How to Run Locally
+App:
+```bash
+npm install
+npm run dev   # http://localhost:3000
+```
+If using a custom gateway URL: set `VITE_VOICE_GATEWAY_URL`.
 
-1. **Voice gateway**
-   ```bash
-   cd voice-gateway
-   npm install
-   npm run build
-   npm start    # ws://localhost:8081/ws/voice
-   ```
-   Env (`voice-gateway/.env`, no secrets committed):
-   - `OPENAI_API_KEY` (required for STT/TTS/AI replies)
-   - `OPENAI_MODEL` (default `gpt-4.1-mini`)
-   - `OPENAI_TTS_MODEL` (default `gpt-4o-mini-tts`)
-   - `OPENAI_TTS_VOICE` (default `alloy`)
-   - `OPENAI_STT_MODEL` (default `whisper-1`)
-   - `OPENAI_DEBRIEF_MODEL` (default `gpt-4.1-mini`)
-   - `PORT` (default `8081`)
-   - `ALLOW_INSECURE_VOICE_WS` (default `false`; set `true` only for local dev/tunnels if you cannot pass Firebase ID tokens)
+## Tests
+- Gateway/unit: `npm run test:gateway`
+- UI pages: `npm test -- --runInBand src/pages/__tests__/JoinSession.test.tsx src/pages/__tests__/PresenterSessionSummary.test.tsx`
+- Rules: `npm run test:rules` (or `FIRESTORE_PORT=62088 FIRESTORE_WS_PORT=62188 FIREBASE_HUB_PORT=62402 FIREBASE_LOGGING_PORT=62502 npm run test:rules:ports` if defaults are blocked)
 
-2. **App**
-   ```bash
-   npm install
-   npm run dev   # default http://localhost:3000
-   ```
-   - Presenter on Mac: use localhost.
-   - Participants on phone: use LAN URL, e.g., `http://<your-LAN-IP>:3000` (and point VITE_VOICE_GATEWAY_URL if needed).
-
-## Important File Map
-
-- **Presenter UI / logic**
-  - `src/pages/PresenterSession.tsx`: Wiring of voice state, transcript, auto Force Reply, scenario selection, debrief, overlay.
-  - `src/components/PresenterVoiceControls.tsx`: Voice controls, scenario dropdown, auto Force Reply toggle.
-  - `src/components/VoicePatientOverlay.tsx`: Streaming transcript display + patient audio playback.
-  - `src/components/SessionTranscriptPanel.tsx`: Transcript log + copy/download.
-  - `src/components/DebriefPanel.tsx`: Generate/show AI debrief.
-- **Participant / resident**
-  - `src/pages/JoinSession.tsx`: Take floor, hold-to-speak, mic level, STT upload, error messaging.
-  - `src/services/VoicePatientService.ts`: Mic permission, RMS, MediaRecorder blobs, turn-complete event.
-- **Shared voice client/types**
-  - `src/services/VoiceGatewayClient.ts`: WS client, commands (`doctor_audio`, `set_scenario`, `analyze_transcript`), patient audio/utterance handling.
-  - `src/types/voiceGateway.ts`: Message/type definitions.
-- **Voice gateway**
-  - `voice-gateway/src/index.ts`: WS server, message handling, scenarios, STT, TTS, debrief.
-  - Per-role voices supported via env:
-    - `OPENAI_TTS_VOICE_PATIENT`, `OPENAI_TTS_VOICE_NURSE`, `OPENAI_TTS_VOICE_TECH`, `OPENAI_TTS_VOICE_CONSULTANT` (fallback: `OPENAI_TTS_VOICE`).
-  - `voice-gateway/src/messageTypes.ts`: Protocol types.
-  - `voice-gateway/src/patientCase.ts`, `patientEngine.ts`, `patientPersona.ts`: Cases/personas and per-session engine.
-  - `voice-gateway/src/sttClient.ts`, `ttsClient.ts`, `debriefAnalyzer.ts`: OpenAI integrations for STT/TTS/debrief.
-- **Firestore**
-  - `firestore.rules`: Session/voice rules; voice-only updates allowed for authenticated users when valid.
-
-## Latest additions
-
-- Multi-role voices with presenter overlay avatars (patient/parent/nurse/tech/consultant).
-- Exam/telemetry/EKG state in `sim_state`: stage-driven exam snippets, telemetry waveform + rhythm history, EKG archive with meta (rate/axis/intervals) and strip URLs.
-- Treatment effects with basic decay and scenario transitions (e.g., SVT → post-episode after rate control; ductal shock improves after bolus; cyanotic spell improves after O₂/knee-chest).
-- Histories persisted via Firestore (telemetry/EKG) and hydrated on reconnect.
-- Timeline now shows EKG/telemetry updates; EKG viewer shows prior strips.
-- Placeholder assets checked in under `/public/avatars/*.png` and `/public/images/ekg/*.png`—replace with final art/strips as needed.
-
-## Open TODOs / Next Ideas
-
-- Swap placeholders for final avatar art and scenario-specific EKG strips.
-- Add transcript/debrief logging of actions (exam/telemetry/EKG/treatment) with export.
-- Refine treatment curves and alarms: scenario-specific dosing/stacking, telemetry alarms for deterioration.
-- Improve mobile UX for floor/voice (permissions/network banners) and participant-side guardrails.
-- Participant-side audio playback fan-out (currently presenter-only).
-- For iPhone mic support in dev, run over HTTPS/WSS via quick or named Cloudflare tunnels; see `docs/virtual-patient-https-iphone.md`.
-- Voice WS auth is secure by default; use Firebase ID tokens. Only set `ALLOW_INSECURE_VOICE_WS=true` for local/emulator or quick-tunnel dev.
+## Known gaps
+- Placeholder avatar/EKG assets; replace with final art/strips.
+- Treatment/alarms are simplified (no weight-based dosing/stacking realism).
+- Budget/alarm badges are presenter-only; participant UX still basic.
+- Limited E2E tests for presenter/participant flows; consider adding before major UI changes.

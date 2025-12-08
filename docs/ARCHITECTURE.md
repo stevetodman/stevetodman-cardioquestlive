@@ -59,3 +59,14 @@ This guide is a quick map for developers joining the project. It highlights wher
 - Slides are raw HTML strings; no sanitizer is applied in presenter. Keep content trusted.
 - Interactive clue tiles are a presenter affordance; participant view is static unless explicitly built otherwise.
 - Firestore security rules mirror the above model (`firestore.rules`).
+
+## Voice gateway (overview)
+
+- **Transport**: `voice-gateway/src/transport.ts` boots the WebSocket server at `/ws/voice`.
+- **Orchestration**: `voice-gateway/src/index.ts` wires message handling, scenarios, orders, telemetry, and safety; `orchestrator.ts` coordinates message flow.
+- **Domain modules**:
+  - Safety/rate limits: `autoReplyGuard.ts`, `speechHelpers.ts`.
+  - Orders/telemetry: `orders.ts`, `telemetry.ts`, `assetUtils.ts`.
+  - State/persistence: `sim/scenarioEngine.ts`, `persistence.ts`, `messageTypes.ts`, `validators.ts`.
+  - OpenAI integrations: `sttClient.ts`, `ttsClient.ts`, `debriefAnalyzer.ts`, `openaiClient.ts`.
+- **Tests**: `npm run test:gateway` runs gateway/unit behavior; page tests cover basic presenter flows; rules tests via `npm run test:rules` (or `test:rules:ports` with env overrides if ports are blocked).
