@@ -525,7 +525,11 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
     const finalText = fullText.trim();
     engine.appendPatientTurn(finalText);
 
-    const audioBuffer = await synthesizePatientAudio(finalText, CHARACTER_VOICE_MAP[routedCharacter]);
+    const audioBuffer = await withRetry(
+      () => synthesizePatientAudio(finalText, CHARACTER_VOICE_MAP[routedCharacter]),
+      { label: "tts", attempts: 2, delayMs: 150 },
+      sessionId
+    );
     if (audioBuffer) {
       sessionManager.broadcastToPresenters(sessionId, {
         type: "patient_audio",
@@ -533,6 +537,8 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
         audioBase64: audioBuffer.toString("base64"),
         character: routedCharacter,
       });
+    } else {
+      sendDegradedNotice(sessionId, "Audio unavailable; showing text reply only.");
     }
 
     sessionManager.broadcastToSession(sessionId, {
@@ -646,10 +652,16 @@ async function handleDoctorAudioLegacy(
   contentType: string,
   character?: CharacterId
 ) {
-  const text = await transcribeDoctorAudio(audioBuffer, contentType);
+  const text = await withRetry(
+    () => transcribeDoctorAudio(audioBuffer, contentType),
+    { label: "stt", attempts: 2, delayMs: 150 },
+    sessionId
+  );
   if (text && text.trim().length > 0) {
     log("STT transcript", sessionId, text.slice(0, 120));
     broadcastDoctorUtterance(sessionId, userId, text, character);
+  } else {
+    sendDegradedNotice(sessionId, "Transcription unavailable; please repeat or use manual reply.");
   }
 }
 
@@ -1216,6 +1228,36 @@ function handleTreatment(sessionId: string, treatmentType?: string) {
       });
     }, decayMs);
   }
+}
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  opts: { label: string; attempts?: number; delayMs?: number },
+  sessionId?: string
+): Promise<T | null> {
+  const { label, attempts = 2, delayMs = 150 } = opts;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i === attempts - 1) {
+        logError(`${label} failed after ${attempts} attempts`, err);
+        if (sessionId) sendDegradedNotice(sessionId, `${label.toUpperCase()} temporarily unavailable.`);
+        break;
+      }
+      await new Promise((res) => setTimeout(res, delayMs));
+    }
+  }
+  return null;
+}
+
+function sendDegradedNotice(sessionId: string, text: string) {
+  sessionManager.broadcastToPresenters(sessionId, {
+    type: "patient_transcript_delta",
+    sessionId,
+    text,
+    character: "nurse",
+  });
 }
 
 function maybeAdvanceStageFromTreatment(runtime: Runtime, treatmentType?: string) {
