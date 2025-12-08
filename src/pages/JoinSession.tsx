@@ -762,6 +762,8 @@ const [toast, setToast] = useState<{ message: string; ts: number } | null>(null)
                     const highlight =
                       order.result?.summary &&
                       /elevated|abnormal|shock|effusion|edema|ectasia|rvh|low|high|thickened/i.test(order.result.summary);
+                    const keyAbnormal = order.result?.abnormal;
+                    const nextAction = order.result?.nextAction;
                     return (
                       <div
                         key={order.id}
@@ -788,6 +790,12 @@ const [toast, setToast] = useState<{ message: string; ts: number } | null>(null)
                             }`}
                           >
                             {detail}
+                            {keyAbnormal && (
+                              <div className="text-[11px] text-amber-200 mt-1">Key abnormal: {keyAbnormal}</div>
+                            )}
+                            {nextAction && (
+                              <div className="text-[11px] text-slate-300 mt-1">Next: {nextAction}</div>
+                            )}
                             {order.result?.rationale && (
                               <div className="text-[11px] text-slate-400 mt-1">{order.result.rationale}</div>
                             )}

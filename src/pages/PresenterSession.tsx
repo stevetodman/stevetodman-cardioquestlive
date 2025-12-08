@@ -1657,16 +1657,22 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
                         {isDone && order.result?.type === "ekg" && (
                           <div className="text-slate-300 text-[12px] mt-1">
                             {order.result.summary ?? "EKG ready"}
+                            {order.result.abnormal && <div className="text-amber-200 text-[11px]">Key abnormal: {order.result.abnormal}</div>}
+                            {order.result.nextAction && <div className="text-slate-300 text-[11px]">Next: {order.result.nextAction}</div>}
                           </div>
                         )}
                         {isDone && order.result?.type === "labs" && (
                           <div className="text-slate-300 text-[12px] mt-1">
                             {order.result.summary ?? "Labs ready"}
+                            {order.result.abnormal && <div className="text-amber-200 text-[11px]">Key abnormal: {order.result.abnormal}</div>}
+                            {order.result.nextAction && <div className="text-slate-300 text-[11px]">Next: {order.result.nextAction}</div>}
                           </div>
                         )}
                         {isDone && order.result?.type === "imaging" && (
                           <div className="text-slate-300 text-[12px] mt-1">
                             {order.result.summary ?? "Imaging ready"}
+                            {order.result.abnormal && <div className="text-amber-200 text-[11px]">Key abnormal: {order.result.abnormal}</div>}
+                            {order.result.nextAction && <div className="text-slate-300 text-[11px]">Next: {order.result.nextAction}</div>}
                           </div>
                         )}
                       </div>
