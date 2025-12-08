@@ -217,6 +217,26 @@ const [lastContextStage, setLastContextStage] = useState<string | null>(null);
           stage_2_irritable: "Nurse: \"Telemetry is picking up some irregular beats.\"",
           stage_3_vtach_risk: "Nurse: \"Rhythm looks more unstable—be ready.\"",
         },
+        syncope: {
+          stage_1_baseline: "Parent: \"She nearly fainted when standing—seems pale.\"",
+          stage_2_decomp: "Nurse: \"Blood pressure is softer when she stands.\"",
+        },
+        myocarditis: {
+          stage_1_baseline: "Nurse: \"Tired and tachy—listen for rub or gallop.\"",
+          stage_2_decomp: "Nurse: \"Crackles increased; pulses feel weak.\"",
+        },
+        cyanotic_spell: {
+          stage_1_baseline: "Parent: \"He squats when upset—it helps him breathe.\"",
+          stage_2_spell: "Nurse: \"Cyanotic and irritable—maybe a spell.\"",
+        },
+        ductal_shock: {
+          stage_1_shock: "Nurse: \"Lower extremity pulses are barely palpable.\"",
+          stage_2_decomp: "Nurse: \"After support, upper pulses better than lower.\"",
+        },
+        exertional_syncope_hcm: {
+          stage_1_baseline: "Parent: \"He gets dizzy after running; murmur louder standing.\"",
+          stage_2_decomp: "Nurse: \"HR up and still dizzy when upright.\"",
+        },
       };
       const scenarioContext = contextByScenario[simState.scenarioId ?? ""] ?? {};
       const msg = scenarioContext[simState.stageId] ?? null;
@@ -591,14 +611,22 @@ const [lastContextStage, setLastContextStage] = useState<string | null>(null);
       });
     lines.push("");
     lines.push("## Timeline (last 30)");
-    timelineItems
-      .sort((a, b) => a.ts - b.ts)
-      .slice(-30)
-      .forEach((item) => {
+    const sortedTimeline = [...timelineItems].sort((a, b) => a.ts - b.ts).slice(-30);
+    sortedTimeline.forEach((item) => {
+      lines.push(
+        `[${new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}] ${item.label}: ${item.detail}`
+      );
+    });
+    const audioEvents = sortedTimeline.filter((t) => t.label === "Exam" && t.detail.toLowerCase().includes("sounds"));
+    if (audioEvents.length > 0) {
+      lines.push("");
+      lines.push("## Audio Exam Events");
+      audioEvents.forEach((ev) => {
         lines.push(
-          `[${new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}] ${item.label}: ${item.detail}`
+          `[${new Date(ev.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}] ${ev.detail}`
         );
       });
+    }
     return lines.join("\n");
   }, [sessionId, simState, selectedScenario, scoringSummary, transcriptLog, timelineItems]);
   const debriefReportText = useMemo(() => {
@@ -621,6 +649,20 @@ const [lastContextStage, setLastContextStage] = useState<string | null>(null);
     }
     if (timelineItems.length > 0) {
       parts.push("## Timeline (last 20 events)", timelineText || "—");
+    }
+    const audioEvents = timelineItems.filter((t) => t.label === "Exam" && t.detail.toLowerCase().includes("sounds"));
+    if (audioEvents.length > 0) {
+      parts.push(
+        "## Audio Exam Events",
+        audioEvents
+          .slice(-10)
+          .sort((a, b) => a.ts - b.ts)
+          .map(
+            (ev) =>
+              `[${new Date(ev.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}] ${ev.detail}`
+          )
+          .join("\n")
+      );
     }
     return parts.join("\n\n");
   }, [debriefResult, sessionId, timelineItems.length, timelineText]);
