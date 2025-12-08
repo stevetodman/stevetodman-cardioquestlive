@@ -26,6 +26,7 @@ import { Runtime } from "./typesRuntime";
 import { createOrderHandler } from "./orders";
 import { shouldAutoReply } from "./autoReplyGuard";
 import { createTransport, send, ClientContext } from "./transport";
+import { makeOrchestrator } from "./orchestrator";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
