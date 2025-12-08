@@ -9,6 +9,7 @@ export type OrderResult =
   | { type: "ekg"; summary: string; imageUrl?: string; meta?: { rate?: string; axis?: string; intervals?: string } }
   | { type: "labs"; summary: string }
   | { type: "imaging"; summary: string };
+  
 
 export type ClientToServerMessage =
   | {

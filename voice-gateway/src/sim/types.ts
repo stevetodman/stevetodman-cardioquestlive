@@ -83,7 +83,7 @@ export type SimState = {
     id: string;
     type: "vitals" | "ekg" | "labs" | "imaging";
     status: "pending" | "complete";
-    result?: Record<string, unknown>;
+    result?: import("../messageTypes").OrderResult;
     completedAt?: number;
   }[];
   budget?: {

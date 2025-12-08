@@ -26,7 +26,6 @@ import { Runtime } from "./typesRuntime";
 import { createOrderHandler } from "./orders";
 import { shouldAutoReply } from "./autoReplyGuard";
 import { createTransport, send, ClientContext } from "./transport";
-import { makeOrchestrator } from "./orchestrator";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
@@ -65,8 +64,6 @@ if (allowInsecureWs && process.env.NODE_ENV === "production") {
 
 const runtimes: Map<string, Runtime> = new Map();
 const scenarioTimers: Map<string, NodeJS.Timeout> = new Map();
-const notifiedOrders: Map<string, Set<string>> = new Map();
-const alertFlags: Map<string, { hypoxia?: boolean }> = new Map();
 const hydratedSessions: Set<string> = new Set();
 
 const CHARACTER_VOICE_MAP: Partial<Record<CharacterId, string>> = {
@@ -895,7 +892,7 @@ function startScenarioHeartbeat(sessionId: string) {
     const telemetryWaveform = runtime.scenarioEngine.getState().telemetry
       ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
       : undefined;
-    checkAlarms(sessionId, runtime);
+    checkAlarms(sessionId, runtime, alarmSeenAt, sessionManager);
     if (result) {
       if (runtime.scenarioEngine.getState().telemetry) {
         const rhythm = runtime.scenarioEngine.getState().rhythmSummary;
@@ -1003,128 +1000,6 @@ function buildSystemPrompt(scenario: PatientScenarioId): string {
 }
 
 main();
-function makeOrder(type: "vitals" | "ekg" | "labs" | "imaging"): { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending"; createdAt: number } {
-  return {
-    id: `order-${type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    type,
-    status: "pending",
-    createdAt: Date.now(),
-  };
-}
-
-function resolveOrder(order: { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending" | "complete"; result?: OrderResult }, scenario: PatientScenarioId): OrderResult {
-  const result = getOrderResultTemplate(order.type, scenario);
-  if ((order.type === "ekg" || order.type === "imaging") && (result as any).imageUrl) {
-    const exists = assetExists((result as any).imageUrl as string);
-    if (!exists) {
-      log(`[asset] missing ${order.type} asset ${((result as any).imageUrl as string)}`);
-      (result as any).imageUrl = undefined;
-      (result as any).summary = `${(result as any).summary ?? "Result ready"} (image unavailable)`;
-    }
-  }
-  return result;
-}
-
-function handleOrder(sessionId: string, orderType: "vitals" | "ekg" | "labs" | "imaging") {
-  const runtime = ensureRuntime(sessionId);
-  const currentOrders = runtime.scenarioEngine.getState().orders ?? [];
-  const newOrder = makeOrder(orderType);
-  const nextOrders = [...currentOrders, newOrder];
-  broadcastSimState(sessionId, {
-    ...runtime.scenarioEngine.getState(),
-    stageIds: runtime.scenarioEngine.getStageIds(),
-    orders: nextOrders,
-  });
-  const delay = orderType === "vitals" ? 1500 : orderType === "ekg" ? 2500 : 2200;
-  setTimeout(() => {
-    const result = resolveOrder(newOrder, runtime.scenarioEngine.getState().scenarioId as PatientScenarioId);
-    const updatedOrders = nextOrders.map((o) =>
-      o.id === newOrder.id ? { ...o, status: "complete", result, completedAt: Date.now() } : o
-    );
-    const stateRef: any = runtime.scenarioEngine.getState();
-    if (orderType === "ekg") {
-      stateRef.telemetry = true;
-      stateRef.rhythmSummary = result.summary;
-      const entry = { ts: Date.now(), summary: result.summary, imageUrl: (result as any).imageUrl };
-      const updatedHistory = [...(runtime.scenarioEngine.getState().ekgHistory ?? []), entry].slice(-3);
-      runtime.scenarioEngine.setEkgHistory(updatedHistory);
-    }
-    const telemetryWaveform =
-      orderType === "ekg"
-        ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
-        : runtime.scenarioEngine.getState().telemetry
-        ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
-        : undefined;
-    broadcastSimState(sessionId, {
-      ...runtime.scenarioEngine.getState(),
-      stageIds: runtime.scenarioEngine.getStageIds(),
-      telemetry: orderType === "ekg" ? true : runtime.scenarioEngine.getState().telemetry,
-      rhythmSummary: orderType === "ekg" ? result.summary : runtime.scenarioEngine.getState().rhythmSummary,
-      telemetryWaveform,
-      ekgHistory: runtime.scenarioEngine.getState().ekgHistory,
-      orders: updatedOrders,
-    });
-    if (orderType === "ekg") {
-      const announcement =
-        result?.summary && typeof result.summary === "string"
-          ? `EKG complete: ${result.summary}`
-          : "EKG complete. Displaying the strip now.";
-      sessionManager.broadcastToSession(sessionId, {
-        type: "patient_state",
-        sessionId,
-        state: "speaking",
-        character: "tech",
-      });
-      sessionManager.broadcastToSession(sessionId, {
-        type: "patient_transcript_delta",
-        sessionId,
-        text: announcement,
-        character: "tech",
-      });
-      sessionManager.broadcastToSession(sessionId, {
-        type: "patient_state",
-        sessionId,
-        state: "idle",
-        character: "tech",
-      });
-    } else if (orderType === "imaging") {
-      const announcement =
-        result?.summary && typeof result.summary === "string"
-          ? `Chest X-ray complete: ${result.summary}`
-          : "Chest X-ray complete. Showing the image now.";
-      sessionManager.broadcastToSession(sessionId, {
-        type: "patient_state",
-        sessionId,
-        state: "speaking",
-        character: "imaging",
-      });
-      sessionManager.broadcastToSession(sessionId, {
-        type: "patient_transcript_delta",
-        sessionId,
-        text: announcement,
-        character: "imaging",
-      });
-      sessionManager.broadcastToSession(sessionId, {
-        type: "patient_state",
-        sessionId,
-        state: "idle",
-        character: "imaging",
-      });
-      if ((result as any).imageUrl === undefined) {
-        sessionManager.broadcastToPresenters(sessionId, {
-          type: "patient_transcript_delta",
-          sessionId,
-          text: "Imaging: image asset not available; showing summary only.",
-          character: "imaging",
-        });
-      }
-    }
-    logSimEvent(sessionId, {
-      type: `order.${orderType}.complete`,
-      payload: { result, completedAt: Date.now() },
-    }).catch(() => {});
-  }, delay);
-}
 
 function handleExamRequest(sessionId: string) {
   const runtime = ensureRuntime(sessionId);
@@ -1343,17 +1218,6 @@ function handleTreatment(sessionId: string, treatmentType?: string) {
   }
 }
 
-function assetExists(urlPath: string): boolean {
-  // urlPath expected like "/images/ekg/ekg-baseline.png"
-  const clean = urlPath.startsWith("/") ? urlPath.slice(1) : urlPath;
-  const abs = path.join(process.cwd(), "public", clean);
-  try {
-    return fs.existsSync(abs);
-  } catch {
-    return false;
-  }
-}
-
 function maybeAdvanceStageFromTreatment(runtime: Runtime, treatmentType?: string) {
   const scenarioId = runtime.scenarioEngine.getState().scenarioId as PatientScenarioId;
   const stageId = runtime.scenarioEngine.getState().stageId;
@@ -1367,40 +1231,4 @@ function maybeAdvanceStageFromTreatment(runtime: Runtime, treatmentType?: string
   if (scenarioId === "cyanotic_spell" && stageId === "stage_2_spell" && (t.includes("oxygen") || t.includes("knee") || t.includes("position"))) {
     runtime.scenarioEngine.setStage("stage_3_recovery");
   }
-}
-
-function checkAlarms(sessionId: string, runtime: Runtime) {
-  const vitals = runtime.scenarioEngine.getState().vitals || {};
-  const spo2 = vitals.spo2 ?? 100;
-  const hr = vitals.hr ?? 80;
-  const alarms: string[] = [];
-  const now = Date.now();
-  const seen = alarmSeenAt.get(sessionId) ?? {};
-  if (spo2 < 88) {
-    seen.spo2Low = seen.spo2Low ?? now;
-    if (now - seen.spo2Low >= 4000) alarms.push(`SpO2 low: ${spo2}%`);
-  } else {
-    seen.spo2Low = undefined;
-  }
-  if (hr > 170) {
-    seen.hrHigh = seen.hrHigh ?? now;
-    if (now - seen.hrHigh >= 4000) alarms.push(`HR high: ${hr} bpm`);
-  } else {
-    seen.hrHigh = undefined;
-  }
-  if (hr < 40) {
-    seen.hrLow = seen.hrLow ?? now;
-    if (now - seen.hrLow >= 4000) alarms.push(`HR low: ${hr} bpm`);
-  } else {
-    seen.hrLow = undefined;
-  }
-  alarmSeenAt.set(sessionId, seen);
-  if (alarms.length === 0) return;
-  sessionManager.broadcastToPresenters(sessionId, {
-    type: "patient_transcript_delta",
-    sessionId,
-    text: `ALARM: ${alarms.join(" | ")}`,
-    character: "nurse",
-  });
-  logSimEvent(sessionId, { type: "alarm", payload: { alarms } }).catch(() => {});
 }

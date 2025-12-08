@@ -20,6 +20,7 @@ export function shouldAutoReply(opts: {
   const trimmed = text.trim();
   if (!trimmed) return false;
 
+  // Zero-latency local safety guard: block known profanity/PII-like patterns.
   if (isUnsafeUtterance(trimmed)) return false;
 
   // Minimal length guard
