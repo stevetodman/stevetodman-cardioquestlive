@@ -186,6 +186,8 @@ const [assessmentDifferential, setAssessmentDifferential] = useState<string[]>([
 const [assessmentPlan, setAssessmentPlan] = useState<string[]>([]);
 const [npcCooldowns, setNpcCooldowns] = useState<Record<string, number>>({});
 const [scoringTrend, setScoringTrend] = useState<{ current: number; delta: number }>({ current: 0, delta: 0 });
+const lastRhythmRef = useRef<string | null>(null);
+const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -510,6 +512,13 @@ const [scoringTrend, setScoringTrend] = useState<{ current: number; delta: numbe
       delta: scoringSummary.score - (prev.current ?? scoringSummary.score),
     }));
   }, [scoringSummary.score]);
+  useEffect(() => {
+    const rhythm = simState?.rhythmSummary ?? null;
+    if (rhythm && rhythm !== lastRhythmRef.current) {
+      setRhythmAlert(rhythm);
+      lastRhythmRef.current = rhythm;
+    }
+  }, [simState?.rhythmSummary]);
   const transcriptText = useMemo(() => {
     const parts: string[] = [];
     transcriptLog.forEach((t) => {
@@ -1532,6 +1541,11 @@ const [scoringTrend, setScoringTrend] = useState<{ current: number; delta: numbe
                     <span className="px-2 py-0.5 rounded-full border border-emerald-500/40 text-[10px] text-emerald-200">
                       {simState.telemetryHistory?.slice(-1)[0]?.rhythm ?? "Live"}
                     </span>
+                    {rhythmAlert && (
+                      <span className="px-2 py-0.5 rounded-full border border-amber-500/60 text-[10px] text-amber-200">
+                        Rhythm changed
+                      </span>
+                    )}
                   </div>
                   {simState.telemetryWaveform && simState.telemetryWaveform.length > 0 && (
                     <svg viewBox={`0 0 ${simState.telemetryWaveform.length} 2`} className="w-full h-16 mt-2">
@@ -1562,6 +1576,29 @@ const [scoringTrend, setScoringTrend] = useState<{ current: number; delta: numbe
                       {latestEkgMeta.rate && <div>Rate: {latestEkgMeta.rate}</div>}
                       {latestEkgMeta.intervals && <div>Intervals: {latestEkgMeta.intervals}</div>}
                       {latestEkgMeta.axis && <div>Axis: {latestEkgMeta.axis}</div>}
+                    </div>
+                  )}
+                  {rhythmAlert && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ts = Date.now();
+                          setTimelineExtras((prev) => [
+                            ...prev,
+                            {
+                              id: `rhythm-pin-${ts}`,
+                              ts,
+                              label: "Telemetry",
+                              detail: `Rhythm: ${rhythmAlert}`,
+                            },
+                          ]);
+                          setRhythmAlert(null);
+                        }}
+                        className="px-2 py-1 rounded border border-amber-500/60 text-[11px] text-amber-100 bg-amber-500/10 hover:border-amber-400"
+                      >
+                        Pin rhythm change
+                      </button>
                     </div>
                   )}
                 </div>

@@ -99,12 +99,14 @@ export default function JoinSession() {
     stageIds?: string[];
     orders?: { id: string; type: string; status: string; result?: any; completedAt?: number }[];
   } | null>(null);
-  const [micStatus, setMicStatus] = useState<MicStatus>("unknown");
-  const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
-  const [voiceError, setVoiceError] = useState<string | null>(null);
-  const [showExam, setShowExam] = useState(false);
-  const [showEkg, setShowEkg] = useState(false);
-  const [toast, setToast] = useState<{ message: string; ts: number } | null>(null);
+const [micStatus, setMicStatus] = useState<MicStatus>("unknown");
+const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
+const [voiceError, setVoiceError] = useState<string | null>(null);
+const [showExam, setShowExam] = useState(false);
+const [showEkg, setShowEkg] = useState(false);
+const [toast, setToast] = useState<{ message: string; ts: number } | null>(null);
+  const [lastFloorHolder, setLastFloorHolder] = useState<string | null>(null);
+  const [lastFallback, setLastFallback] = useState<boolean | null>(null);
   const voice = useVoiceState(sessionId);
   const userDisplayName = auth?.currentUser?.displayName ?? "Resident";
   useEffect(() => {
@@ -112,6 +114,33 @@ export default function JoinSession() {
     const t = setTimeout(() => setToast(null), 3000);
     return () => clearTimeout(t);
   }, [toast]);
+  useEffect(() => {
+    if (!voice) return;
+    if (voice.floorHolderId !== lastFloorHolder) {
+      if (voice.floorHolderId === userId) {
+        setToast({ message: "You have the floor", ts: Date.now() });
+      } else if (voice.floorHolderId) {
+        setToast({ message: `${voice.floorHolderName ?? "Another resident"} has the floor`, ts: Date.now() });
+      } else if (lastFloorHolder) {
+        setToast({ message: "Floor is now free", ts: Date.now() });
+      }
+      setLastFloorHolder(voice.floorHolderId ?? null);
+    }
+  }, [voice.floorHolderId, voice.floorHolderName, userId, lastFloorHolder]);
+  useEffect(() => {
+    const currentFallback = simState?.fallback ?? false;
+    if (lastFallback === null) {
+      setLastFallback(currentFallback);
+      return;
+    }
+    if (currentFallback !== lastFallback) {
+      setToast({
+        message: currentFallback ? "Voice fallback on. Use text/typed questions." : "Voice live again.",
+        ts: Date.now(),
+      });
+      setLastFallback(currentFallback);
+    }
+  }, [simState?.fallback, lastFallback]);
 
   useEffect(() => {
     if (!isConfigured || !auth) return;
