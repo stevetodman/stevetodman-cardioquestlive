@@ -165,6 +165,7 @@ export type ServerToClientMessage =
       scenarioId?: PatientScenarioId;
       vitals: Record<string, unknown>;
       exam?: Record<string, string | undefined>;
+      examAudio?: { type: "heart" | "lung"; label: string; url: string; stageId?: string }[];
       telemetry?: boolean;
       rhythmSummary?: string;
       telemetryWaveform?: number[];

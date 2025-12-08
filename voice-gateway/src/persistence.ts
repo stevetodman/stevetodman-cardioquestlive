@@ -153,6 +153,16 @@ const persistedStateSchema = z
     findings: z.array(z.string()).optional(),
     fallback: z.boolean().optional(),
     stageIds: z.array(z.string()).optional(),
+    examAudio: z
+      .array(
+        z.object({
+          type: z.enum(["heart", "lung"]),
+          label: z.string(),
+          url: z.string(),
+          stageId: z.string().optional(),
+        })
+      )
+      .optional(),
     orders: z
       .array(
         z.object({

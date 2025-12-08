@@ -27,6 +27,7 @@ import { Runtime } from "./typesRuntime";
 import { createOrderHandler } from "./orders";
 import { shouldAutoReply } from "./autoReplyGuard";
 import { createTransport, send, ClientContext } from "./transport";
+import { getAuscultationClips } from "./data/auscultation";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
@@ -971,14 +972,17 @@ function broadcastSimState(
     logError("sim_state validation failed; skipping broadcast", state);
     return;
   }
+  const scenarioId = (validated.scenarioId ?? getScenarioForSession(sessionId)) as PatientScenarioId;
+  const examAudio = getAuscultationClips(scenarioId, validated.stageId);
   sessionManager.broadcastToSession(sessionId, {
     type: "sim_state",
     sessionId,
     stageId: validated.stageId,
     stageIds: validated.stageIds,
-    scenarioId: (validated.scenarioId ?? getScenarioForSession(sessionId)) as PatientScenarioId,
+    scenarioId,
     vitals: validated.vitals ?? {},
     exam: validated.exam ?? {},
+    examAudio,
     telemetry: validated.telemetry,
     rhythmSummary: validated.rhythmSummary,
     telemetryWaveform: validated.telemetryWaveform,

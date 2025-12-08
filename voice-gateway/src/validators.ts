@@ -117,6 +117,16 @@ const simStateSchema = z
         lungAudioUrl: z.string().optional(),
       })
       .optional(),
+    examAudio: z
+      .array(
+        z.object({
+          type: z.enum(["heart", "lung"]),
+          label: z.string(),
+          url: z.string(),
+          stageId: z.string().optional(),
+        })
+      )
+      .optional(),
     telemetry: z.boolean().optional(),
     rhythmSummary: z.string().optional(),
     telemetryWaveform: z.array(z.number()).optional(),

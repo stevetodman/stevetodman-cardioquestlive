@@ -20,6 +20,7 @@ type SimStateListener = (state: {
   scenarioId?: PatientScenarioId;
   vitals: Record<string, unknown>;
   exam?: Record<string, string | undefined>;
+  examAudio?: { type: "heart" | "lung"; label: string; url: string }[];
   telemetry?: boolean;
   rhythmSummary?: string;
   telemetryWaveform?: number[];
@@ -353,6 +354,7 @@ class VoiceGatewayClient {
             scenarioId: msg.scenarioId,
             vitals: msg.vitals,
             exam: (msg as any).exam,
+            examAudio: (msg as any).examAudio,
             telemetry: (msg as any).telemetry,
             rhythmSummary: (msg as any).rhythmSummary,
             telemetryWaveform: (msg as any).telemetryWaveform,

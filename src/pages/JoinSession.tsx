@@ -90,6 +90,7 @@ export default function JoinSession() {
     stageId: string;
     vitals: Record<string, unknown>;
     exam?: Record<string, string | undefined>;
+    examAudio?: { type: "heart" | "lung"; label: string; url: string }[];
     telemetry?: boolean;
     rhythmSummary?: string;
     telemetryWaveform?: number[];
@@ -99,15 +100,18 @@ export default function JoinSession() {
     stageIds?: string[];
     orders?: { id: string; type: string; status: string; result?: any; completedAt?: number }[];
   } | null>(null);
-const [micStatus, setMicStatus] = useState<MicStatus>("unknown");
-const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
-const [voiceError, setVoiceError] = useState<string | null>(null);
-const [showExam, setShowExam] = useState(false);
-const [showEkg, setShowEkg] = useState(false);
-const [toast, setToast] = useState<{ message: string; ts: number } | null>(null);
-const [lastFloorHolder, setLastFloorHolder] = useState<string | null>(null);
-const [lastFallback, setLastFallback] = useState<boolean | null>(null);
+  const [micStatus, setMicStatus] = useState<MicStatus>("unknown");
+  const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [showExam, setShowExam] = useState(false);
+  const [showEkg, setShowEkg] = useState(false);
+  const [toast, setToast] = useState<{ message: string; ts: number } | null>(null);
+  const [lastFloorHolder, setLastFloorHolder] = useState<string | null>(null);
+  const [lastFallback, setLastFallback] = useState<boolean | null>(null);
   const [assessmentRequest, setAssessmentRequest] = useState<{ ts: number; stage?: string } | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playingClipId, setPlayingClipId] = useState<string | null>(null);
+  const [audioError, setAudioError] = useState<string | null>(null);
   const voice = useVoiceState(sessionId);
   const userDisplayName = auth?.currentUser?.displayName ?? "Resident";
   useEffect(() => {
@@ -142,6 +146,15 @@ const [lastFallback, setLastFallback] = useState<boolean | null>(null);
       setLastFallback(currentFallback);
     }
   }, [simState?.fallback, lastFallback]);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!isConfigured || !auth) return;
@@ -442,6 +455,36 @@ const [lastFallback, setLastFallback] = useState<boolean | null>(null);
   const handlePressEnd = async () => {
     voicePatientService.stopCapture();
     voiceGatewayClient.stopSpeaking(targetCharacter);
+  };
+
+  const stopExamAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setPlayingClipId(null);
+  };
+
+  const handlePlayExamClip = (clip: { url: string; label: string }) => {
+    setAudioError(null);
+    const isSame = playingClipId === clip.url;
+    if (isSame) {
+      stopExamAudio();
+      return;
+    }
+    stopExamAudio();
+    const el = new Audio(clip.url);
+    audioRef.current = el;
+    setPlayingClipId(clip.url);
+    el.onended = () => stopExamAudio();
+    el.onerror = () => {
+      setAudioError("Audio unavailable. Please try again or check assets.");
+      stopExamAudio();
+    };
+    el.play().catch(() => {
+      setAudioError("Could not play audio. Check browser permissions.");
+      stopExamAudio();
+    });
   };
 
   const handleRetryVoice = () => {
@@ -756,6 +799,36 @@ const [lastFallback, setLastFallback] = useState<boolean | null>(null);
                 {simState.exam.lungs && <div><span className="text-slate-500 text-[11px] mr-1">Lungs:</span>{simState.exam.lungs}</div>}
                 {simState.exam.perfusion && <div><span className="text-slate-500 text-[11px] mr-1">Perfusion:</span>{simState.exam.perfusion}</div>}
                 {simState.exam.neuro && <div><span className="text-slate-500 text-[11px] mr-1">Neuro:</span>{simState.exam.neuro}</div>}
+                {simState.examAudio && simState.examAudio.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+                      Auscultation (headphones recommended)
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {simState.examAudio.map((clip) => (
+                        <button
+                          key={`${clip.type}-${clip.url}`}
+                          type="button"
+                          onClick={() => handlePlayExamClip(clip)}
+                          className={`px-3 py-2 rounded-lg border text-left text-sm transition-colors ${
+                            playingClipId === clip.url
+                              ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-100"
+                              : "border-slate-700 bg-slate-900/70 text-slate-100 hover:border-slate-500"
+                          }`}
+                        >
+                          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                            {clip.type === "heart" ? "Heart" : "Lungs"}
+                          </div>
+                          <div className="font-semibold">{clip.label}</div>
+                          <div className="text-[11px] text-slate-400">
+                            {playingClipId === clip.url ? "Pause" : "Play clip"}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    {audioError && <div className="text-[11px] text-rose-300">{audioError}</div>}
+                  </div>
+                )}
               </div>
             )}
             {simState?.orders && simState.orders.length > 0 && (
