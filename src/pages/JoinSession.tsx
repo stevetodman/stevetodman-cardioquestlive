@@ -725,6 +725,14 @@ export default function JoinSession() {
                         : order.type === "imaging"
                         ? "Imaging"
                         : order.type;
+                    const eta =
+                      order.status === "pending"
+                        ? `${order.type === "vitals" ? "≈10s" : order.type === "ekg" ? "≈20s" : "≈15s"}`
+                        : null;
+                    const detail = order.result?.summary;
+                    const highlight =
+                      order.result?.summary &&
+                      /elevated|abnormal|shock|effusion|edema|ectasia|rvh|low|high|thickened/i.test(order.result.summary);
                     return (
                       <div
                         key={order.id}
@@ -738,14 +746,22 @@ export default function JoinSession() {
                             {isDone ? "Complete" : "Pending"}
                           </div>
                         </div>
+                        {!isDone && eta && <div className="text-[11px] text-slate-400">Result in {eta}</div>}
                         {isDone && order.completedAt && (
                           <div className="text-[10px] text-slate-400">
                             {new Date(order.completedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                           </div>
                         )}
-                        {isDone && order.result?.summary && (
-                          <div className="text-slate-300 text-[12px] mt-1 whitespace-pre-wrap">
-                            {order.result.summary}
+                        {isDone && detail && (
+                          <div
+                            className={`text-[12px] mt-1 whitespace-pre-wrap ${
+                              highlight ? "text-amber-200" : "text-slate-300"
+                            }`}
+                          >
+                            {detail}
+                            {order.result?.rationale && (
+                              <div className="text-[11px] text-slate-400 mt-1">{order.result.rationale}</div>
+                            )}
                           </div>
                         )}
                         {!isDone && <div className="text-[12px] text-slate-400">Result on the way…</div>}

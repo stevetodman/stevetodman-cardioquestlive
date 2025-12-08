@@ -38,6 +38,14 @@ function resolveOrder(
       (result as any).summary = `${(result as any).summary ?? "Result ready"} (image unavailable)`;
     }
   }
+  (result as any).rationale =
+    order.type === "ekg"
+      ? "Ordered for rhythm/ischemia evaluation."
+      : order.type === "labs"
+      ? "Ordered to assess perfusion, inflammation, and metabolic status."
+      : order.type === "imaging"
+      ? "Ordered to assess structure and perfusion."
+      : "Ordered to reassess vitals.";
   return result;
 }
 
