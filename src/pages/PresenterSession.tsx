@@ -182,6 +182,8 @@ const [showTelemetryPopout, setShowTelemetryPopout] = useState(false);
 const [assessmentResponse, setAssessmentResponse] = useState<string>("");
 const [assessmentPromptOpen, setAssessmentPromptOpen] = useState(false);
 const [lastContextStage, setLastContextStage] = useState<string | null>(null);
+const [assessmentDifferential, setAssessmentDifferential] = useState<string[]>([]);
+const [assessmentPlan, setAssessmentPlan] = useState<string[]>([]);
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -2079,6 +2081,56 @@ const [lastContextStage, setLastContextStage] = useState<string | null>(null);
                   </button>
                   {assessmentPromptOpen && <span className="text-amber-300">Awaiting response</span>}
                 </div>
+                <div className="flex flex-col gap-2 text-[10px] text-slate-200">
+                  <label className="text-slate-400">Differential</label>
+                  <div className="flex flex-wrap gap-1">
+                    {["HCM", "Myocarditis", "Coarctation", "Arrhythmia", "Pulmonary cause"].map((dx) => {
+                      const active = assessmentDifferential.includes(dx);
+                      return (
+                        <button
+                          key={dx}
+                          type="button"
+                          onClick={() =>
+                            setAssessmentDifferential((prev) =>
+                              active ? prev.filter((p) => p !== dx) : [...prev, dx]
+                            )
+                          }
+                          className={`px-2 py-1 rounded-full border text-[10px] ${
+                            active
+                              ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-100"
+                              : "border-slate-700 bg-slate-900 text-slate-300"
+                          }`}
+                        >
+                          {dx}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <label className="text-slate-400">Plan</label>
+                  <div className="flex flex-wrap gap-1">
+                    {["Oxygen", "Fluids", "Beta-blocker", "EKG", "Labs", "Imaging"].map((plan) => {
+                      const active = assessmentPlan.includes(plan);
+                      return (
+                        <button
+                          key={plan}
+                          type="button"
+                          onClick={() =>
+                            setAssessmentPlan((prev) =>
+                              active ? prev.filter((p) => p !== plan) : [...prev, plan]
+                            )
+                          }
+                          className={`px-2 py-1 rounded-full border text-[10px] ${
+                            active
+                              ? "border-sky-500/60 bg-sky-500/10 text-sky-100"
+                              : "border-slate-700 bg-slate-900 text-slate-300"
+                          }`}
+                        >
+                          {plan}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <div className="flex flex-col gap-1 text-[10px] text-slate-200">
                   <label className="text-slate-400">Log assessment response</label>
                   <textarea
@@ -2091,35 +2143,39 @@ const [lastContextStage, setLastContextStage] = useState<string | null>(null);
                     <button
                       type="button"
                       disabled={!assessmentResponse.trim()}
-                    onClick={() => {
-                      if (!assessmentResponse.trim()) return;
-                      const ts = Date.now();
-                      setTimelineExtras((prev) => [
-                        ...prev,
-                        {
-                          id: `assessment-response-${ts}`,
-                          ts,
-                          label: "Assessment",
-                          detail: assessmentResponse.trim(),
-                        },
-                      ]);
-                      setTranscriptLog((prev) => [
-                        ...prev,
-                        {
-                          id: `assessment-response-log-${ts}`,
-                          timestamp: ts,
-                          text: assessmentResponse.trim(),
-                          character: "doctor",
-                        },
-                      ]);
-                      setAssessmentResponse("");
-                      setAssessmentPromptOpen(false);
-                      setLastAssessmentAt(ts);
+                      onClick={() => {
+                        if (!assessmentResponse.trim()) return;
+                        const ts = Date.now();
+                        const detailParts = [];
+                        if (assessmentDifferential.length) detailParts.push(`Dx: ${assessmentDifferential.join(", ")}`);
+                        if (assessmentPlan.length) detailParts.push(`Plan: ${assessmentPlan.join(", ")}`);
+                        detailParts.push(assessmentResponse.trim());
+                        setTimelineExtras((prev) => [
+                          ...prev,
+                          {
+                            id: `assessment-response-${ts}`,
+                            ts,
+                            label: "Assessment",
+                            detail: detailParts.join(" | "),
+                          },
+                        ]);
+                        setTranscriptLog((prev) => [
+                          ...prev,
+                          {
+                            id: `assessment-response-log-${ts}`,
+                            timestamp: ts,
+                            text: detailParts.join(" | "),
+                            character: "doctor",
+                          },
+                        ]);
+                        setAssessmentResponse("");
+                        setAssessmentPromptOpen(false);
+                        setLastAssessmentAt(ts);
                     }}
-                    className={`px-2 py-1 rounded border text-[10px] ${
-                      assessmentResponse.trim()
-                        ? "border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
-                        : "border-slate-800 bg-slate-900 text-slate-600 cursor-not-allowed"
+                      className={`px-2 py-1 rounded border text-[10px] ${
+                        assessmentResponse.trim()
+                          ? "border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
+                          : "border-slate-800 bg-slate-900 text-slate-600 cursor-not-allowed"
                       }`}
                     >
                       Save assessment
