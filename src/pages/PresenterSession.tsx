@@ -183,6 +183,11 @@ const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exporte
     return ekgs.length ? ekgs[ekgs.length - 1] : null;
   }, [simState?.orders]);
   const latestEkgMeta = useMemo(() => latestEkg?.result?.meta, [latestEkg]);
+  const examAudio = useMemo(() => {
+    const heart = (simState as any)?.exam?.heartAudioUrl as string | undefined;
+    const lung = (simState as any)?.exam?.lungAudioUrl as string | undefined;
+    return { heart, lung };
+  }, [simState]);
   const ekgHistory = useMemo(() => {
     if ((simState as any)?.ekgHistory) return (simState as any).ekgHistory;
     const ekgs = (simState?.orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
@@ -324,6 +329,11 @@ const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exporte
       const ts = e.ts ? new Date(e.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
       parts.push(`${ts} EKG: ${e.summary ?? "strip"}`);
     });
+    const vitalsTrend = (simState?.vitalsHistory as any[]) ?? [];
+    vitalsTrend.slice(-5).forEach((v, idx) => {
+      const ts = v.ts ? new Date(v.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : `vitals-${idx}`;
+      parts.push(`${ts} Vitals: HR ${v.hr ?? "—"} BP ${v.bp ?? "—"} SpO2 ${v.spo2 ?? "—"}`);
+    });
     return parts.join("\n");
   }, [transcriptLog, simState?.treatmentHistory, simState?.telemetryHistory, simState?.ekgHistory]);
   const buildExportText = useCallback(() => {
@@ -381,6 +391,18 @@ const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exporte
         } ${ekg.imageUrl ? `(image: ${ekg.imageUrl})` : ""}`
       );
     });
+    lines.push("");
+    lines.push("## Vitals Trend (last 5)");
+    const vitalsTrend = (simState?.vitalsHistory as any[]) ?? [];
+    vitalsTrend
+      .slice(-5)
+      .forEach((v, idx) => {
+        lines.push(
+          `- ${v.ts ? new Date(v.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : `vitals-${idx}`}: HR ${
+            v.hr ?? "—"
+          } BP ${v.bp ?? "—"} SpO2 ${v.spo2 ?? "—"}`
+        );
+      });
     lines.push("");
     lines.push("## Transcript (last 30)");
     transcriptLog
@@ -1745,18 +1767,18 @@ const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exporte
                       type="button"
                       onClick={async () => {
                         try {
-                        await navigator.clipboard.writeText(timelineText);
-                        setTimelineCopyStatus("copied");
-                        setTimeout(() => setTimelineCopyStatus("idle"), 1200);
-                      } catch {
-                        setTimelineCopyStatus("error");
-                        setTimeout(() => setTimelineCopyStatus("idle"), 1200);
-                      }
-                    }}
-                    className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] text-slate-200"
-                  >
-                    Copy
-                  </button>
+                          await navigator.clipboard.writeText(timelineText);
+                          setTimelineCopyStatus("copied");
+                          setTimeout(() => setTimelineCopyStatus("idle"), 1200);
+                        } catch {
+                          setTimelineCopyStatus("error");
+                          setTimeout(() => setTimelineCopyStatus("idle"), 1200);
+                        }
+                      }}
+                      className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] text-slate-200"
+                    >
+                      Copy
+                    </button>
                   <button
                     type="button"
                     onClick={() => {

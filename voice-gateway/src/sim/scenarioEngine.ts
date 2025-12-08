@@ -312,7 +312,13 @@ const scenarioMap: Record<ScenarioId, ScenarioDef> = {
 
 const examTemplates: Record<
   ScenarioId,
-  { baseline: StageDef["exam"]; decomp?: StageDef["exam"]; spell?: StageDef["exam"] }
+  {
+    baseline: StageDef["exam"];
+    decomp?: StageDef["exam"];
+    spell?: StageDef["exam"];
+    heartAudioUrl?: string;
+    lungAudioUrl?: string;
+  }
 > = {
   syncope: {
     baseline: {
@@ -432,6 +438,7 @@ const examTemplates: Record<
       cardio: "Tachycardic, no murmur.",
       lungs: "Clear.",
       perfusion: "Warm, swollen hands/feet.",
+      neuro: "Irritable but alert.",
     },
     decomp: {
       general: "Less febrile, still irritable.",
