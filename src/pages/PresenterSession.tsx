@@ -185,6 +185,7 @@ const [lastContextStage, setLastContextStage] = useState<string | null>(null);
 const [assessmentDifferential, setAssessmentDifferential] = useState<string[]>([]);
 const [assessmentPlan, setAssessmentPlan] = useState<string[]>([]);
 const [npcCooldowns, setNpcCooldowns] = useState<Record<string, number>>({});
+const [scoringTrend, setScoringTrend] = useState<{ current: number; delta: number }>({ current: 0, delta: 0 });
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -502,6 +503,13 @@ const [npcCooldowns, setNpcCooldowns] = useState<Record<string, number>>({});
     score = Math.max(0, Math.min(100, score));
     return { score, items };
   }, [simState?.orders, simState?.treatmentHistory, (simState as any)?.stageEnteredAt]);
+
+  useEffect(() => {
+    setScoringTrend((prev) => ({
+      current: scoringSummary.score,
+      delta: scoringSummary.score - (prev.current ?? scoringSummary.score),
+    }));
+  }, [scoringSummary.score]);
   const transcriptText = useMemo(() => {
     const parts: string[] = [];
     transcriptLog.forEach((t) => {
@@ -1797,6 +1805,26 @@ const [npcCooldowns, setNpcCooldowns] = useState<Record<string, number>>({});
                 }`}
               >
                 {voiceLocked ? "Locked" : freezeStatus === "frozen" ? "Paused" : "Live"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
+              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Score</span>
+              <span
+                className={`px-2 py-0.5 rounded-full border text-xs ${
+                  scoringSummary.score >= 85
+                    ? "border-emerald-500/60 text-emerald-100"
+                    : scoringSummary.score >= 70
+                    ? "border-amber-500/60 text-amber-100"
+                    : "border-rose-500/60 text-rose-100"
+                }`}
+                title={`Score: ${scoringSummary.score} | ${scoringSummary.items.join("; ")}`}
+              >
+                {scoringSummary.score}
+                {scoringTrend.delta !== 0 && (
+                  <span className={scoringTrend.delta > 0 ? "text-emerald-300 ml-1" : "text-rose-300 ml-1"}>
+                    {scoringTrend.delta > 0 ? "▴" : "▾"} {Math.abs(scoringTrend.delta)}
+                  </span>
+                )}
               </span>
             </div>
           <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
