@@ -171,6 +171,7 @@ const [timelineFilter, setTimelineFilter] = useState<string>("all");
   const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 const [timelineSearch, setTimelineSearch] = useState<string>("");
+const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exported" | "error">("idle");
   const [voiceLocked, setVoiceLocked] = useState(false);
   const [activeCharacter, setActiveCharacter] = useState<{ character: CharacterId; state: PatientState } | null>(null);
   const snapshot = useMemo(
@@ -271,6 +272,39 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
       })
       .join("\n");
   }, [timelineItems]);
+  const scoringSummary = useMemo(() => {
+    const ordersComplete = (simState?.orders ?? []).filter((o) => o.status === "complete");
+    const treatments = simState?.treatmentHistory ?? [];
+    const ekgDone = ordersComplete.some((o) => o.type === "ekg");
+    const labsDone = ordersComplete.some((o) => o.type === "labs");
+    const imagingDone = ordersComplete.some((o) => o.type === "imaging");
+    const vitalsOrders = ordersComplete.filter((o) => o.type === "vitals").length;
+    const oxygenGiven = treatments.some((t) => t.treatmentType.toLowerCase().includes("oxygen"));
+    const fluidsGiven = treatments.some((t) => t.treatmentType.toLowerCase().includes("fluid") || t.treatmentType.toLowerCase().includes("bolus"));
+    const rateControl = treatments.some((t) => t.treatmentType.toLowerCase().includes("rate"));
+    const kneeChest = treatments.some((t) => t.treatmentType.toLowerCase().includes("knee") || t.treatmentType.toLowerCase().includes("position"));
+    const score = [
+      ekgDone ? 10 : 0,
+      labsDone ? 5 : 0,
+      imagingDone ? 5 : 0,
+      vitalsOrders > 0 ? 3 : 0,
+      oxygenGiven ? 5 : 0,
+      fluidsGiven ? 5 : 0,
+      rateControl ? 5 : 0,
+      kneeChest ? 5 : 0,
+    ].reduce((a, b) => a + b, 0);
+    const items: string[] = [];
+    if (ekgDone) items.push("EKG obtained");
+    if (labsDone) items.push("Labs obtained");
+    if (imagingDone) items.push("Imaging obtained");
+    if (vitalsOrders > 0) items.push(`Vitals refreshed x${vitalsOrders}`);
+    if (oxygenGiven) items.push("Oxygen given");
+    if (fluidsGiven) items.push("Fluids given");
+    if (rateControl) items.push("Rate control/medication given");
+    if (kneeChest) items.push("Positioning/knee-chest applied");
+    if (items.length === 0) items.push("No critical actions recorded yet.");
+    return { score, items };
+  }, [simState?.orders, simState?.treatmentHistory]);
   const transcriptText = useMemo(() => {
     const parts: string[] = [];
     transcriptLog.forEach((t) => {
@@ -292,6 +326,85 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
     });
     return parts.join("\n");
   }, [transcriptLog, simState?.treatmentHistory, simState?.telemetryHistory, simState?.ekgHistory]);
+  const buildExportText = useCallback(() => {
+    const lines: string[] = [];
+    lines.push("# CardioQuest Session Export");
+    lines.push(`Session: ${sessionId ?? "unknown"}`);
+    lines.push(`Scenario: ${simState?.scenarioId ?? selectedScenario}`);
+    lines.push(`Stage: ${simState?.stageId ?? "n/a"}`);
+    if (simState?.vitals) {
+      lines.push(`Vitals: HR ${simState.vitals?.hr ?? "—"} BP ${simState.vitals?.bp ?? "—"} SpO2 ${simState.vitals?.spo2 ?? "—"}`);
+    }
+    lines.push("");
+    lines.push("## Scoring Summary");
+    lines.push(`Score: ${scoringSummary.score}`);
+    scoringSummary.items.forEach((i) => lines.push(`- ${i}`));
+    lines.push("");
+    lines.push("## Orders (complete)");
+    (simState?.orders ?? [])
+      .filter((o) => o.status === "complete")
+      .forEach((o) => {
+        lines.push(
+          `- ${o.type.toUpperCase()} @ ${
+            o.completedAt ? new Date(o.completedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "n/a"
+          }: ${
+            o.result?.type === "vitals"
+              ? `HR ${o.result.hr ?? "—"} BP ${o.result.bp ?? "—"} SpO2 ${o.result.spo2 ?? "—"}`
+              : o.result?.summary ?? "Result"
+          }`
+        );
+      });
+    lines.push("");
+    lines.push("## Treatments");
+    (simState?.treatmentHistory ?? []).forEach((t) => {
+      lines.push(
+        `- ${t.treatmentType}${t.note ? `: ${t.note}` : ""} @ ${
+          t.ts ? new Date(t.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "n/a"
+        }`
+      );
+    });
+    lines.push("");
+    lines.push("## Telemetry History");
+    (simState?.telemetryHistory ?? []).forEach((h) => {
+      lines.push(
+        `- ${h.rhythm ?? "Rhythm"} @ ${
+          h.ts ? new Date(h.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "n/a"
+        } ${h.note ? `(${h.note})` : ""}`
+      );
+    });
+    lines.push("");
+    lines.push("## EKG History");
+    (simState as any)?.ekgHistory?.forEach?.((ekg: any) => {
+      lines.push(
+        `- ${ekg.summary ?? "EKG"} @ ${
+          ekg.ts ? new Date(ekg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "n/a"
+        } ${ekg.imageUrl ? `(image: ${ekg.imageUrl})` : ""}`
+      );
+    });
+    lines.push("");
+    lines.push("## Transcript (last 30)");
+    transcriptLog
+      .slice(-30)
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .forEach((t) => {
+        lines.push(
+          `[${new Date(t.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}] ${t.character ?? t.role ?? "speaker"}: ${
+            t.text
+          }`
+        );
+      });
+    lines.push("");
+    lines.push("## Timeline (last 30)");
+    timelineItems
+      .sort((a, b) => a.ts - b.ts)
+      .slice(-30)
+      .forEach((item) => {
+        lines.push(
+          `[${new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}] ${item.label}: ${item.detail}`
+        );
+      });
+    return lines.join("\n");
+  }, [sessionId, simState, selectedScenario, scoringSummary, transcriptLog, timelineItems]);
   const debriefReportText = useMemo(() => {
     if (!debriefResult) return "";
     const parts: string[] = [];
@@ -1687,12 +1800,43 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
                   >
                     {transcriptSaveStatus === "saving" ? "Saving transcript…" : "Save transcript"}
                   </button>
+                  <button
+                    type="button"
+                    disabled={exportStatus === "exporting" || timelineItems.length === 0}
+                    onClick={() => {
+                      try {
+                        setExportStatus("exporting");
+                        const text = buildExportText();
+                        const blob = new Blob([text], { type: "text/plain" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `cardioquest-session-${sessionId ?? "session"}.txt`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        setExportStatus("exported");
+                        setTimeout(() => setExportStatus("idle"), 2000);
+                      } catch (err) {
+                        setExportStatus("error");
+                        console.error(err);
+                      }
+                    }}
+                    className={`px-2 py-1 rounded border text-[10px] ${
+                      exportStatus === "exporting"
+                        ? "border-slate-800 bg-slate-900 text-slate-500 cursor-wait"
+                        : "border-sky-600/60 bg-sky-600/10 text-sky-100 hover:border-sky-500"
+                    }`}
+                  >
+                    {exportStatus === "exporting" ? "Exporting…" : "Export session"}
+                  </button>
                   {timelineCopyStatus === "copied" && <span className="text-[10px] text-emerald-300">Copied</span>}
                   {timelineCopyStatus === "error" && <span className="text-[10px] text-rose-300">Copy failed</span>}
                   {timelineSaveStatus === "saved" && <span className="text-[10px] text-emerald-300">Saved</span>}
                   {timelineSaveStatus === "error" && <span className="text-[10px] text-rose-300">Save failed</span>}
                   {transcriptSaveStatus === "saved" && <span className="text-[10px] text-emerald-300">Transcript saved</span>}
                   {transcriptSaveStatus === "error" && <span className="text-[10px] text-rose-300">Transcript save failed</span>}
+                  {exportStatus === "exported" && <span className="text-[10px] text-emerald-300">Exported</span>}
+                  {exportStatus === "error" && <span className="text-[10px] text-rose-300">Export failed</span>}
                 </div>
               </div>
               {(filteredTimeline.length === 0) ? (
