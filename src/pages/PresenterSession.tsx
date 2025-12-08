@@ -172,8 +172,11 @@ const [timelineFilter, setTimelineFilter] = useState<string>("all");
   const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 const [timelineSearch, setTimelineSearch] = useState<string>("");
 const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exported" | "error">("idle");
-  const [voiceLocked, setVoiceLocked] = useState(false);
-  const [activeCharacter, setActiveCharacter] = useState<{ character: CharacterId; state: PatientState } | null>(null);
+const [voiceLocked, setVoiceLocked] = useState(false);
+const [activeCharacter, setActiveCharacter] = useState<{ character: CharacterId; state: PatientState } | null>(null);
+const [assessmentEnabled, setAssessmentEnabled] = useState(true);
+const [lastAssessmentAt, setLastAssessmentAt] = useState<number>(Date.now());
+const [lastNpcInterjectAt, setLastNpcInterjectAt] = useState<number>(0);
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -188,6 +191,53 @@ const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exporte
     const lung = (simState as any)?.exam?.lungAudioUrl as string | undefined;
     return { heart, lung };
   }, [simState]);
+  useEffect(() => {
+    // Reset assessment timer on stage change
+    if (simState?.stageEnteredAt) {
+      setLastAssessmentAt(simState.stageEnteredAt);
+    }
+  }, [simState?.stageEnteredAt]);
+  useEffect(() => {
+    if (!assessmentEnabled) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      if (now - lastAssessmentAt >= 180000) {
+        const ts = now;
+        setTimelineItems((prev) => [
+          ...prev,
+          {
+            id: `assessment-${ts}`,
+            ts,
+            label: "Assessment",
+            detail: "Checkpoint: Ask for differential and plan.",
+          },
+        ]);
+        setLastAssessmentAt(now);
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [assessmentEnabled, lastAssessmentAt]);
+  useEffect(() => {
+    // Lightweight NPC interjection for deteriorating vitals
+    const vitals = simState?.vitals ?? {};
+    const now = Date.now();
+    if (!vitals) return;
+    const alarms: string[] = [];
+    if ((vitals as any).spo2 && (vitals as any).spo2 < 88) alarms.push("SpO2 dropping, patient looks worse.");
+    if ((vitals as any).hr && (vitals as any).hr > 170) alarms.push("Heart rate is very fast.");
+    if (alarms.length > 0 && now - lastNpcInterjectAt > 60000) {
+      setLastNpcInterjectAt(now);
+      setTranscriptLog((prev) => [
+        ...prev,
+        {
+          id: `npc-${now}`,
+          timestamp: now,
+          text: alarms.join(" "),
+          character: "nurse",
+        },
+      ]);
+    }
+  }, [simState?.vitals, lastNpcInterjectAt]);
   const ekgHistory = useMemo(() => {
     if ((simState as any)?.ekgHistory) return (simState as any).ekgHistory;
     const ekgs = (simState?.orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
@@ -1843,13 +1893,22 @@ const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exporte
                         : "border-indigo-600/60 bg-indigo-600/10 text-indigo-100 hover:border-indigo-500"
                     }`}
                   >
-                    {transcriptSaveStatus === "saving" ? "Saving transcript…" : "Save transcript"}
-                  </button>
-                  {examAudio.heart && (
-                    <button
-                      type="button"
-                      onClick={() => handlePlayExamAudio("heart")}
-                      className="px-2 py-1 rounded border border-pink-500/60 bg-pink-500/10 text-pink-100 text-[10px] hover:border-pink-400"
+                  {transcriptSaveStatus === "saving" ? "Saving transcript…" : "Save transcript"}
+                </button>
+                <label className="flex items-center gap-1 text-[10px] text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={assessmentEnabled}
+                    onChange={(e) => setAssessmentEnabled(e.target.checked)}
+                    className="accent-emerald-500"
+                  />
+                  Timed assessment prompts
+                </label>
+                {examAudio.heart && (
+                  <button
+                    type="button"
+                    onClick={() => handlePlayExamAudio("heart")}
+                    className="px-2 py-1 rounded border border-pink-500/60 bg-pink-500/10 text-pink-100 text-[10px] hover:border-pink-400"
                     >
                       Play heart sounds
                     </button>
@@ -1863,27 +1922,27 @@ const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exporte
                       Play lung sounds
                     </button>
                   )}
-                  <button
-                    type="button"
-                    disabled={exportStatus === "exporting" || timelineItems.length === 0}
-                    onClick={() => {
-                      try {
-                        setExportStatus("exporting");
-                        const text = buildExportText();
-                        const blob = new Blob([text], { type: "text/plain" });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = `cardioquest-session-${sessionId ?? "session"}.txt`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                        setExportStatus("exported");
-                        setTimeout(() => setExportStatus("idle"), 2000);
-                      } catch (err) {
-                        setExportStatus("error");
-                        console.error(err);
-                      }
-                    }}
+                <button
+                  type="button"
+                  disabled={exportStatus === "exporting" || timelineItems.length === 0}
+                  onClick={() => {
+                    try {
+                      setExportStatus("exporting");
+                      const text = buildExportText();
+                      const blob = new Blob([text], { type: "text/plain" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `cardioquest-session-${sessionId ?? "session"}.txt`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      setExportStatus("exported");
+                      setTimeout(() => setExportStatus("idle"), 2000);
+                    } catch (err) {
+                      setExportStatus("error");
+                      console.error(err);
+                    }
+                  }}
                     className={`px-2 py-1 rounded border text-[10px] ${
                       exportStatus === "exporting"
                         ? "border-slate-800 bg-slate-900 text-slate-500 cursor-wait"
