@@ -1,4 +1,5 @@
 import { CharacterId } from "./messageTypes";
+import { isUnsafeUtterance } from "./speechHelpers";
 
 type GuardMaps = {
   lastAutoReplyAt: Map<string, number>;
@@ -18,6 +19,8 @@ export function shouldAutoReply(opts: {
   const { sessionId, userId, text, floorHolder, commandCooldownMs, maps } = opts;
   const trimmed = text.trim();
   if (!trimmed) return false;
+
+  if (isUnsafeUtterance(trimmed)) return false;
 
   // Minimal length guard
   const words = trimmed.split(/\s+/).length;
