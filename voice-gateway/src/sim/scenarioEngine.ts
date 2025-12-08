@@ -446,6 +446,8 @@ const examTemplates: Record<
       lungs: "Clear.",
       perfusion: "Warm.",
     },
+    heartAudioUrl: "/audio/heart/pediatric-tachy.mp3",
+    lungAudioUrl: "/audio/lung/clear-child.mp3",
   },
   coarctation_shock: {
     baseline: {
@@ -460,6 +462,8 @@ const examTemplates: Record<
       lungs: "Tachypnea improving.",
       perfusion: "Arms warm, legs cooler.",
     },
+    heartAudioUrl: "/audio/heart/infant-murmur.mp3",
+    lungAudioUrl: "/audio/lung/coarse.mp3",
   },
   arrhythmogenic_syncope: {
     baseline: {
@@ -474,6 +478,8 @@ const examTemplates: Record<
       lungs: "Clear.",
       perfusion: "Warm.",
     },
+    heartAudioUrl: "/audio/heart/irregular-teen.mp3",
+    lungAudioUrl: "/audio/lung/clear-teen.mp3",
   },
 };
 
@@ -796,9 +802,12 @@ export class ScenarioEngine {
     const template = examTemplates[scenarioId] ?? examTemplates.syncope;
     const isDecomp = stageId.includes("decomp") || stageId.includes("worse") || stageId.includes("support") || stageId.includes("episode");
     const isSpell = stageId.includes("spell");
-    if (isSpell && template.spell) return template.spell;
-    if (isDecomp && template.decomp) return template.decomp;
-    return template.baseline;
+    const baseExam =
+      (isSpell && template.spell) ? template.spell : (isDecomp && template.decomp) ? template.decomp : template.baseline;
+    const merged = { ...baseExam } as StageDef["exam"] & { heartAudioUrl?: string; lungAudioUrl?: string };
+    if (template.heartAudioUrl && !merged.heartAudioUrl) merged.heartAudioUrl = template.heartAudioUrl;
+    if (template.lungAudioUrl && !merged.lungAudioUrl) merged.lungAudioUrl = template.lungAudioUrl;
+    return merged;
   }
 
   private getRhythm(stageId: string, scenarioId: ScenarioId) {
