@@ -8,6 +8,7 @@ import { getOrCreatePatientEngine, setScenarioForSession, getScenarioForSession,
 import { synthesizePatientAudio } from "./ttsClient";
 import { transcribeDoctorAudio } from "./sttClient";
 import { Buffer } from "buffer";
+import { performance } from "perf_hooks";
 import { PatientScenarioId } from "./patientCase";
 import { analyzeTranscript } from "./debriefAnalyzer";
 import { DebriefTurn } from "./messageTypes";
@@ -61,6 +62,7 @@ if (allowInsecureWs && process.env.NODE_ENV === "production") {
     "[warn] ALLOW_INSECURE_VOICE_WS=true in production; require Firebase ID tokens or set ALLOW_INSECURE_VOICE_WS=false."
   );
 }
+const timingEnabled = process.env.GATEWAY_TIMING === "true";
 
 const runtimes: Map<string, Runtime> = new Map();
 const scenarioTimers: Map<string, NodeJS.Timeout> = new Map();
@@ -526,7 +528,7 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
     engine.appendPatientTurn(finalText);
 
     const audioBuffer = await withRetry(
-      () => synthesizePatientAudio(finalText, CHARACTER_VOICE_MAP[routedCharacter]),
+      () => timed("tts.synthesize", () => synthesizePatientAudio(finalText, CHARACTER_VOICE_MAP[routedCharacter])),
       { label: "tts", attempts: 2, delayMs: 150 },
       sessionId
     );
@@ -653,7 +655,7 @@ async function handleDoctorAudioLegacy(
   character?: CharacterId
 ) {
   const text = await withRetry(
-    () => transcribeDoctorAudio(audioBuffer, contentType),
+    () => timed("stt.transcribe", () => transcribeDoctorAudio(audioBuffer, contentType)),
     { label: "stt", attempts: 2, delayMs: 150 },
     sessionId
   );
@@ -1258,6 +1260,15 @@ function sendDegradedNotice(sessionId: string, text: string) {
     text,
     character: "nurse",
   });
+}
+
+async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  if (!timingEnabled) return fn();
+  const start = performance.now();
+  const res = await fn();
+  const ms = Math.round(performance.now() - start);
+  log(`[perf] ${label} ${ms}ms`);
+  return res;
 }
 
 function maybeAdvanceStageFromTreatment(runtime: Runtime, treatmentType?: string) {
