@@ -3,6 +3,8 @@ import http from "http";
 import { ServerToClientMessage } from "./messageTypes";
 import { SessionManager } from "./sessionManager";
 
+const MAX_WS_PAYLOAD_BYTES = Number(process.env.MAX_WS_PAYLOAD_BYTES || 262144); // ~256KB guardrail
+
 export type ClientContext = {
   joined: boolean;
   sessionId: string | null;
@@ -25,6 +27,20 @@ export function createTransport(opts: {
     const ctx: ClientContext = { joined: false, sessionId: null, role: null };
 
     ws.on("message", (data) => {
+      if (typeof data === "string") {
+        if (Buffer.byteLength(data, "utf8") > MAX_WS_PAYLOAD_BYTES) {
+          send(ws, { type: "error", message: "Payload too large" });
+          ws.close();
+          return;
+        }
+      } else if (data instanceof Buffer || Array.isArray(data)) {
+        const bytes = data instanceof Buffer ? data.byteLength : Buffer.byteLength(Buffer.from(data as any));
+        if (bytes > MAX_WS_PAYLOAD_BYTES) {
+          send(ws, { type: "error", message: "Payload too large" });
+          ws.close();
+          return;
+        }
+      }
       void handleMessage(ws, ctx, data);
     });
 
