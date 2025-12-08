@@ -6,6 +6,15 @@
 
 Interactive pediatric cardiology teaching with presenter + student modes, Gemini-styled decks, and live-session gamification (team + individual scoring for residents).
 
+## Documentation map
+
+- Start here: `docs/START_HERE.md`
+- Architecture: `docs/ARCHITECTURE.md`
+- Admin deck editing: `docs/ADMIN_SLIDE_EDITING.md`
+- Ops/deploy: `DEPLOY.md`, `RUNBOOK.md`
+- Voice/virtual patient: `docs/virtual-patient-status.md`, `docs/voice-sim-state-and-harnesses.md`
+- Testing matrix: `docs/TESTING_MATRIX.md`
+
 ## Overview
 
 - **Presenter** runs a live session, opens questions, and shows live poll results and scoreboards.
@@ -94,6 +103,13 @@ Env for gateway (in `voice-gateway/.env`):
 - Presenter: `/#/create-demo` (creates a session) → `/#/presenter/:sessionId`
 - Student: `/#/join/CODE`
 - Admin: `/#/admin` (guarded by optional `VITE_ADMIN_ACCESS_CODE`)
+
+## Support matrix
+
+- Node.js: 18.x or 20.x LTS (align with CI and voice gateway builds); npm from the same Node install.
+- Firebase: Firestore/Auth in Native mode. Emulator defaults: Firestore 8088/9188, Auth 9099 (override via `VITE_*_PORT` envs).
+- Build tooling: Vite 6, React 19, TypeScript (checked by `npm run build`).
+- Voice gateway: Node 18+; `/ws/voice` on port 8081 by default; OpenAI models default to `gpt-4.1-mini` (text) and `gpt-4o-mini-tts` (TTS) unless overridden in `voice-gateway/.env`.
 
 ## Testing
 

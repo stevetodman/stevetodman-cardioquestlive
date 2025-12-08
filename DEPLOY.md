@@ -13,6 +13,7 @@ Lightweight guidance for running the presenter/student app and the voice gateway
 - `npm test -- --runInBand src/pages/__tests__/JoinSession.test.tsx src/pages/__tests__/PresenterSessionSummary.test.tsx`
 - `npm run test:rules` (or `npm run test:rules:ports` if emulator ports clash)
 - `npm run build`
+- See `docs/TESTING_MATRIX.md` for change-type coverage.
 
 ## Gateway runtime env (recommended defaults)
 - `PORT=8081`

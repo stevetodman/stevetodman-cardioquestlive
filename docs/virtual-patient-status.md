@@ -9,6 +9,11 @@
 - Persistence: telemetry/EKG histories and timing hydrated on reconnect.
 - Debrief: AI summary/strengths/opportunities/teaching points from transcript.
 
+### Current posture
+- Runs locally with OpenAI keys; voice gateway publishes `sim_state` over `/ws/voice` and the presenter UI renders vitals/status banners.
+- State lives in-process; telemetry/EKG histories hydrate on reconnect while the process is alive. Firestore persistence for sim_state/events is not wired yet.
+- TTS/STT require valid OpenAI credentials; otherwise text-only fallback replies are used.
+
 ## How to run (short)
 
 Voice gateway:
@@ -37,3 +42,5 @@ If using a custom gateway URL: set `VITE_VOICE_GATEWAY_URL`.
 - Treatment/alarms are simplified (no weight-based dosing/stacking realism).
 - Budget/alarm badges are presenter-only; participant UX still basic.
 - Limited E2E tests for presenter/participant flows; consider adding before major UI changes.
+- Persistence to Firestore for sim_state/events is still pending; gateway restarts drop state.
+- No production SLOs/alerting yet; add dashboards for fallback/budget/5xx and WS error rates.
