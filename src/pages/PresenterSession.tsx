@@ -180,6 +180,7 @@ const [lastAssessmentAt, setLastAssessmentAt] = useState<number>(Date.now());
 const [lastNpcInterjectAt, setLastNpcInterjectAt] = useState<number>(0);
 const [showTelemetryPopout, setShowTelemetryPopout] = useState(false);
 const [assessmentResponse, setAssessmentResponse] = useState<string>("");
+const [assessmentPromptOpen, setAssessmentPromptOpen] = useState(false);
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -215,19 +216,25 @@ const [assessmentResponse, setAssessmentResponse] = useState<string>("");
             detail: "Checkpoint: Ask for differential and plan.",
           },
         ]);
+        setAssessmentPromptOpen(true);
         setLastAssessmentAt(now);
       }
     }, 15000);
     return () => clearInterval(interval);
   }, [assessmentEnabled, lastAssessmentAt]);
   useEffect(() => {
-    // Lightweight NPC interjection for deteriorating vitals
+    // Lightweight NPC interjection for deteriorating vitals / distress
     const vitals = simState?.vitals ?? {};
     const now = Date.now();
     if (!vitals) return;
     const alarms: string[] = [];
-    if ((vitals as any).spo2 && (vitals as any).spo2 < 88) alarms.push("SpO2 dropping, patient looks worse.");
-    if ((vitals as any).hr && (vitals as any).hr > 170) alarms.push("Heart rate is very fast.");
+    const hr = (vitals as any).hr as number | undefined;
+    const spo2 = (vitals as any).spo2 as number | undefined;
+    const temp = (vitals as any).temp as number | undefined;
+    if (spo2 && spo2 < 88) alarms.push("SpO₂ dropping, patient looks worse.");
+    if (hr && hr > 170) alarms.push("Heart rate is very fast.");
+    if (temp && temp > 38.5) alarms.push("Parent: \"They're burning up—please help.\"");
+    if (hr && hr > 150 && !spo2) alarms.push("Nurse: \"Patient looks anxious and is breathing faster.\"");
     if (alarms.length > 0 && now - lastNpcInterjectAt > 60000) {
       setLastNpcInterjectAt(now);
       setTranscriptLog((prev) => [
@@ -237,6 +244,15 @@ const [assessmentResponse, setAssessmentResponse] = useState<string>("");
           timestamp: now,
           text: alarms.join(" "),
           character: "nurse",
+        },
+      ]);
+      setTimelineExtras((prev) => [
+        ...prev,
+        {
+          id: `npc-timeline-${now}`,
+          ts: now,
+          label: "NPC",
+          detail: alarms.join(" "),
         },
       ]);
     }
@@ -1971,6 +1987,24 @@ const [assessmentResponse, setAssessmentResponse] = useState<string>("");
                   />
                   Timed assessment prompts
                 </label>
+                <div className="flex items-center gap-2 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ts = Date.now();
+                      setAssessmentPromptOpen(true);
+                      setTimelineExtras((prev) => [
+                        ...prev,
+                        { id: `assessment-manual-${ts}`, ts, label: "Assessment", detail: "Presenter prompted assessment." },
+                      ]);
+                      setLastAssessmentAt(ts);
+                    }}
+                    className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-slate-200"
+                  >
+                    Prompt now
+                  </button>
+                  {assessmentPromptOpen && <span className="text-amber-300">Awaiting response</span>}
+                </div>
                 <div className="flex flex-col gap-1 text-[10px] text-slate-200">
                   <label className="text-slate-400">Log assessment response</label>
                   <textarea
@@ -1983,33 +2017,35 @@ const [assessmentResponse, setAssessmentResponse] = useState<string>("");
                     <button
                       type="button"
                       disabled={!assessmentResponse.trim()}
-                      onClick={() => {
-                        if (!assessmentResponse.trim()) return;
-                        const ts = Date.now();
-                        setTimelineExtras((prev) => [
-                          ...prev,
-                          {
-                            id: `assessment-response-${ts}`,
-                            ts,
-                            label: "Assessment",
-                            detail: assessmentResponse.trim(),
-                          },
-                        ]);
-                        setTranscriptLog((prev) => [
-                          ...prev,
-                          {
-                            id: `assessment-response-log-${ts}`,
-                            timestamp: ts,
-                            text: assessmentResponse.trim(),
-                            character: "doctor",
-                          },
-                        ]);
-                        setAssessmentResponse("");
-                      }}
-                      className={`px-2 py-1 rounded border text-[10px] ${
-                        assessmentResponse.trim()
-                          ? "border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
-                          : "border-slate-800 bg-slate-900 text-slate-600 cursor-not-allowed"
+                    onClick={() => {
+                      if (!assessmentResponse.trim()) return;
+                      const ts = Date.now();
+                      setTimelineExtras((prev) => [
+                        ...prev,
+                        {
+                          id: `assessment-response-${ts}`,
+                          ts,
+                          label: "Assessment",
+                          detail: assessmentResponse.trim(),
+                        },
+                      ]);
+                      setTranscriptLog((prev) => [
+                        ...prev,
+                        {
+                          id: `assessment-response-log-${ts}`,
+                          timestamp: ts,
+                          text: assessmentResponse.trim(),
+                          character: "doctor",
+                        },
+                      ]);
+                      setAssessmentResponse("");
+                      setAssessmentPromptOpen(false);
+                      setLastAssessmentAt(ts);
+                    }}
+                    className={`px-2 py-1 rounded border text-[10px] ${
+                      assessmentResponse.trim()
+                        ? "border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
+                        : "border-slate-800 bg-slate-900 text-slate-600 cursor-not-allowed"
                       }`}
                     >
                       Save assessment
