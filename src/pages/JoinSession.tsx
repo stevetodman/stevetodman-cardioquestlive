@@ -104,8 +104,14 @@ export default function JoinSession() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [showExam, setShowExam] = useState(false);
   const [showEkg, setShowEkg] = useState(false);
+  const [toast, setToast] = useState<{ message: string; ts: number } | null>(null);
   const voice = useVoiceState(sessionId);
   const userDisplayName = auth?.currentUser?.displayName ?? "Resident";
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     if (!isConfigured || !auth) return;
@@ -391,6 +397,7 @@ export default function JoinSession() {
       setVoiceError(null);
       await voicePatientService.startCapture();
       voiceGatewayClient.startSpeaking(targetCharacter);
+      setToast({ message: "Recording… speak now", ts: Date.now() });
     } catch (err: any) {
       console.error("Failed to start capture", err);
       if (err?.message?.toLowerCase()?.includes("blocked")) {
@@ -510,6 +517,11 @@ export default function JoinSession() {
       </header>
 
       <main className="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6">
+        {toast && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-2 text-[12px] text-slate-100 shadow-md shadow-black/30">
+            {toast.message}
+          </div>
+        )}
         <section className="bg-slate-900 rounded-xl p-4 border border-slate-800 shadow-lg">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
@@ -583,7 +595,12 @@ export default function JoinSession() {
           <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
             <button
               type="button"
-              onClick={() => emitCommand(sessionId!, "exam", {}, "nurse").then(() => setShowExam(true))}
+              onClick={() =>
+                emitCommand(sessionId!, "exam", {}, "nurse").then(() => {
+                  setShowExam(true);
+                  setToast({ message: "Exam requested", ts: Date.now() });
+                })
+              }
               disabled={fallbackActive}
               className={`px-3 py-2 rounded-lg bg-indigo-600/10 border border-indigo-500/60 text-indigo-100 hover:border-indigo-400 ${
                 fallbackActive ? "opacity-60 cursor-not-allowed" : ""
@@ -593,7 +610,11 @@ export default function JoinSession() {
             </button>
             <button
               type="button"
-              onClick={() => emitCommand(sessionId!, "toggle_telemetry", { enabled: true }, "tech")}
+              onClick={() =>
+                emitCommand(sessionId!, "toggle_telemetry", { enabled: true }, "tech").then(() =>
+                  setToast({ message: "Telemetry requested", ts: Date.now() })
+                )
+              }
               disabled={fallbackActive}
               className={`px-3 py-2 rounded-lg bg-emerald-600/10 border border-emerald-500/60 text-emerald-100 hover:border-emerald-400 ${
                 fallbackActive ? "opacity-60 cursor-not-allowed" : ""
@@ -607,6 +628,7 @@ export default function JoinSession() {
               onClick={() => {
                 emitCommand(sessionId!, "show_ekg", {}, "tech");
                 setShowEkg(true);
+                setToast({ message: "EKG requested", ts: Date.now() });
               }}
               className="px-3 py-2 rounded-lg border text-amber-100 bg-amber-600/10 border-amber-500/60 disabled:opacity-50"
             >
@@ -632,6 +654,14 @@ export default function JoinSession() {
               {fallbackActive
                 ? "Voice fallback active. Use typed questions if available."
                 : `Stage: ${stageLabel}`}
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+              <div className={`px-2 py-1 rounded-lg border ${hasFloor ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-100" : "border-slate-800 bg-slate-900 text-slate-300"}`}>
+                {hasFloor ? "You have the floor" : floorTakenByOther ? "Another resident has the floor" : "Floor available"}
+              </div>
+              <div className={`px-2 py-1 rounded-lg border ${fallbackActive ? "border-amber-500/60 bg-amber-500/10 text-amber-100" : "border-slate-800 bg-slate-900 text-slate-300"}`}>
+                {fallbackActive ? "Voice fallback on" : simState?.budget?.throttled ? "Budget throttled" : "Voice live"}
+              </div>
             </div>
           </div>
           <div className="mt-3 space-y-2">
@@ -674,6 +704,55 @@ export default function JoinSession() {
                 {simState.exam.lungs && <div><span className="text-slate-500 text-[11px] mr-1">Lungs:</span>{simState.exam.lungs}</div>}
                 {simState.exam.perfusion && <div><span className="text-slate-500 text-[11px] mr-1">Perfusion:</span>{simState.exam.perfusion}</div>}
                 {simState.exam.neuro && <div><span className="text-slate-500 text-[11px] mr-1">Neuro:</span>{simState.exam.neuro}</div>}
+              </div>
+            )}
+            {simState?.orders && simState.orders.length > 0 && (
+              <div className="mt-2 bg-slate-900/70 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-2">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold flex items-center justify-between">
+                  <span>Orders</span>
+                  <span className="text-[10px] text-slate-400">Student view</span>
+                </div>
+                <div className="space-y-1">
+                  {simState.orders.slice(-6).map((order) => {
+                    const isDone = order.status === "complete";
+                    const header =
+                      order.type === "vitals"
+                        ? "Vitals"
+                        : order.type === "ekg"
+                        ? "EKG"
+                        : order.type === "labs"
+                        ? "Labs"
+                        : order.type === "imaging"
+                        ? "Imaging"
+                        : order.type;
+                    return (
+                      <div
+                        key={order.id}
+                        className={`rounded-lg border px-3 py-2 text-[12px] ${
+                          isDone ? "border-emerald-500/50 bg-emerald-500/5 text-emerald-100" : "border-slate-700 bg-slate-900/80 text-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="font-semibold">{header}</div>
+                          <div className="text-[10px] uppercase tracking-[0.14em]">
+                            {isDone ? "Complete" : "Pending"}
+                          </div>
+                        </div>
+                        {isDone && order.completedAt && (
+                          <div className="text-[10px] text-slate-400">
+                            {new Date(order.completedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                          </div>
+                        )}
+                        {isDone && order.result?.summary && (
+                          <div className="text-slate-300 text-[12px] mt-1 whitespace-pre-wrap">
+                            {order.result.summary}
+                          </div>
+                        )}
+                        {!isDone && <div className="text-[12px] text-slate-400">Result on the way…</div>}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
             {showEkg && latestEkg && (
