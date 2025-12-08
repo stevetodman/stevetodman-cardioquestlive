@@ -25,8 +25,12 @@ function makeOrder(type: OrderType): { id: string; type: OrderType; status: "pen
   };
 }
 
-function resolveOrder(order: { id: string; type: OrderType; status: "pending" | "complete"; result?: OrderResult }, scenario: PatientScenarioId): OrderResult {
-  const result = getOrderResultTemplate(order.type, scenario);
+function resolveOrder(
+  order: { id: string; type: OrderType; status: "pending" | "complete"; result?: OrderResult },
+  scenario: PatientScenarioId,
+  stageId?: string
+): OrderResult {
+  const result = getOrderResultTemplate(order.type, scenario, stageId);
   if ((order.type === "ekg" || order.type === "imaging") && (result as any).imageUrl) {
     const exists = assetExists((result as any).imageUrl as string);
     if (!exists) {
@@ -51,7 +55,8 @@ export function createOrderHandler(deps: OrderDeps) {
     });
     const delay = orderType === "vitals" ? 1500 : orderType === "ekg" ? 2500 : 2200;
     schedule(() => {
-      const result = resolveOrder(newOrder, runtime.scenarioEngine.getState().scenarioId as PatientScenarioId);
+      const state = runtime.scenarioEngine.getState();
+      const result = resolveOrder(newOrder, state.scenarioId as PatientScenarioId, state.stageId);
       const updatedOrders = nextOrders.map((o) =>
         o.id === newOrder.id ? { ...o, status: "complete", result, completedAt: Date.now() } : o
       );

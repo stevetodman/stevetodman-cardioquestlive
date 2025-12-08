@@ -1,7 +1,7 @@
 import { PatientScenarioId } from "./patientCase";
 import { OrderResult, OrderType } from "./messageTypes";
 
-export function getOrderResultTemplate(type: OrderType, scenario: PatientScenarioId): OrderResult {
+export function getOrderResultTemplate(type: OrderType, scenario: PatientScenarioId, stageId?: string): OrderResult {
   if (type === "vitals") {
     if (scenario === "myocarditis") {
       return { type: "vitals", hr: 128, bp: "94/58", rr: 24, spo2: 95, temp: 38.2 };
@@ -61,6 +61,9 @@ export function getOrderResultTemplate(type: OrderType, scenario: PatientScenari
     };
   }
   if (type === "labs") {
+    const isDecomp = stageId?.includes("decomp");
+    const isShock = stageId?.includes("shock");
+    const isImproving = stageId?.includes("improving") || stageId?.includes("support");
     return {
       type: "labs",
       summary:
@@ -68,15 +71,21 @@ export function getOrderResultTemplate(type: OrderType, scenario: PatientScenari
           ? "CBC normal; electrolytes normal; troponin negative; glucose normal."
         : scenario === "palpitations_svt"
           ? "CBC normal; electrolytes normal; TSH pending."
-          : scenario === "myocarditis"
-          ? "Troponin elevated; BNP elevated; CRP/ESR elevated; electrolytes normal; lactate normal."
-          : scenario === "exertional_syncope_hcm"
+        : scenario === "myocarditis"
+          ? isDecomp
+            ? "Troponin markedly elevated; BNP high; CRP/ESR elevated; lactate mild; electrolytes normal."
+            : isImproving
+            ? "Troponin trending down; BNP improving; CRP/ESR elevated."
+            : "Troponin elevated; BNP elevated; CRP/ESR elevated; electrolytes normal; lactate normal."
+        : scenario === "exertional_syncope_hcm"
           ? "CBC normal; electrolytes normal; troponin normal; glucose normal."
-          : scenario === "ductal_shock"
-          ? "Blood gas: metabolic acidosis with lactate 5.2; glucose 68; electrolytes pending."
-          : scenario === "cyanotic_spell"
+        : scenario === "ductal_shock"
+          ? isImproving
+            ? "Blood gas improving: lactate 2.4; glucose 82; electrolytes stable."
+            : "Blood gas: metabolic acidosis with lactate 5.2; glucose 68; electrolytes pending."
+        : scenario === "cyanotic_spell"
           ? "CBC: Hgb 17.5, Hct 52; electrolytes normal; blood gas shows hypoxemia."
-          : "CBC normal; BMP normal; troponin pending; BNP pending.",
+        : "CBC normal; BMP normal; troponin pending; BNP pending.",
     };
   }
   return {
@@ -86,14 +95,18 @@ export function getOrderResultTemplate(type: OrderType, scenario: PatientScenari
         ? "CXR normal silhouette; no cardiomegaly; clear lungs."
       : scenario === "syncope"
         ? "CXR clear; normal heart size; no effusion."
-        : scenario === "myocarditis"
-        ? "CXR mild cardiomegaly with pulmonary vascular congestion."
-        : scenario === "exertional_syncope_hcm"
-        ? "CXR normal size silhouette; no congestion."
-        : scenario === "ductal_shock"
-        ? "CXR cardiomegaly with pulmonary edema; possible differential perfusion."
-        : scenario === "cyanotic_spell"
-        ? "CXR boot-shaped heart; decreased pulmonary vascularity."
-        : "CXR normal; no acute process; no cardiomegaly.",
+      : scenario === "myocarditis"
+        ? stageId?.includes("decomp")
+          ? "CXR cardiomegaly with pulmonary edema; echo: depressed function."
+          : "CXR mild cardiomegaly with pulmonary vascular congestion; echo: LV function mildly reduced."
+      : scenario === "exertional_syncope_hcm"
+        ? "CXR normal size silhouette; echo: asymmetric septal hypertrophy, dynamic LVOT gradient."
+      : scenario === "ductal_shock"
+        ? stageId?.includes("improving")
+          ? "CXR cardiomegaly with less pulmonary edema; echo: ductal-dependent systemic flow improving."
+          : "CXR cardiomegaly with pulmonary edema; echo: ductal-dependent systemic flow."
+      : scenario === "cyanotic_spell"
+        ? "CXR boot-shaped heart; decreased pulmonary vascularity; echo: RV outflow obstruction."
+      : "CXR normal; no acute process; no cardiomegaly.",
   };
 }

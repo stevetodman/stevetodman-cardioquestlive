@@ -181,6 +181,7 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
     const ekgs = (simState?.orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
     return ekgs.length ? ekgs[ekgs.length - 1] : null;
   }, [simState?.orders]);
+  const latestEkgMeta = useMemo(() => latestEkg?.result?.meta, [latestEkg]);
   const ekgHistory = useMemo(() => {
     if ((simState as any)?.ekgHistory) return (simState as any).ekgHistory;
     const ekgs = (simState?.orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
@@ -1162,6 +1163,13 @@ const [timelineSearch, setTimelineSearch] = useState<string>("");
                           </span>
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {latestEkgMeta && (
+                    <div className="mt-2 text-[12px] text-slate-400 space-y-0.5">
+                      {latestEkgMeta.rate && <div>Rate: {latestEkgMeta.rate}</div>}
+                      {latestEkgMeta.intervals && <div>Intervals: {latestEkgMeta.intervals}</div>}
+                      {latestEkgMeta.axis && <div>Axis: {latestEkgMeta.axis}</div>}
                     </div>
                   )}
                 </div>
