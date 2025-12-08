@@ -5,7 +5,10 @@ export type PatientScenarioId =
   | "myocarditis"
   | "exertional_syncope_hcm"
   | "ductal_shock"
-  | "cyanotic_spell";
+  | "cyanotic_spell"
+  | "kawasaki"
+  | "coarctation_shock"
+  | "arrhythmogenic_syncope";
 
 export type PatientCase = {
   id: string;
@@ -77,6 +80,60 @@ export function getPatientCaseForScenario(
         ],
         baselinePersonality: "casual but a bit worried when episodes happen",
         redFlags: ["recurrent palpitations", "lightheadedness during episodes"],
+      };
+    case "kawasaki":
+      return {
+        id: sessionId,
+        scenarioId,
+        age: 4,
+        sex: "male",
+        name: "Mason",
+        chiefComplaint: "5 days of fever and rash",
+        onset: "fever for 5 days, rash/red eyes for 3 days",
+        associatedSymptoms: ["cracked lips", "strawberry tongue", "swollen hands/feet", "cervical lymph node"],
+        relevantPMH: ["previously healthy"],
+        medications: ["acetaminophen at home"],
+        allergies: ["no known drug allergies"],
+        familyHistory: ["no known coronary disease in young relatives"],
+        socialHistory: ["preschooler, recent viral contacts at daycare"],
+        baselinePersonality: "fussy and tired, uncomfortable with fever",
+        redFlags: ["persistent fever >5 days", "mucocutaneous findings"],
+      };
+    case "coarctation_shock":
+      return {
+        id: sessionId,
+        scenarioId,
+        age: 2,
+        sex: "female",
+        name: "Ava",
+        chiefComplaint: "Poor feeding and lethargy",
+        onset: "worsening over 12 hours",
+        associatedSymptoms: ["tachypnea", "cool legs", "decreased urine"],
+        relevantPMH: ["full-term infant, no prior issues noted"],
+        medications: [],
+        allergies: ["no known drug allergies"],
+        familyHistory: ["no congenital heart disease known"],
+        socialHistory: ["lives with parents, up to date on vaccines"],
+        baselinePersonality: "sleepy, irritable with handling",
+        redFlags: ["upper/lower pulse difference", "shock picture in infant"],
+      };
+    case "arrhythmogenic_syncope":
+      return {
+        id: sessionId,
+        scenarioId,
+        age: 15,
+        sex: "male",
+        name: "Diego",
+        chiefComplaint: "Collapse during practice",
+        onset: "episode today, brief loss of consciousness",
+        associatedSymptoms: ["palpitations before collapse", "rapid recovery"],
+        relevantPMH: ["no known heart disease"],
+        medications: [],
+        allergies: ["no known drug allergies"],
+        familyHistory: ["cousin died suddenly at 19"],
+        socialHistory: ["plays soccer, no substances"],
+        baselinePersonality: "anxious after the episode, otherwise cooperative",
+        redFlags: ["syncope with exertion", "family sudden death"],
       };
     case "exertional_chest_pain":
     default:

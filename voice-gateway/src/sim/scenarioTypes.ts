@@ -5,7 +5,10 @@ export type ScenarioId =
   | "myocarditis"
   | "exertional_syncope_hcm"
   | "ductal_shock"
-  | "cyanotic_spell";
+  | "cyanotic_spell"
+  | "kawasaki"
+  | "coarctation_shock"
+  | "arrhythmogenic_syncope";
 
 export type ActionTrigger =
   | { action: "asked_about_exertion" }

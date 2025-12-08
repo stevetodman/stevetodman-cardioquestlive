@@ -165,6 +165,70 @@ const summaries: Record<PatientScenarioId, ScenarioSnapshot> = {
       { name: "Echo", status: "pending", summary: "Definitive anatomy; assumed known history." },
     ],
   },
+  kawasaki: {
+    chiefComplaint: "Fever and rash for 5 days",
+    hpi: [
+      "Persistent fever >5 days with rash and red eyes.",
+      "Cracked lips, strawberry tongue, swollen hands/feet.",
+      "Irritable, poor intake.",
+    ],
+    exam: [
+      "Febrile, irritable preschooler.",
+      "Conjunctivitis, oral changes; no murmur.",
+      "Swollen hands/feet; cervical node enlarged.",
+    ],
+    labs: [
+      { name: "CBC/CRP/ESR", status: "result", summary: "Inflammatory markers elevated." },
+      { name: "CMP", status: "pending", summary: "Assess liver enzymes, albumin." },
+    ],
+    imaging: [
+      { name: "ECG", status: "result", summary: "Sinus tachycardia expected." },
+      { name: "Echo", status: "pending", summary: "Coronary assessment; may be normal early." },
+    ],
+  },
+  coarctation_shock: {
+    chiefComplaint: "Infant in shock",
+    hpi: [
+      "Poor feeding, lethargy, cool legs.",
+      "Tachypnea and decreased urine over hours.",
+      "No known congenital heart disease diagnosed.",
+    ],
+    exam: [
+      "Ill-appearing infant, cool lower extremities.",
+      "Weak femoral pulses, stronger upper pulses.",
+      "Delayed cap refill legs; possible gallop.",
+    ],
+    labs: [
+      { name: "Blood gas/lactate", status: "result", summary: "Metabolic acidosis likely." },
+      { name: "Electrolytes/glucose", status: "result", summary: "Check before interventions." },
+    ],
+    imaging: [
+      { name: "ECG", status: "result", summary: "Sinus tachycardia." },
+      { name: "CXR", status: "result", summary: "May show cardiomegaly/pulmonary edema." },
+      { name: "Echo", status: "pending", summary: "Assess arch and gradients." },
+    ],
+  },
+  arrhythmogenic_syncope: {
+    chiefComplaint: "Collapse during sports",
+    hpi: [
+      "Brief loss of consciousness during practice.",
+      "Palpitations beforehand; rapid recovery.",
+      "Family history of sudden death in a young relative.",
+    ],
+    exam: [
+      "Alert now, anxious.",
+      "Occasional irregular beats; no loud murmur.",
+      "Good pulses; perfusion intact.",
+    ],
+    labs: [
+      { name: "Electrolytes", status: "pending", summary: "Screen for arrhythmia contributors." },
+      { name: "Troponin", status: "pending", summary: "Usually normal; order if chest pain." },
+    ],
+    imaging: [
+      { name: "ECG", status: "result", summary: "Baseline sinus; watch for PVCs/runs." },
+      { name: "Echo", status: "pending", summary: "Rule out structural disease." },
+    ],
+  },
 };
 
 export function getScenarioSnapshot(scenarioId: PatientScenarioId | null | undefined): ScenarioSnapshot | null {
