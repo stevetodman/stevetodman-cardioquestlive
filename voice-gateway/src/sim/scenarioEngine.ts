@@ -838,6 +838,10 @@ export class ScenarioEngine {
       const dbp = dRaw + ((delta as any).dbpPerMin ?? 0) / 60;
       next.bp = `${Math.round(sbp)}/${Math.round(dbp)}`;
     }
+    // Clamp SpO2 to physiological range
+    if (typeof next.spo2 === "number") {
+      next.spo2 = Math.min(100, Math.max(50, next.spo2));
+    }
     return next;
   }
 }

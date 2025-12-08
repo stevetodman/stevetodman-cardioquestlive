@@ -9,6 +9,7 @@ type Props = {
 };
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+const clampSpo2 = (v?: number) => (typeof v === "number" ? Math.min(100, v) : undefined);
 
 export function VitalsMonitor({ vitals, telemetryWaveform, telemetryOn }: Props) {
   const [display, setDisplay] = useState<Vitals>({});
@@ -29,7 +30,7 @@ export function VitalsMonitor({ vitals, telemetryWaveform, telemetryOn }: Props)
       setDisplay({
         hr: Math.round(lerpNum(initial.hr, vitals.hr) ?? 0) || undefined,
         rr: Math.round(lerpNum(initial.rr, vitals.rr) ?? 0) || undefined,
-        spo2: Math.round(lerpNum(initial.spo2, vitals.spo2) ?? 0) || undefined,
+        spo2: clampSpo2(Math.round(lerpNum(initial.spo2, vitals.spo2) ?? 0) || undefined),
         temp: lerpNum(initial.temp, vitals.temp) ?? undefined,
         bp: vitals.bp ?? initial.bp,
       });
@@ -82,4 +83,3 @@ function VitalTile({ label, value, unit, highlight }: { label: string; value: st
     </div>
   );
 }
-
