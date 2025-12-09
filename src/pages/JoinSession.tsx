@@ -81,6 +81,7 @@ export default function JoinSession() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [mockVoice, setMockVoice] = useState<string | null>(null);
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
   const [userId, setUserId] = useState<string | null>(
     isConfigured ? auth?.currentUser?.uid ?? null : getLocalUserId()
@@ -150,6 +151,12 @@ export default function JoinSession() {
       setIsVoiceExpanded(stored === "true");
     } else {
       setIsVoiceExpanded(!mq.matches); // default collapsed on mobile
+    }
+    // Test hook for mock voice state
+    const params = new URLSearchParams(window.location.search);
+    const mockVoiceParam = params.get("mockVoice");
+    if (mockVoiceParam) {
+      setMockVoice(mockVoiceParam);
     }
     return () => mq.removeEventListener?.("change", handler);
   }, []);
@@ -226,6 +233,7 @@ export default function JoinSession() {
     const params = new URLSearchParams(window.location.search);
     const mockSession = params.get("mockSession") || localStorage.getItem("cq_mock_session");
     const mockNotFoundFlag = params.get("mockNotFound");
+    const mockVoiceParam = params.get("mockVoice");
     if (mockNotFoundFlag) {
       setSession(null);
       setSessionId(null);
@@ -248,6 +256,9 @@ export default function JoinSession() {
       setSession(mock);
       setSessionId("MOCK");
       setLoading(false);
+      if (mockVoiceParam) {
+        setMockVoice(mockVoiceParam);
+      }
       return;
     }
 
@@ -903,7 +914,10 @@ export default function JoinSession() {
 
   if (!session || !sessionId) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-50 space-y-4 p-6">
+      <div
+        className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-50 space-y-4 p-6"
+        data-testid="session-not-found"
+      >
         <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center text-slate-700 mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
         </div>
