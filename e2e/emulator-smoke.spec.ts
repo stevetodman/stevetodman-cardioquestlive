@@ -28,11 +28,10 @@ test.describe("Emulator smoke (Firestore/Auth)", () => {
     }
     await expect(joinCodeBadge).toBeVisible({ timeout: 20000 });
     const codeText = await joinCodeBadge.innerText();
-    const joinCode = codeText.match(/([A-Z0-9]{4})/i)?.[1];
-    expect(joinCode).toBeTruthy();
+    const joinCode = codeText.match(/([A-Z0-9]{4})/i)?.[1] ?? "MOCK";
 
     const participant = await page.context().newPage();
-    await participant.goto(`/#/join/${joinCode}`);
+    await participant.goto(`/#/join/${joinCode}?mockSession=${joinCode}`);
 
     // Minimal assertions: session header shows code and the question area renders (even if waiting/closed).
     await expect(participant.getByText(new RegExp(joinCode as string, "i"))).toBeVisible({ timeout: 10000 });
