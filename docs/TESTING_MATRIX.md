@@ -14,6 +14,10 @@ Use this to choose the smallest reliable test set for your change. Prefer the sm
   - Start dev server: `npm run dev -- --host 127.0.0.1 --port 5173 --strictPort --clearScreen false`
   - Run: `PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 PLAYWRIGHT_USE_CHROMIUM=true npx playwright test`
   - Suite uses mock hooks (`?mockSession`, `mockVoice`, `mockNotFound`) and hash router query params.
+- **E2E Playwright (emulator-backed smoke)**
+  - Start emulators + app (`npm run dev:stack:local` or equivalent with `VITE_USE_EMULATORS=true` on 127.0.0.1:5173)
+  - Run: `E2E_EMULATOR=1 PLAYWRIGHT_USE_CHROMIUM=true npx playwright test e2e/emulator-smoke.spec.ts`
+  - Skips automatically if `E2E_EMULATOR` is not set.
 - **Firestore rules**
   - `npm run test:rules`
   - If emulator ports clash: `FIRESTORE_PORT=62088 FIRESTORE_WS_PORT=62188 FIREBASE_HUB_PORT=62402 FIREBASE_LOGGING_PORT=62502 npm run test:rules:ports`
