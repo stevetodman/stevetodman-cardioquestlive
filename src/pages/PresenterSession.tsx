@@ -1574,6 +1574,12 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
             Close
           </button>
         </div>
+        <div className="mt-4 p-4 rounded-xl border border-slate-800 bg-slate-900 space-y-2" data-testid="mock-responses">
+          <div className="text-sm font-semibold text-slate-100">Responses</div>
+          <div className="text-slate-400 text-sm">
+            Mock view: responses will appear here when participants answer.
+          </div>
+        </div>
       </div>
     );
   }
