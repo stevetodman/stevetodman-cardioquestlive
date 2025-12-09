@@ -670,6 +670,11 @@ export default function JoinSession() {
               if (!sessionId) return;
               setToast({ message: "Text question sent", ts: Date.now() });
               await sendVoiceCommand(sessionId, { type: "order" as any, payload: { text, mode: "text_fallback" } });
+              try {
+                voiceGatewayClient.sendVoiceCommand("order" as any, { text, mode: "text_fallback" }, "patient");
+              } catch {
+                // best-effort gateway send; Firestore command already queued
+              }
             }}
           />
           {preferTextInput && (
@@ -1064,9 +1069,11 @@ export default function JoinSession() {
       </header>
 
       <main className="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6 pb-[env(safe-area-inset-bottom)]">
-        <div className="sr-only" aria-live="polite">
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
           Voice status: {voiceStatusData.message}
           {voiceStatusData.detail ? `, ${voiceStatusData.detail}` : ""}
+          {voiceStatusData.status === "active" ? ", recording started" : ""}
+          {voiceStatusData.status === "ready" && voice.mode === "ai-speaking" ? ", patient is responding" : ""}
         </div>
         {toast && (
           <div
