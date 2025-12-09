@@ -43,7 +43,7 @@ function Home() {
     const isComplete = joinCode.length === 4;
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50 p-4" id="main-content">
             <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-8 relative overflow-hidden">
               
               {/* Cloud Status Indicator */}
@@ -146,6 +146,12 @@ export default function App() {
   return (
     <HashRouter>
       <DevGatewayBadge />
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-sky-700 focus:text-white focus:px-3 focus:py-2 focus:rounded"
+      >
+        Skip to main content
+      </a>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/create-demo" element={<CreateDemoSession />} />

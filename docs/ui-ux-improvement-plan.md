@@ -245,7 +245,7 @@ export function SessionSkeleton() {
 - [ ] `SessionSummary` modal: trap focus, return focus on close
 - [ ] QR overlay: trap focus, close on Escape
 - [ ] Collapsible voice panel: focus first interactive element on expand
-- [ ] Add skip link to main content in header
+- [x] Add skip link to main content in header
 
 **Testing:**
 - Tab through entire join flow with keyboard only
@@ -259,8 +259,9 @@ export function SessionSkeleton() {
 
 **Changes:**
 - [ ] Announce question open/close: "Question now open for answers"
+- [x] Announce question open/close: "Question now open for answers"
 - [ ] Announce voice state changes: "Recording started", "Patient is responding"
-- [ ] Announce correct answer reveal: "Correct answer is B"
+- [x] Announce correct answer reveal: "Results are shown" status message
 - [ ] Add `role="status"` to toast messages
 
 **Acceptance criteria:**

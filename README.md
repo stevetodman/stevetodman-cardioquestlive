@@ -43,6 +43,7 @@ Interactive pediatric cardiology teaching with presenter + student modes, Gemini
   - Advanced options hidden by default; defaults to asking the patient.
   - Mobile-first voice layout: collapsible voice panel plus floating mic button that respects safe areas.
   - Text fallback: if mic is blocked or voice is paused, switch to typing a question with inline help and keep that preference in localStorage.
+- Accessibility: skip link to main content; live announcements when questions open/close and when results are shown.
 
 ## Data & Architecture (brief)
 
