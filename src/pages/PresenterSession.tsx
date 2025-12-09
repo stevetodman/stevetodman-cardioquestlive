@@ -2335,6 +2335,51 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                 </div>
               ) : (
                 <>
+                  {/* Slides mode: show slide content and gamification overlays */}
+                  {presenterMode === "slides" && (
+                    <>
+                      <div
+                        className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
+                        ref={slideRef}
+                        dangerouslySetInnerHTML={{ __html: currentSlideHtml }}
+                      />
+
+                      {showTeamScores && (teams?.length ?? 0) > 0 && (
+                        <div className="absolute top-4 right-4 z-30 pointer-events-none">
+                          <TeamScoreboard teams={teams} />
+                        </div>
+                      )}
+
+                      {showIndividualScores && (players?.length ?? 0) > 0 && (
+                        <div className="absolute bottom-4 right-4 z-30 pointer-events-none">
+                          <IndividualScoreboard players={players} />
+                        </div>
+                      )}
+
+                      {showResultsOverlay && currentQuestion && (
+                        <div className="absolute inset-x-3 bottom-3 pointer-events-none">
+                          <div className="bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 shadow-lg shadow-black/30 pointer-events-auto">
+                            <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
+                              <span className="uppercase tracking-[0.12em] text-slate-300">Poll Results</span>
+                              <span className="font-mono text-[10px]">
+                                {isQuestionOpen ? "Open" : "Closed"} {isShowingResults ? "· Showing results" : ""}
+                              </span>
+                            </div>
+                            <ResponsesChart
+                              sessionId={sessionId}
+                              questionId={currentQuestion.id}
+                              options={currentQuestion.options}
+                              correctIndex={currentQuestion.correctIndex ?? 0}
+                              showResults={isShowingResults}
+                              mode="presenter"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Sim mode: show voice overlays only (main sim panels are in right column) */}
                   {presenterMode === "sim" && (
                     <>
                       <VoicePatientOverlay
@@ -2354,44 +2399,6 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                         </div>
                       )}
                     </>
-                  )}
-                  <div
-                    className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
-                    ref={slideRef}
-                    dangerouslySetInnerHTML={{ __html: currentSlideHtml }}
-                  />
-
-                  {showTeamScores && (teams?.length ?? 0) > 0 && (
-                    <div className="absolute top-4 right-4 z-30 pointer-events-none">
-                      <TeamScoreboard teams={teams} />
-                    </div>
-                  )}
-
-                  {showIndividualScores && (players?.length ?? 0) > 0 && (
-                    <div className="absolute bottom-4 right-4 z-30 pointer-events-none">
-                      <IndividualScoreboard players={players} />
-                    </div>
-                  )}
-
-                  {showResultsOverlay && currentQuestion && (
-                    <div className="absolute inset-x-3 bottom-3 pointer-events-none">
-                      <div className="bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 shadow-lg shadow-black/30 pointer-events-auto">
-                        <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
-                          <span className="uppercase tracking-[0.12em] text-slate-300">Poll Results</span>
-                          <span className="font-mono text-[10px]">
-                            {isQuestionOpen ? "Open" : "Closed"} {isShowingResults ? "· Showing results" : ""}
-                          </span>
-                        </div>
-                        <ResponsesChart
-                          sessionId={sessionId}
-                          questionId={currentQuestion.id}
-                          options={currentQuestion.options}
-                          correctIndex={currentQuestion.correctIndex ?? 0}
-                          showResults={isShowingResults}
-                          mode="presenter"
-                        />
-                      </div>
-                    </div>
                   )}
                 </>
               )}
