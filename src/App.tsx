@@ -1,7 +1,6 @@
 import React, { useEffect, useState, Suspense, lazy } from "react";
 import { HashRouter, Routes, Route, Link, useNavigate } from "react-router-dom";
 import { ensureSignedIn, isConfigured } from "./firebase";
-import { DevGatewayBadge } from "./components/DevGatewayBadge";
 import { SessionSkeleton } from "./components/SessionSkeleton";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
@@ -154,7 +153,6 @@ export default function App() {
 
   return (
     <HashRouter>
-      <DevGatewayBadge />
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-sky-700 focus:text-white focus:px-3 focus:py-2 focus:rounded"

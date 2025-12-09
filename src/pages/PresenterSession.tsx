@@ -238,6 +238,7 @@ const [voiceGuideOpen, setVoiceGuideOpen] = useState<boolean>(false);
   const [transcriptLog, setTranscriptLog] = useState<TranscriptLogTurn[]>([]);
   const [patientAudioUrl, setPatientAudioUrl] = useState<string | null>(null);
   const [freezeStatus, setFreezeStatus] = useState<"live" | "frozen">("live");
+  const [showInterventions, setShowInterventions] = useState(false);
   const [showEkg, setShowEkg] = useState(false);
   const [availableStages, setAvailableStages] = useState<string[]>([]);
   const [selectedStage, setSelectedStage] = useState<string>("");
@@ -940,6 +941,14 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
   const teams = useTeamScores(sessionId);
   const players = useIndividualScores(sessionId);
   const voice = useVoiceState(sessionId ?? undefined);
+
+  // Auto-enable voice when entering sim mode
+  useEffect(() => {
+    if (presenterMode === "sim" && sessionId && !voice.enabled) {
+      setVoiceEnabled(sessionId, true);
+    }
+  }, [presenterMode, sessionId, voice.enabled]);
+
   const makeTurnId = useCallback(
     () => `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     []
@@ -2232,83 +2241,6 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
             </div>
         </div>
       </div>
-      {/* Simulation-specific status bar - only in sim mode */}
-      {presenterMode === "sim" && (
-        <div className="flex flex-col gap-2 px-3 md:px-4 py-2 border-b border-slate-800/50">
-          <button
-            type="button"
-            onClick={() => setVoiceGuideOpen((v) => !v)}
-            className="text-[10px] text-sky-300 underline self-start"
-          >
-            {voiceGuideOpen ? "Hide voice guide" : "Show voice guide"}
-          </button>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-[11px] text-slate-200">
-            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
-              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Case</span>
-              <span className="px-2 py-0.5 rounded-full border border-slate-700 text-slate-100 text-xs">
-                {snapshot?.chiefComplaint ?? selectedScenario}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
-              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Voice</span>
-              <span
-                className={`px-2 py-0.5 rounded-full border text-xs ${
-                  freezeStatus === "frozen"
-                    ? "border-amber-500/60 text-amber-100"
-                    : voiceLocked
-                    ? "border-rose-500/60 text-rose-100"
-                    : "border-emerald-500/60 text-emerald-100"
-                }`}
-              >
-                {voiceLocked ? "Locked" : freezeStatus === "frozen" ? "Paused" : "Live"}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
-              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Queue</span>
-              <span className="px-2 py-0.5 rounded-full border border-slate-700 text-slate-100 text-xs">
-                {participantCount}
-              </span>
-              {participantCount > 1 && voice.floorHolderId && (
-                <span className="text-[10px] text-slate-500">Waiting: {Math.max(0, participantCount - 1)}</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
-              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Budget</span>
-              <span className="font-mono text-xs text-slate-200">
-                ${simState?.budget?.usdEstimate?.toFixed(2) ?? "0.00"} · {simState?.budget?.voiceSeconds ? `${Math.round(simState.budget.voiceSeconds)}s` : "0s"}
-              </span>
-              {budgetAlert && (
-                <span
-                  className={`px-2 py-0.5 rounded-full border text-[10px] ${
-                    budgetAlert.level === "hard"
-                      ? "border-red-600 text-red-200 bg-red-900/50"
-                      : "border-amber-500 text-amber-100 bg-amber-900/40"
-                  }`}
-                >
-                  ! {budgetAlert.message}
-                </span>
-              )}
-              {alarmNotice && (
-                <span className="px-2 py-0.5 rounded-full border text-[10px] border-red-600 text-red-200 bg-red-900/40">
-                  ! {alarmNotice.replace("ALARM: ", "")}
-                </span>
-              )}
-            </div>
-          </div>
-          {voiceGuideOpen && (
-            <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-3 text-[11px] text-slate-300 space-y-1">
-              <div className="text-slate-200 font-semibold">Voice guide</div>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>Check status: Voice {gatewayStatus.state}. If disconnected, tap Retry in banner.</li>
-                <li>Manage floor: Take/Release or Lock floor to control resident speaking.</li>
-                <li>Queue: if residents waiting, keep turns brief; floor auto-releases after 60s idle.</li>
-                <li>Fallback: switch to text Q&amp;A; resume voice when budget allows.</li>
-                <li>Mic issues: ask resident to re-check mic; if blocked, have them allow permissions.</li>
-              </ol>
-            </div>
-          )}
-        </div>
-      )}
       <div className="flex-1 flex flex-col items-center px-4 md:px-6 pb-2 gap-2">
         <div className={`w-full max-w-[1800px] grid grid-cols-1 gap-3 items-start ${presenterMode === "sim" ? "xl:grid-cols-[1.7fr_1fr]" : ""}`}>
           <div className="flex flex-col gap-3">
@@ -2442,501 +2374,175 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
           </div>
           {presenterMode === "sim" && (
           <div className="flex flex-col gap-3">
-            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
-              <div className="text-sm font-semibold text-slate-200 flex items-center justify-between">
-                <span>Voice & Roles</span>
-                <div className="text-[10px] uppercase tracking-wide text-slate-500">
-                  {freezeStatus === "frozen" ? "Voice paused" : "Voice live"}
+            {/* Simplified Sim Controls */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 text-slate-100 space-y-4">
+              {/* Case selector and status */}
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <label htmlFor="sim-case-select" className="text-sm font-semibold text-slate-200">
+                    Patient Case
+                  </label>
+                  <select
+                    id="sim-case-select"
+                    value={selectedScenario}
+                    onChange={(e) => handleScenarioSelect(e.target.value as PatientScenarioId)}
+                    className="text-sm bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 min-w-[240px]"
+                  >
+                    {scenarioOptions.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-3">
+                  {/* Status dot: green = ok, amber = connecting, red = error */}
+                  <div
+                    className={`w-2.5 h-2.5 rounded-full ${
+                      gatewayStatus.state === "ready"
+                        ? "bg-emerald-500"
+                        : gatewayStatus.state === "connecting"
+                        ? "bg-amber-500 animate-pulse"
+                        : "bg-rose-500"
+                    }`}
+                    title={gatewayStatus.state === "ready" ? "Voice connected" : gatewayStatus.state === "connecting" ? "Connecting..." : "Voice disconnected"}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowInterventions((v) => !v)}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                      showInterventions
+                        ? "bg-amber-600 text-white border border-amber-500"
+                        : "bg-amber-600/20 text-amber-100 border border-amber-500/60 hover:bg-amber-600/30"
+                    }`}
+                  >
+                    Intervene
+                  </button>
                 </div>
               </div>
-              <PresenterVoiceControls
-                sessionId={sessionId!}
-                voice={voice}
-                doctorQuestion={doctorQuestionText}
-                onDoctorQuestionChange={setDoctorQuestionText}
-                onForceReply={handleForceReply}
-                autoForceReply={autoForceReply}
-                onToggleAutoForceReply={setAutoForceReply}
-                scenarioId={selectedScenario}
-                scenarioOptions={scenarioOptions}
-                onScenarioChange={handleScenarioChange}
-                character={targetCharacter}
-                onCharacterChange={setTargetCharacter}
-              />
+              <div className="text-xs text-slate-400">
+                Students interact via their phones. The AI responds automatically. Click "Intervene" to change patient state.
+              </div>
+              {/* Intervention controls */}
+              {showInterventions && (
+                <div className="border-t border-slate-800 pt-4 space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleFreezeToggle(freezeStatus === "frozen" ? "unfreeze" : "freeze")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                        freezeStatus === "frozen"
+                          ? "bg-emerald-700 text-emerald-50 hover:bg-emerald-600"
+                          : "bg-amber-700 text-amber-50 hover:bg-amber-600"
+                      }`}
+                    >
+                      {freezeStatus === "frozen" ? "Unfreeze" : "Freeze"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleForceReply}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-700 text-sky-50 hover:bg-sky-600"
+                    >
+                      Force reply
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRevealClue}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-700 text-purple-50 hover:bg-purple-600"
+                    >
+                      Reveal clue
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="stage-select" className="text-xs text-slate-400">Stage:</label>
+                    <select
+                      id="stage-select"
+                      value={selectedStage}
+                      onChange={(e) => setSelectedStage(e.target.value)}
+                      className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100"
+                    >
+                      {(availableStages.length ? availableStages : simState?.stageIds ?? []).map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleSkipStage}
+                      disabled={!selectedStage}
+                      className="px-2 py-1 rounded text-xs font-semibold bg-slate-700 text-slate-50 hover:bg-slate-600 disabled:opacity-50"
+                    >
+                      Skip
+                    </button>
+                    <span className="text-xs text-slate-500">Current: {simState?.stageId ?? "—"}</span>
+                  </div>
+                </div>
+              )}
             </div>
+            {/* Orders & Status */}
             <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-semibold text-slate-200">Orders & Status</div>
                 <div className="text-[10px] text-slate-500">
-                  {simState?.orders?.length ? `${simState.orders.length} orders` : "Live sim state"}
+                  {simState?.orders?.length ? `${simState.orders.length} orders` : "No orders yet"}
                 </div>
               </div>
-              <div className="space-y-2">
-                {(simState?.orders ?? []).length === 0 && (
-                  <div className="text-xs text-slate-500">No orders yet.</div>
-                )}
-                {(simState?.orders ?? []).map((o) => (
-                  <div
-                    key={o.id}
-                    className="flex items-start gap-2 rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-2 text-sm"
-                  >
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-[0.14em] ${
-                        o.status === "complete"
-                          ? "bg-emerald-500/15 text-emerald-100 border border-emerald-500/40"
-                          : "bg-slate-800 text-slate-300 border border-slate-700"
-                      }`}
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {(simState?.orders ?? []).length === 0 ? (
+                  <div className="text-xs text-slate-500">Waiting for student orders...</div>
+                ) : (
+                  (simState?.orders ?? []).map((o) => (
+                    <div
+                      key={o.id}
+                      className="flex items-start gap-2 rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-2 text-sm"
                     >
-                      {o.type} {o.status}
-                    </span>
-                    <div className="text-slate-100 leading-snug">
-                      {o.result?.summary ||
-                        (o.result?.type === "vitals"
-                          ? `HR ${o.result.hr ?? "—"} BP ${o.result.bp ?? "—"} SpO₂ ${o.result.spo2 ?? "—"}`
-                          : "In progress")}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="text-sm font-semibold text-slate-200">Timeline</div>
-                  <div className="flex items-center gap-2">
-                    <label htmlFor="timeline-filter" className="sr-only">Timeline filter</label>
-                    <select
-                      id="timeline-filter"
-                      value={timelineFilter}
-                      onChange={(e) => setTimelineFilter(e.target.value)}
-                      className="bg-slate-900 border border-slate-700 text-[10px] text-slate-200 rounded px-2 py-1"
-                    >
-                      <option value="all">All</option>
-                      <option value="patient">Patient</option>
-                      <option value="doctor">Doctor</option>
-                      <option value="nurse">Nurse</option>
-                      <option value="tech">Tech</option>
-                      <option value="consultant">Consultant</option>
-                      <option value="VITALS">Vitals</option>
-                      <option value="EKG">EKG</option>
-                      <option value="LABS">Labs</option>
-                      <option value="IMAGING">Imaging</option>
-                    </select>
-                    <label htmlFor="timeline-search" className="sr-only">Search timeline</label>
-                    <input
-                      id="timeline-search"
-                      value={timelineSearch}
-                      onChange={(e) => setTimelineSearch(e.target.value)}
-                      placeholder="Search"
-                      className="bg-slate-900 border border-slate-700 text-[10px] text-slate-200 rounded px-2 py-1"
-                    />
-                    <div className="text-[10px] text-slate-500">Last 20 events</div>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(timelineText);
-                          setTimelineCopyStatus("copied");
-                          setTimeout(() => setTimelineCopyStatus("idle"), 1200);
-                        } catch {
-                          setTimelineCopyStatus("error");
-                          setTimeout(() => setTimelineCopyStatus("idle"), 1200);
-                        }
-                      }}
-                      className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] text-slate-200"
-                    >
-                      Copy
-                    </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try {
-                        const blob = new Blob([timelineText], { type: "text/plain" });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = `cardioquest-timeline-${sessionId ?? "session"}.txt`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      } catch {
-                        // ignore
-                      }
-                    }}
-                    className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] text-slate-200"
-                  >
-                    Download
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!sessionId || timelineItems.length === 0 || timelineSaveStatus === "saving"}
-                    onClick={saveTimelineToSession}
-                    className={`px-2 py-1 rounded border text-[10px] ${
-                      !sessionId || timelineItems.length === 0
-                        ? "border-slate-800 bg-slate-900 text-slate-600 cursor-not-allowed"
-                        : "border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
-                    }`}
-                  >
-                    {timelineSaveStatus === "saving" ? "Saving…" : "Save to session"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!sessionId || transcriptLog.length === 0 || transcriptSaveStatus === "saving"}
-                    onClick={saveTranscriptToSession}
-                    className={`px-2 py-1 rounded border text-[10px] ${
-                      !sessionId || transcriptLog.length === 0
-                        ? "border-slate-800 bg-slate-900 text-slate-600 cursor-not-allowed"
-                        : "border-indigo-600/60 bg-indigo-600/10 text-indigo-100 hover:border-indigo-500"
-                    }`}
-                  >
-                  {transcriptSaveStatus === "saving" ? "Saving transcript…" : "Save transcript"}
-                </button>
-                <label className="flex items-center gap-1 text-[10px] text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={assessmentEnabled}
-                    onChange={(e) => setAssessmentEnabled(e.target.checked)}
-                    className="accent-emerald-500"
-                  />
-                  Timed assessment prompts
-                </label>
-                <div className="flex items-center gap-2 text-[10px]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const ts = Date.now();
-                      setAssessmentPromptOpen(true);
-                      setTimelineExtras((prev) => [
-                        ...prev,
-                        { id: `assessment-manual-${ts}`, ts, label: "Assessment", detail: "Presenter prompted assessment." },
-                      ]);
-                      setLastAssessmentAt(ts);
-                    }}
-                    className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-slate-200"
-                  >
-                    Prompt now
-                  </button>
-                  {assessmentPromptOpen && <span className="text-amber-300">Awaiting response</span>}
-                </div>
-                <div className="flex flex-col gap-2 text-[10px] text-slate-200">
-                  <label className="text-slate-400">Differential</label>
-                  <div className="flex flex-wrap gap-1">
-                    {["HCM", "Myocarditis", "Coarctation", "Arrhythmia", "Pulmonary cause"].map((dx) => {
-                      const active = assessmentDifferential.includes(dx);
-                      return (
-                        <button
-                          key={dx}
-                          type="button"
-                          onClick={() =>
-                            setAssessmentDifferential((prev) =>
-                              active ? prev.filter((p) => p !== dx) : [...prev, dx]
-                            )
-                          }
-                          className={`px-2 py-1 rounded-full border text-[10px] ${
-                            active
-                              ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-100"
-                              : "border-slate-700 bg-slate-900 text-slate-300"
-                          }`}
-                        >
-                          {dx}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <label className="text-slate-400">Plan</label>
-                  <div className="flex flex-wrap gap-1">
-                    {["Oxygen", "Fluids", "Beta-blocker", "EKG", "Labs", "Imaging"].map((plan) => {
-                      const active = assessmentPlan.includes(plan);
-                      return (
-                        <button
-                          key={plan}
-                          type="button"
-                          onClick={() =>
-                            setAssessmentPlan((prev) =>
-                              active ? prev.filter((p) => p !== plan) : [...prev, plan]
-                            )
-                          }
-                          className={`px-2 py-1 rounded-full border text-[10px] ${
-                            active
-                              ? "border-sky-500/60 bg-sky-500/10 text-sky-100"
-                              : "border-slate-700 bg-slate-900 text-slate-300"
-                          }`}
-                        >
-                          {plan}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1 text-[10px] text-slate-200">
-                  <label className="text-slate-400" htmlFor="assessment-response">
-                    Log assessment response
-                  </label>
-                  <textarea
-                    id="assessment-response"
-                    value={assessmentResponse}
-                    onChange={(e) => setAssessmentResponse(e.target.value)}
-                    placeholder="Document differential, plan, next steps…"
-                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[12px] text-slate-100 h-16 resize-none"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={!assessmentResponse.trim()}
-                      onClick={() => {
-                        if (!assessmentResponse.trim()) return;
-                        const ts = Date.now();
-                        const detailParts = [];
-                        if (assessmentDifferential.length) detailParts.push(`Dx: ${assessmentDifferential.join(", ")}`);
-                        if (assessmentPlan.length) detailParts.push(`Plan: ${assessmentPlan.join(", ")}`);
-                        detailParts.push(assessmentResponse.trim());
-                        setTimelineExtras((prev) => [
-                          ...prev,
-                          {
-                            id: `assessment-response-${ts}`,
-                            ts,
-                            label: "Assessment",
-                            detail: detailParts.join(" | "),
-                          },
-                        ]);
-                        setTranscriptLog((prev) => [
-                          ...prev,
-                          {
-                            id: `assessment-response-log-${ts}`,
-                            timestamp: ts,
-                            text: detailParts.join(" | "),
-                            character: "doctor",
-                          },
-                        ]);
-                        setAssessmentResponse("");
-                        setAssessmentPromptOpen(false);
-                        setLastAssessmentAt(ts);
-                    }}
-                      className={`px-2 py-1 rounded border text-[10px] ${
-                        assessmentResponse.trim()
-                          ? "border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
-                          : "border-slate-800 bg-slate-900 text-slate-600 cursor-not-allowed"
-                      }`}
-                    >
-                      Save assessment
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAssessmentResponse("")}
-                      className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] text-slate-300"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </div>
-                {examAudio.heart && (
-                  <button
-                    type="button"
-                    onClick={() => handlePlayExamAudio("heart")}
-                    className="px-2 py-1 rounded border border-pink-500/60 bg-pink-500/10 text-pink-100 text-[10px] hover:border-pink-400"
-                    >
-                      Play heart sounds
-                    </button>
-                  )}
-                  {examAudio.lung && (
-                    <button
-                      type="button"
-                      onClick={() => handlePlayExamAudio("lung")}
-                      className="px-2 py-1 rounded border border-sky-500/60 bg-sky-500/10 text-sky-100 text-[10px] hover:border-sky-400"
-                    >
-                      Play lung sounds
-                    </button>
-                  )}
-                <button
-                  type="button"
-                  disabled={exportStatus === "exporting" || timelineItems.length === 0}
-                  onClick={() => {
-                    try {
-                      setExportStatus("exporting");
-                      const text = buildExportText();
-                      const blob = new Blob([text], { type: "text/plain" });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = `cardioquest-session-${sessionId ?? "session"}.txt`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                      setExportStatus("exported");
-                      setTimeout(() => setExportStatus("idle"), 2000);
-                    } catch (err) {
-                      setExportStatus("error");
-                      console.error(err);
-                    }
-                  }}
-                    className={`px-2 py-1 rounded border text-[10px] ${
-                      exportStatus === "exporting"
-                        ? "border-slate-800 bg-slate-900 text-slate-500 cursor-wait"
-                        : "border-sky-600/60 bg-sky-600/10 text-sky-100 hover:border-sky-500"
-                    }`}
-                  >
-                    {exportStatus === "exporting" ? "Exporting…" : "Export session"}
-                  </button>
-                  <div role="status" aria-live="polite" className="flex flex-wrap gap-1 items-center">
-                    {timelineCopyStatus === "copied" && <span className="text-[10px] text-emerald-300">Copied</span>}
-                    {timelineCopyStatus === "error" && <span className="text-[10px] text-rose-300">Copy failed</span>}
-                    {timelineSaveStatus === "saved" && <span className="text-[10px] text-emerald-300">Saved</span>}
-                    {timelineSaveStatus === "error" && <span className="text-[10px] text-rose-300">Save failed</span>}
-                    {transcriptSaveStatus === "saved" && <span className="text-[10px] text-emerald-300">Transcript saved</span>}
-                    {transcriptSaveStatus === "error" && <span className="text-[10px] text-rose-300">Transcript save failed</span>}
-                    {exportStatus === "exported" && <span className="text-[10px] text-emerald-300">Exported</span>}
-                    {exportStatus === "error" && <span className="text-[10px] text-rose-300">Export failed</span>}
-                  </div>
-                </div>
-              </div>
-              {(filteredTimeline.length === 0) ? (
-                <div className="text-xs text-slate-500">No events match.</div>
-              ) : (
-                <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                  {filteredTimeline.map((item) => (
-                    <div key={item.id} className="flex items-start gap-2 text-sm text-slate-100">
-                      <span className="text-[10px] uppercase tracking-[0.12em] text-slate-500 w-20">
-                        {new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-[0.14em] ${
+                          o.status === "complete"
+                            ? "bg-emerald-500/15 text-emerald-100 border border-emerald-500/40"
+                            : "bg-slate-800 text-slate-300 border border-slate-700"
+                        }`}
+                      >
+                        {o.type} {o.status}
                       </span>
-                      <span className={timelineBadge(item.label)}>{item.label}</span>
-                      <span className="text-slate-200 leading-snug">{item.detail}</span>
+                      <div className="text-slate-100 leading-snug">
+                        {o.result?.summary ||
+                          (o.result?.type === "vitals"
+                            ? `HR ${o.result.hr ?? "—"} BP ${o.result.bp ?? "—"} SpO₂ ${o.result.spo2 ?? "—"}`
+                            : "In progress")}
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="rounded-xl border border-slate-800/80 bg-slate-900/70 p-3 text-slate-100">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-semibold text-slate-200">Live Captions</div>
-                <div className="text-[10px] uppercase tracking-wide text-slate-500">
-                  {freezeStatus === "frozen" ? "Voice paused" : "Voice live"}
-                </div>
-              </div>
-              <div className="space-y-1 max-h-[200px] overflow-y-auto pr-1 text-sm">
-                {transcriptTurns.length === 0 && (
-                  <div className="text-slate-500 text-xs">No captions yet.</div>
+                  ))
                 )}
-                {transcriptTurns.slice(-8).map((t) => (
-                  <div
-                    key={t.id}
-                    className={`rounded-lg px-2 py-1 ${
-                      t.role === "doctor"
-                        ? "bg-slate-800/70 text-amber-100"
-                        : "bg-emerald-900/50 text-emerald-100"
-                    }`}
-                  >
-                    <span className="text-[10px] uppercase mr-1 opacity-70">
-                      {t.role === "doctor" ? "Doctor" : "Patient"}
-                    </span>
-                    <span>{t.text}</span>
-                  </div>
-                ))}
               </div>
             </div>
-            <div className="rounded-xl border border-slate-800/80 bg-slate-900/70 p-3 text-slate-100">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-semibold text-slate-200">Voice Controls</div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`text-[10px] uppercase tracking-wide ${
-                      freezeStatus === "frozen" ? "text-amber-400" : "text-emerald-400"
-                    }`}
-                  >
-                    {freezeStatus === "frozen" ? "Frozen" : "Live"}
-                  </div>
-                  <div className="text-[10px] font-mono text-slate-400">
-                    Cost: ${simState?.budget?.usdEstimate?.toFixed(2) ?? "0.00"} ·{" "}
-                    {simState?.budget?.voiceSeconds ? `${Math.round(simState.budget.voiceSeconds)}s` : "0s"}
-                  </div>
-                </div>
+            {/* Transcript */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-200">Transcript</div>
+                <div className="text-[10px] text-slate-500">Recent conversation</div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleFreezeToggle(freezeStatus === "frozen" ? "unfreeze" : "freeze")}
-                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition ${
-                    freezeStatus === "frozen"
-                      ? "bg-emerald-700 text-emerald-50 hover:bg-emerald-600"
-                      : "bg-amber-700 text-amber-50 hover:bg-amber-600"
-                  }`}
-                >
-                  {freezeStatus === "frozen" ? "Unfreeze patient" : "Freeze patient"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleForceReply}
-                  className="px-2.5 py-1 rounded-md text-xs font-semibold bg-sky-700 text-sky-50 hover:bg-sky-600"
-                >
-                  Force reply
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRevealClue}
-                  className="px-2.5 py-1 rounded-md text-xs font-semibold bg-purple-700 text-purple-50 hover:bg-purple-600"
-                >
-                  Reveal clue
-                </button>
-                <div className="flex items-center gap-1 text-xs text-slate-300">
-                  <label htmlFor="stage-select" className="text-xs text-slate-300">
-                    Stage:
-                  </label>
-                  <select
-                    id="stage-select"
-                    value={selectedStage}
-                    onChange={(e) => setSelectedStage(e.target.value)}
-                    className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100"
-                  >
-                    {(availableStages.length ? availableStages : simState?.stageIds ?? []).map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={handleSkipStage}
-                    className="px-2 py-1 rounded-md text-xs font-semibold bg-slate-700 text-slate-50 hover:bg-slate-600 disabled:opacity-70 disabled:cursor-not-allowed"
-                    disabled={!selectedStage}
-                  >
-                    Skip
-                  </button>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-slate-400">
-                  Current: <span className="text-slate-200 font-semibold">{simState?.stageId ?? "?"}</span>
-                </div>
-              </div>
-            </div>
-            {fallbackActive && (
-              <div
-                className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-amber-50"
-                role="status"
-                aria-live="polite"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold">Voice paused to protect budget</div>
-                    <div className="text-xs text-amber-100/80">
-                      Continue in text mode or resume voice when ready.
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleResumeVoice}
-                      className="px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-700 text-emerald-50 hover:bg-emerald-600"
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {transcriptTurns.length === 0 ? (
+                  <div className="text-xs text-slate-500">No conversation yet...</div>
+                ) : (
+                  transcriptTurns.slice(-10).map((t) => (
+                    <div
+                      key={t.id}
+                      className={`rounded-lg px-3 py-2 text-sm ${
+                        t.role === "doctor"
+                          ? "bg-slate-800/70 text-amber-100 border-l-2 border-amber-500"
+                          : "bg-emerald-900/30 text-emerald-100 border-l-2 border-emerald-500"
+                      }`}
                     >
-                      Resume voice
-                    </button>
-                  </div>
-                </div>
+                      <div className="text-[10px] uppercase mb-1 opacity-70">
+                        {t.character ?? t.role}
+                      </div>
+                      <div>{t.text}</div>
+                    </div>
+                  ))
+                )}
               </div>
-            )}
-            <ScenarioSnapshotCard snapshot={snapshot} />
-            <DebriefPanel
-              result={debriefResult}
-              isAnalyzing={isAnalyzing}
-              onGenerate={generateDebrief}
-              disabled={transcriptLog.length === 0}
-              reportText={debriefReportText}
-              sessionId={sessionId}
-            />
+            </div>
           </div>
           )}
         </div>
