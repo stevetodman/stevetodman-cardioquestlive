@@ -192,6 +192,8 @@ const lastRhythmRef = useRef<string | null>(null);
 const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
 const [showQr, setShowQr] = useState(false);
 const [copyToast, setCopyToast] = useState<string | null>(null);
+  const summaryRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -213,6 +215,52 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
     const t = setTimeout(() => setCopyToast(null), 1500);
     return () => clearTimeout(t);
   }, [copyToast]);
+
+  useEffect(() => {
+    if (!showSummary) return;
+    const container = summaryRef.current;
+    if (!container) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    const focusable = Array.from(
+      container.querySelectorAll<HTMLElement>(
+        'a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter((el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true");
+    const first = focusable[0] || container;
+    first.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!showSummary) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowSummary(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      if (focusable.length === 0) {
+        e.preventDefault();
+        container.focus();
+        return;
+      }
+      const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+      if (e.shiftKey) {
+        if (currentIndex <= 0) {
+          e.preventDefault();
+          focusable[focusable.length - 1].focus();
+        }
+      } else {
+        if (currentIndex === focusable.length - 1) {
+          e.preventDefault();
+          focusable[0].focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, true);
+      previousFocusRef.current?.focus?.();
+    };
+  }, [showSummary]);
 
   useEffect(() => {
     // Reset assessment timer on stage change
@@ -1983,7 +2031,12 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
           <div className="flex flex-col gap-3">
             <div className="relative flex-1 min-h-[62vh] max-h-[78vh]">
               {showSummary ? (
-                <div className="absolute inset-0 rounded-2xl overflow-hidden">
+                <div
+                  className="absolute inset-0 rounded-2xl overflow-hidden"
+                  ref={summaryRef}
+                  tabIndex={-1}
+                  aria-label="Session summary"
+                >
                   <SessionSummary
                     teams={teams}
                     players={players}

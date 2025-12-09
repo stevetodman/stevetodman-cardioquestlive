@@ -562,7 +562,7 @@ export default function JoinSession() {
             <div className="flex items-center gap-3 flex-wrap">
               <label
                 htmlFor="target-character"
-                className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold"
+                className="text-[11px] uppercase tracking-[0.14em] text-slate-300 font-semibold"
               >
                 Ask
               </label>
