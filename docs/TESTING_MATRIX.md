@@ -2,6 +2,8 @@
 
 Use this to choose the smallest reliable test set for your change. Prefer the smallest set that still covers the surface you touched; run the full suite before release.
 
+- Latest status: v0.0.8 tagged with mock Playwright suite green (bundled Chromium) and emulator smoke passing.
+
 ## Change types → commands
 
 - **Presenter/participant UI (pages/components)**

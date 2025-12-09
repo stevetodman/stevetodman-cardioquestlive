@@ -133,6 +133,7 @@ Mic access: allow microphone for `127.0.0.1` in your browser, then tap **Re-chec
 
 ## Testing
 
+- Latest status: v0.0.8 tagged with full mock Playwright suite green on bundled Chromium; emulator smoke also green when run against local emulators.
 - Unit/UI/rules tests: `npm test -- --runInBand`
 - E2E (Playwright, mock sessions): start dev server `npm run dev -- --host 127.0.0.1 --port 5173 --strictPort --clearScreen false`, then in another shell run  
   `PLAYWRIGHT_BROWSERS_PATH=0 PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 PLAYWRIGHT_USE_CHROMIUM=true PLAYWRIGHT_CHROMIUM_CHANNEL= npx playwright test`  

@@ -46,14 +46,23 @@ async function emitCommand(
   sessionId: string,
   type: "exam" | "toggle_telemetry" | "show_ekg" | "order",
   payload?: Record<string, any>,
-  character?: CharacterId
+  character?: CharacterId,
+  onError?: (message: string, err: unknown) => void
 ) {
   sendVoiceCommand(sessionId, { type, payload, character }).catch((err: unknown) => {
+    if (onError) {
+      onError("Failed to queue voice command", err);
+      return;
+    }
     console.error("Failed to queue voice command", err);
   });
   try {
     voiceGatewayClient.sendVoiceCommand(type as any, payload, character);
   } catch (err) {
+    if (onError) {
+      onError("Failed to send voice command to gateway", err);
+      return;
+    }
     console.error("Failed to send voice command to gateway", err);
   }
 }
@@ -142,6 +151,16 @@ export default function JoinSession() {
   const [isVoiceExpanded, setIsVoiceExpanded] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isOffline, setIsOffline] = useState<boolean>(false);
+  const showToast = useCallback((message: string) => {
+    setToast({ message, ts: Date.now() });
+  }, []);
+  const logAndToast = useCallback(
+    (message: string, err: unknown) => {
+      console.error(message, err);
+      showToast(message);
+    },
+    [showToast]
+  );
   const handleInlineCodeChange = useCallback((value: string) => {
     const trimmed = value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
     if (!trimmed) return;
@@ -573,9 +592,9 @@ export default function JoinSession() {
           <button
             type="button"
             onClick={() =>
-              emitCommand(sessionId!, "exam", {}, "nurse").then(() => {
+              emitCommand(sessionId!, "exam", {}, "nurse", logAndToast).then(() => {
                 setShowExam(true);
-                setToast({ message: "Exam requested", ts: Date.now() });
+                showToast("Exam requested");
               })
             }
             className="px-3 py-2 rounded-lg bg-indigo-600/10 border border-indigo-500/60 text-indigo-100 hover:border-indigo-400 hover:bg-indigo-600/20 transition-colors"
@@ -587,9 +606,9 @@ export default function JoinSession() {
           <button
             type="button"
             onClick={() =>
-              emitCommand(sessionId!, "toggle_telemetry", { enabled: true }, "tech").then(() =>
-                setToast({ message: "Telemetry requested", ts: Date.now() })
-              )
+              emitCommand(sessionId!, "toggle_telemetry", { enabled: true }, "tech", logAndToast).then(() => {
+                showToast("Telemetry requested");
+              })
             }
             className="px-3 py-2 rounded-lg bg-emerald-600/10 border border-emerald-500/60 text-emerald-100 hover:border-emerald-400 hover:bg-emerald-600/20 transition-colors"
           >
@@ -600,9 +619,9 @@ export default function JoinSession() {
           <button
             type="button"
             onClick={() => {
-              emitCommand(sessionId!, "show_ekg", {}, "tech");
+              emitCommand(sessionId!, "show_ekg", {}, "tech", logAndToast);
               setShowEkg(true);
-              setToast({ message: "EKG opened", ts: Date.now() });
+              showToast("EKG opened");
             }}
             className="px-3 py-2 rounded-lg border text-amber-100 bg-amber-600/10 border-amber-500/60 hover:border-amber-400 hover:bg-amber-600/20 transition-colors animate-pulse-slow"
           >
