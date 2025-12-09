@@ -119,7 +119,55 @@ function ScenarioSnapshotCard({ snapshot }: { snapshot: SnapshotProps | null }) 
 
 export default function PresenterSession() {
   const { sessionId } = useParams();
+  // Test hook: allow Playwright/local to supply a mock session without Firestore.
+  const mockSessionParam = React.useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("mockSession");
+  }, []);
+
+  const mockSessionStored = React.useMemo(() => {
+    try {
+      const stored = localStorage.getItem("cq_mock_session");
+      if (!stored) return null;
+      return JSON.parse(stored) as { joinCode: string; sessionId?: string };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const mockSessionData = React.useMemo(() => {
+    const joinCodeSource = mockSessionParam || mockSessionStored?.joinCode;
+    const idSource = mockSessionStored?.sessionId || "MOCK-SESSION";
+    if (!joinCodeSource) return null;
+    return {
+      id: idSource,
+      joinCode: joinCodeSource.toUpperCase(),
+      title: "Mock Session",
+      currentSlideIndex: 0,
+      slides: [
+        {
+          id: "mock-slide-1",
+          title: "Mock Slide",
+          body: "<p>Mock content</p>",
+          type: "info",
+        },
+      ],
+      questions: [
+        {
+          id: "mock-q1",
+          stem: "Mock question?",
+          choices: ["A", "B", "C", "D"],
+          correctIndex: 2,
+        },
+      ],
+      currentQuestionId: "mock-q1",
+      showResults: false,
+      isQuestionSlide: true,
+    };
+  }, [mockSessionParam]);
   const [session, setSession] = useState<SessionData | null>(null);
+  const [mockQuestionOpen, setMockQuestionOpen] = useState(false);
+  const [mockShowResults, setMockShowResults] = useState(false);
   const [loading, setLoading] = useState(true);
   const [responseTotal, setResponseTotal] = useState(0);
   const [showTeamScores, setShowTeamScores] = useState(true);
@@ -881,6 +929,12 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
   }, [sessionId, transcriptLog]);
 
   useEffect(() => {
+    // If mock session is present, short-circuit Firestore fetch.
+    if (mockSessionData) {
+      setSession(mockSessionData as any);
+      setLoading(false);
+      return;
+    }
     if (!sessionId) return;
     const ref = doc(db, "sessions", sessionId);
     const unsub = onSnapshot(ref, (snap: any) => {
@@ -1452,7 +1506,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
     });
   };
 
-  if (!sessionId) {
+  if (!sessionId && !mockSessionData) {
     return <div className="p-8 text-rose-500">Error: No session ID provided.</div>;
   }
 
@@ -1462,6 +1516,56 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
         <div className="flex flex-col items-center gap-4">
             <div className="w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
             <span className="text-slate-400">Loading Session...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (mockSessionParam) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-50 p-4">
+        <div
+          className="flex items-center justify-between gap-3 py-2"
+          data-testid="presenter-header"
+        >
+          <div className="text-sm font-semibold text-slate-100">Presenter View</div>
+          <div className="text-xs text-slate-400">Session: {(mockSessionParam || "MOCK").toUpperCase()}</div>
+        </div>
+        <div className="mt-4 p-4 rounded-xl border border-slate-800 bg-slate-900 space-y-4">
+          <div className="text-sm font-semibold text-slate-100">Mock slide</div>
+          <div className="text-slate-300 text-sm" dangerouslySetInnerHTML={{ __html: "<p>Mock content</p>" }} />
+        </div>
+        <div className="mt-4 flex items-center gap-2" data-testid="mock-question-controls">
+          <button
+            type="button"
+            data-testid="open-question"
+            onClick={() => setMockQuestionOpen(true)}
+            disabled={mockQuestionOpen}
+            className="px-3 py-2 rounded-lg border border-emerald-500/70 bg-emerald-500/15 text-emerald-100 text-xs font-semibold"
+          >
+            Open
+          </button>
+          <button
+            type="button"
+            data-testid="toggle-results"
+            onClick={() => setMockShowResults((v) => !v)}
+            disabled={!mockQuestionOpen}
+            className="px-3 py-2 rounded-lg border border-amber-500/70 bg-amber-500/15 text-amber-100 text-xs font-semibold"
+          >
+            {mockShowResults ? "Hide" : "Show"}
+          </button>
+          <button
+            type="button"
+            data-testid="close-question"
+            onClick={() => {
+              setMockQuestionOpen(false);
+              setMockShowResults(false);
+            }}
+            disabled={!mockQuestionOpen && !mockShowResults}
+            className="px-3 py-2 rounded-lg border border-slate-700 bg-slate-800/70 text-slate-100 text-xs font-semibold"
+          >
+            Close
+          </button>
         </div>
       </div>
     );
@@ -1477,6 +1581,16 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
       </div>
     );
   }
+
+  const presenterHeader = (
+    <div
+      className="flex items-center justify-between gap-3 py-2"
+      data-testid="presenter-header"
+    >
+      <div className="text-sm font-semibold text-slate-100">Presenter View</div>
+      <div className="text-xs text-slate-400">Session: {session.joinCode}</div>
+    </div>
+  );
 
   const totalQuestions = session.questions?.length ?? 0;
   const questionsAnsweredPct =
@@ -1499,6 +1613,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
 
   return (
     <div className="h-screen bg-slate-950 text-slate-50 overflow-hidden relative flex flex-col">
+      {presenterHeader}
       {copyToast && (
         <div className="fixed top-4 right-4 bg-slate-900 border border-slate-700 text-slate-100 px-3 py-2 rounded-lg shadow-lg text-sm z-50">
           {copyToast}
@@ -1880,6 +1995,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                 type="button"
                 onClick={openQuestion}
                 disabled={isQuestionOpen}
+                data-testid="open-question"
                 className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${
                   isQuestionOpen
                     ? "border-slate-800 bg-slate-900/60 text-slate-500 cursor-not-allowed"
@@ -1892,6 +2008,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                 type="button"
                 onClick={toggleResults}
                 disabled={!isQuestionOpen && !isShowingResults}
+                data-testid="toggle-results"
                 className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${
                   !isQuestionOpen && !isShowingResults
                     ? "border-slate-800 bg-slate-900/60 text-slate-500 cursor-not-allowed"
@@ -1904,6 +2021,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                 type="button"
                 onClick={closeQuestion}
                 disabled={!isQuestionOpen && !isShowingResults}
+                data-testid="close-question"
                 className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${
                   !isQuestionOpen && !isShowingResults
                     ? "border-slate-800 bg-slate-900/60 text-slate-500 cursor-not-allowed"

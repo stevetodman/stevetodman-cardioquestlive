@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { auth, ensureSignedIn } from "../firebase";
 import { addDoc, collection, db } from "../utils/firestore"; 
@@ -14,6 +14,39 @@ export default function CreateDemoSession() {
   const [error, setError] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Test hook: allow Playwright/local environments to preload a mock session via localStorage or query param.
+  useEffect(() => {
+    const stored = localStorage.getItem("cq_mock_session");
+    const params = new URLSearchParams(window.location.search);
+    const qpMock = params.get("mockSession");
+
+    const loadMock = (joinCode: string, id?: string) => {
+      const data = {
+        ...createInitialSessionData(defaultDeck),
+        joinCode,
+        id: id ?? "MOCK-SESSION",
+      };
+      setSessionInfo(data as SessionData);
+      setSessionId(id ?? "MOCK-SESSION");
+    };
+
+    if (qpMock) {
+      loadMock(qpMock.toUpperCase(), "MOCK-SESSION");
+      return;
+    }
+
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as { joinCode: string; sessionId?: string };
+        if (parsed?.joinCode) {
+          loadMock(parsed.joinCode, parsed.sessionId);
+        }
+      } catch {
+        // ignore malformed mock
+      }
+    }
+  }, []);
 
   const handleCreate = async () => {
     setLoading(true);
@@ -56,7 +89,7 @@ export default function CreateDemoSession() {
           <div className="p-4 rounded-lg bg-slate-800 border border-slate-600 space-y-4 animate-fade-in">
             <div className="space-y-1">
               <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Session Created</p>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between" data-testid="join-code">
                 <span className="font-semibold text-white">Join Code:</span>
                 <span className="text-2xl font-mono text-sky-400 tracking-widest">{sessionInfo.joinCode}</span>
               </div>
@@ -64,6 +97,7 @@ export default function CreateDemoSession() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
+                data-testid="copy-join-link"
                 onClick={async () => {
                   const url = `${window.location.origin}/#/join/${sessionInfo.joinCode}`;
                   try {
@@ -88,6 +122,7 @@ export default function CreateDemoSession() {
               </button>
               <button
                 type="button"
+                data-testid="toggle-qr"
                 onClick={() => setShowQr(true)}
                 className="px-3 py-2 rounded-lg border border-slate-600 text-slate-100 hover:border-slate-400 text-sm transition-colors"
               >
@@ -96,8 +131,8 @@ export default function CreateDemoSession() {
             </div>
             
             <div className="grid grid-cols-1 gap-3">
-                 <Link 
-                    to={`/presenter/${sessionId}`}
+                <Link 
+                    to={`/presenter/${sessionId}${sessionId === "MOCK-SESSION" ? `?mockSession=${sessionInfo.joinCode}` : ""}`}
                     className="block w-full text-center rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold py-3 text-sm transition-colors"
                  >
                     Launch Presenter View

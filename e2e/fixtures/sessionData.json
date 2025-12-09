@@ -1,0 +1,11 @@
+{
+  "sessionId": "TEST1234",
+  "joinCode": "TEST",
+  "currentQuestionId": "q1",
+  "question": {
+    "id": "q1",
+    "stem": "What medication maintains ductal patency?",
+    "choices": ["Epinephrine", "Indomethacin", "Prostaglandin E1", "Atenolol"]
+  },
+  "status": "active"
+}
