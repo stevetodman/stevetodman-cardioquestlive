@@ -213,7 +213,8 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
           break;
         }
         case "exam": {
-          handleExamRequest(simId);
+          const examType = typeof parsed.payload?.examType === "string" ? parsed.payload.examType : undefined;
+          handleExamRequest(simId, examType);
           break;
         }
         case "toggle_telemetry": {
@@ -1243,10 +1244,29 @@ function buildSystemPrompt(scenario: PatientScenarioId): string {
 
 main();
 
-function handleExamRequest(sessionId: string) {
+function handleExamRequest(sessionId: string, examType?: string) {
   const runtime = ensureRuntime(sessionId);
-  const exam = runtime.scenarioEngine.getState().exam ?? {};
-  const maneuver = (runtime as any).lastManeuver as string | undefined;
+  const state = runtime.scenarioEngine.getState();
+  const exam = state.exam ?? {};
+  const maneuver = examType ?? (runtime as any).lastManeuver as string | undefined;
+
+  // Add finding to reveal exam/audio to participants
+  // This allows participants to see exam findings and play heart/lung sounds
+  const currentFindings = new Set(state.findings ?? []);
+  currentFindings.add("physical_exam_performed");
+  if (maneuver === "cardiac" || maneuver === "auscultation") {
+    currentFindings.add("cardiac_exam");
+  }
+  if (maneuver === "pulmonary" || maneuver === "lungs") {
+    currentFindings.add("pulmonary_exam");
+  }
+
+  // Update findings in state
+  runtime.scenarioEngine.applyIntent({
+    type: "intent_revealFinding",
+    findingId: "physical_exam_performed",
+  });
+
   const summary = [
     exam.general && `General: ${exam.general}`,
     exam.cardio && `CV: ${exam.cardio}`,
@@ -1256,8 +1276,9 @@ function handleExamRequest(sessionId: string) {
   ]
     .filter(Boolean)
     .join(" | ");
+
+  // Nurse reports exam findings
   const text = summary || "Exam unchanged from prior check.";
-  const audioUrl = (exam as any).audioUrl as string | undefined;
   sessionManager.broadcastToSession(sessionId, {
     type: "patient_state",
     sessionId,
@@ -1267,30 +1288,42 @@ function handleExamRequest(sessionId: string) {
   sessionManager.broadcastToSession(sessionId, {
     type: "patient_transcript_delta",
     sessionId,
-    text: maneuver ? `${maneuver}: ${text}` : text,
+    text: maneuver ? `${maneuver} exam: ${text}` : text,
     character: "nurse",
   });
+
+  // If auscultation, prompt about listening
+  if (maneuver === "cardiac" || maneuver === "auscultation" || maneuver === "heart") {
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: "Heart sounds available - use your headphones to listen.",
+      character: "nurse",
+    });
+  }
+  if (maneuver === "pulmonary" || maneuver === "lungs") {
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: "Breath sounds available - use your headphones to listen.",
+      character: "nurse",
+    });
+  }
+
   sessionManager.broadcastToSession(sessionId, {
     type: "patient_state",
     sessionId,
     state: "idle",
     character: "nurse",
   });
+
+  // Broadcast updated state with findings (allows participants to see examAudio)
+  broadcastSimState(sessionId, {
+    ...runtime.scenarioEngine.getState(),
+    stageIds: runtime.scenarioEngine.getStageIds(),
+  });
+
   logSimEvent(sessionId, { type: "exam.requested", payload: { maneuver: maneuver ?? "standard" } }).catch(() => {});
-  if (audioUrl) {
-    sessionManager.broadcastToSession(sessionId, {
-      type: "patient_audio",
-      sessionId,
-      audioBase64: "",
-      character: "nurse",
-    });
-    sessionManager.broadcastToSession(sessionId, {
-      type: "patient_transcript_delta",
-      sessionId,
-      text: `Heart sounds: ${audioUrl}`,
-      character: "nurse",
-    });
-  }
 }
 
 function handleTelemetryToggle(sessionId: string, enabled: boolean) {

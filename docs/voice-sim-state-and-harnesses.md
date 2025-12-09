@@ -1,49 +1,96 @@
-## Voice Sim State & Harnesses (vNext Notes)
+## Voice Sim State & Harnesses
 
-This document captures the current deterministic voice sim shape, how to exercise it locally, and what remains to wire before production.
+Real-time simulation state management and testing harnesses for the voice gateway.
 
-### What’s implemented
-- `sim_state` WebSocket message (stageId, stageIds, vitals, fallback, budget) published by the voice-gateway.
-- Frontend consumption:
-  - Presenter: stage/vitals/cost chips, freeze/unfreeze, force reply, reveal clue, skip to stage dropdown, live captions, patient snapshot card (chief complaint, HPI, exam, labs/imaging) sourced from `src/data/scenarioSummaries.ts`.
-  - Participant: status banner shows fallback; PTT disables when fallback is active.
-- Deterministic core scaffolding in gateway:
-  - `ScenarioEngine` (in-memory state) and `ToolGate` (validation/rate limits; vitals clamped; stage allowlist check).
-  - RealtimePatientClient scaffold (not exercised here without network).
-- Harnesses:
-  - `npm run sim:harness` (voice-gateway) — exercises ScenarioEngine + ToolGate.
-  - `npm run ws:harness` (voice-gateway) — connects to a running gateway and prints `sim_state`/patient events.
+### Architecture
 
-### How to run harnesses
-From `voice-gateway/`:
+```
+┌─────────────────┐     ┌───────────────────┐     ┌──────────────────┐
+│   Presenter     │────▶│   Voice Gateway   │◀────│   Participant    │
+│ (Full State)    │     │   (WebSocket)     │     │ (Filtered State) │
+└─────────────────┘     └───────────────────┘     └──────────────────┘
+                               │
+                    ┌──────────┴──────────┐
+                    │   ScenarioEngine    │
+                    │   - State machine   │
+                    │   - Age-based HR    │
+                    │   - Dynamic rhythm  │
+                    └─────────────────────┘
+```
+
+### What's Implemented
+
+**Core Engine** (`voice-gateway/src/sim/scenarioEngine.ts`):
+- ScenarioEngine with stage-based state machine
+- PALS-accurate age-dependent HR thresholds (neonate → adolescent)
+- Dynamic rhythm generation (`getDynamicRhythm()`)
+- Vitals drift over time
+- ToolGate for intent validation and rate limits
+
+**State Broadcasting** (`voice-gateway/src/index.ts`):
+- `sim_state` WebSocket message with full simulation data
+- **Presenter view**: All vitals, orders, telemetry, exam findings
+- **Participant view**: Only ordered data (vitals, EKG, exam audio)
+- Telemetry waveform generation
+- Auscultation audio clips (scenario-specific)
+
+**Frontend**:
+- Presenter: Stage/vitals chips, freeze/unfreeze, force reply, skip stage, live captions
+- Participant: Status banner, PTT (disabled in fallback), exam audio playback
+
+**Characters** (`voice-gateway/src/patientPersona.ts`):
+- Patient, Parent, Nurse, Tech, Consultant—each with sim-context-aware prompts
+- Real-time vitals/scenario injection into character responses
+
+### Running Harnesses
+
 ```bash
+cd voice-gateway
+
 # Build first
 npm run build
+
+# Unit tests (28 rhythm generation tests)
+npm test
 
 # Exercise ScenarioEngine + ToolGate
 npm run sim:harness
 
-# Exercise WS flow (gateway must be running)
+# WS flow test (gateway must be running)
 GW_URL=ws://localhost:8081/ws/voice npm run ws:harness
-# Optional env overrides: SIM_ID, USER_ID, ROLE
 ```
 
-### Manual UI check (dev)
-1) Start the gateway (`npm start` in voice-gateway) and the app (`npm run dev` in root).
-2) Open presenter + participant in the browser.
-3) Verify:
-   - Stage/vitals/fallback chips render (presenter).
-   - Participant banner shows fallback when triggered; PTT is disabled in fallback.
-   - Stage label is visible in participant view.
+### Manual Testing
 
-### What’s missing / next wiring
-- Firestore persistence: sim_state + events are still in-memory; add firebase-admin writes for `sessions/{simId}` and `sessions/{simId}/events` (planned).
-- Realtime/OpenAI path needs live testing (network/API key).
-- Budget guardrail: CostController wired; UI shows cost; soft/hard thresholds should be live-tested.
-- Jest rules tests: run with Firestore emulator to remove skipped warnings.
+1. Start gateway: `cd voice-gateway && npm start`
+2. Start frontend: `npm run dev` (root)
+3. Open presenter + participant views
+4. Verify:
+   - Presenter sees full vitals/rhythm/orders
+   - Participant only sees data after ordering it
+   - Exam audio plays on participant device (AirPods)
+   - Stage transitions update rhythm appropriately
 
-### Production-minded checklist
-- Persist sim_state/events to Firestore (debounced) for replay/debug.
-- Confirm WS harness + UI show sim_state against a running gateway (with and without fallback).
-- Realtime smoke test with OPENAI_API_KEY: doctor_audio → tool intent → sim_state update; fallback on disconnect/budget.
-- Observability: track tool intent approvals/rejections, stage changes, fallback events.
+### Age-Based HR Thresholds (PALS)
+
+| Age Group | NSR Range | Tachy Threshold | Brady Threshold | SVT |
+|-----------|-----------|-----------------|-----------------|-----|
+| Neonate (<1mo) | 100-180 | 180 | 100 | >220 |
+| Infant (1-12mo) | 100-160 | 160 | 100 | >220 |
+| Toddler (1-3y) | 90-150 | 150 | 90 | >220 |
+| Preschool (3-5y) | 80-140 | 140 | 80 | >220 |
+| School (5-12y) | 70-120 | 120 | 70 | >220 |
+| Adolescent (>12y) | 60-100 | 100 | 60 | >220 |
+
+### Remaining Work
+
+**High Priority**:
+- Firestore persistence for sim_state replay/debug
+- Live OPENAI_API_KEY smoke testing
+
+**Medium Priority**:
+- Budget guardrail live testing (soft/hard thresholds)
+- Observability: intent approvals, stage changes, fallback events
+
+**Low Priority**:
+- Jest Firestore emulator integration
