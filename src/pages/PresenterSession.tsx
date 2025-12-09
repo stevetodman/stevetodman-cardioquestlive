@@ -1529,14 +1529,49 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
   }
 
   if (mockSessionParam) {
+    const mockJoinUrl = `${window.location.origin}/#/join/${(mockSessionParam || "MOCK").toUpperCase()}`;
+    const mockStateLabel = mockShowResults ? "Showing results" : mockQuestionOpen ? "Accepting answers" : "Closed";
+    const mockStateTone = mockShowResults
+      ? "bg-sky-500/15 border-sky-500/50 text-sky-100"
+      : mockQuestionOpen
+      ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-100"
+      : "bg-slate-800 border-slate-700 text-slate-300";
     return (
       <div className="min-h-screen bg-slate-950 text-slate-50 p-4">
         <div
-          className="flex items-center justify-between gap-3 py-2"
+          className="flex flex-wrap items-center justify-between gap-3 py-2 px-2 md:px-3 border-b border-slate-900"
           data-testid="presenter-header"
         >
-          <div className="text-sm font-semibold text-slate-100">Presenter View</div>
-          <div className="text-xs text-slate-400">Session: {(mockSessionParam || "MOCK").toUpperCase()}</div>
+          <div className="flex items-center gap-2">
+            <div className="text-sm font-semibold text-slate-100">Presenter View</div>
+            <div className="text-xs text-slate-400">Session: {(mockSessionParam || "MOCK").toUpperCase()}</div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1">
+              <span className="text-[11px] text-slate-400 uppercase tracking-[0.14em]">Join</span>
+              <span className="font-mono text-xs text-sky-200">{(mockSessionParam || "MOCK").toUpperCase()}</span>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(mockJoinUrl);
+                    setCopyToast("Join link copied");
+                  } catch {
+                    setCopyToast("Copy failed");
+                  }
+                }}
+                className="text-[10px] px-2 py-0.5 rounded border border-slate-700 text-slate-200 hover:border-slate-500 transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            <div className={`text-[11px] px-2.5 py-1 rounded-full border ${mockStateTone}`}>
+              {mockStateLabel}
+            </div>
+            <div className="text-[11px] px-2.5 py-1 rounded-full border border-slate-700 bg-slate-900/60 text-slate-200">
+              Responses: 0
+            </div>
+          </div>
         </div>
         <div className="mt-4 p-4 rounded-xl border border-slate-800 bg-slate-900 space-y-4">
           <div className="text-sm font-semibold text-slate-100">Mock slide</div>
@@ -1595,13 +1630,61 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
     );
   }
 
+  const questionStateLabel = isQuestionOpen
+    ? "Accepting answers"
+    : isShowingResults
+    ? "Showing results"
+    : "Closed";
+  const questionStateTone = isQuestionOpen
+    ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-100"
+    : isShowingResults
+    ? "bg-sky-500/15 border-sky-500/50 text-sky-100"
+    : "bg-slate-800 border-slate-700 text-slate-300";
+
   const presenterHeader = (
     <div
-      className="flex items-center justify-between gap-3 py-2"
+      className="flex flex-wrap items-center justify-between gap-3 py-2 px-3 md:px-4 border-b border-slate-900"
       data-testid="presenter-header"
     >
-      <div className="text-sm font-semibold text-slate-100">Presenter View</div>
-      <div className="text-xs text-slate-400">Session: {session.joinCode}</div>
+      <div className="flex items-center gap-3">
+        <div className="text-sm font-semibold text-slate-100">Presenter View</div>
+        <div className="text-[11px] text-slate-400">Session: {session.joinCode}</div>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex items-center gap-1 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1">
+          <span className="text-[11px] text-slate-400 uppercase tracking-[0.14em]">Join</span>
+          <span className="font-mono text-xs text-sky-200">{session.joinCode}</span>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!joinUrl) return;
+              try {
+                if ((navigator as any).share) {
+                  await (navigator as any).share({ url: joinUrl, text: `Join CardioQuest Live: ${session.joinCode}` });
+                  return;
+                }
+              } catch {
+                // ignore share errors
+              }
+              try {
+                await navigator.clipboard.writeText(joinUrl);
+                setCopyToast("Join link copied");
+              } catch {
+                setCopyToast("Copy failed");
+              }
+            }}
+            className="text-[10px] px-2 py-0.5 rounded border border-slate-700 text-slate-200 hover:border-slate-500 transition-colors"
+          >
+            Copy
+          </button>
+        </div>
+        <div className={`text-[11px] px-2.5 py-1 rounded-full border ${questionStateTone}`}>
+          {questionStateLabel}
+        </div>
+        <div className="text-[11px] px-2.5 py-1 rounded-full border border-slate-700 bg-slate-900/60 text-slate-200">
+          Responses: {responseTotal}
+        </div>
+      </div>
     </div>
   );
 
