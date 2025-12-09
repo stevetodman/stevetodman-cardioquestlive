@@ -29,6 +29,7 @@ import { VoiceStatusBadge } from "../components/VoiceStatusBadge";
 import { useSimplifiedVoiceState } from "../hooks/useSimplifiedVoiceState";
 import { CollapsibleVoicePanel } from "../components/CollapsibleVoicePanel";
 import { FloatingMicButton } from "../components/FloatingMicButton";
+import { SessionSkeleton } from "../components/SessionSkeleton";
 
 function getLocalUserId(): string {
   const key = "cq_live_user_id";
@@ -109,6 +110,7 @@ export default function JoinSession() {
   const [showExam, setShowExam] = useState(false);
   const [showEkg, setShowEkg] = useState(false);
   const [toast, setToast] = useState<{ message: string; ts: number } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [lastFloorHolder, setLastFloorHolder] = useState<string | null>(null);
   const [lastFallback, setLastFallback] = useState<boolean | null>(null);
   const [assessmentRequest, setAssessmentRequest] = useState<{ ts: number; stage?: string } | null>(null);
@@ -809,8 +811,8 @@ export default function JoinSession() {
 
   if (loading && !session) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-50">
-        <div className="animate-pulse text-sky-400 font-semibold">Connecting to session...</div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50 p-4">
+        <SessionSkeleton />
       </div>
     );
   }
@@ -934,6 +936,8 @@ export default function JoinSession() {
   const handleChoice = async (choiceIndex: number) => {
     if (!currentQuestion || !isQuestionActive || !userId || !sessionId) return;
     if (submitting) return;
+    setSubmitError(null);
+    setSelectedChoice(choiceIndex); // optimistic selection
     setSubmitting(true);
     try {
       const responseId = `${userId}_${currentQuestion.id}`;
@@ -990,10 +994,10 @@ export default function JoinSession() {
           }
         });
       }
-
-      setSelectedChoice(choiceIndex);
     } catch (err) {
         console.error("Failed to submit answer", err);
+        setSelectedChoice(null);
+        setSubmitError("Could not record your answer. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -1137,6 +1141,11 @@ export default function JoinSession() {
                         </div>
                     )}
                 </div>
+                {submitError && (
+                  <div className="mt-3 text-center text-xs text-rose-300">
+                    {submitError}
+                  </div>
+                )}
             </div>
           </section>
         ) : (

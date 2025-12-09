@@ -136,11 +136,11 @@ interface Props {
 **Current state:** Shows "Connecting to session..." text with `animate-pulse`.
 
 **Changes:**
-- [ ] Replace text with skeleton UI matching final layout:
+- [x] Replace text with skeleton UI matching final layout:
   - Header bar skeleton (logo + code badge + status)
   - Voice panel skeleton (status badge shape + button shape)
   - Question card skeleton (stem lines + 4 option rectangles)
-- [ ] Use shimmer animation (not just pulse)
+- [x] Use shimmer animation (not just pulse)
 
 **Skeleton structure:**
 ```tsx
@@ -173,10 +173,10 @@ export function SessionSkeleton() {
 **Current state:** Sets `submitting=true`, waits for Firestore, then updates UI.
 
 **Changes:**
-- [ ] Immediately set `selectedChoice` on click (before Firestore)
-- [ ] Show "Answer Recorded" badge immediately
-- [ ] On Firestore error, reset `selectedChoice` and show error toast
-- [ ] Add error state: `const [submitError, setSubmitError] = useState<string | null>(null)`
+- [x] Immediately set `selectedChoice` on click (before Firestore)
+- [x] Show "Answer Recorded" badge immediately
+- [x] On Firestore error, reset `selectedChoice` and show error toast
+- [x] Add error state: `const [submitError, setSubmitError] = useState<string | null>(null)`
 
 **Acceptance criteria:**
 - Visual feedback appears <50ms after tap
