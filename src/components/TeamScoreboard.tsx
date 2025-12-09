@@ -9,15 +9,19 @@ export function TeamScoreboard({ teams }: Props) {
   if (!teams || teams.length === 0) return null;
 
   return (
-    <div className="pointer-events-none select-none">
+    <div
+      className="select-none"
+      role="region"
+      aria-label="Team scores"
+    >
       <div className="bg-slate-900/85 border border-slate-800 rounded-2xl shadow-2xl shadow-black/30 px-3.5 py-2.5 w-[270px] max-w-xs backdrop-blur-sm">
-        <div className="text-[11px] uppercase tracking-[0.12em] text-slate-300 font-semibold mb-2 flex items-center justify-between">
+        <div className="text-[11px] uppercase tracking-[0.12em] text-slate-200 font-semibold mb-2 flex items-center justify-between">
           <span>Team scores</span>
-          <span className="text-[10px] text-slate-500">Live</span>
+          <span className="text-[10px] text-slate-400">Live</span>
         </div>
-        <div className="divide-y divide-slate-800/70">
+        <ul className="divide-y divide-slate-800/70" role="list">
           {teams.map((team, idx) => (
-            <div
+            <li
               key={team.teamId}
               className="py-1.5 flex items-center gap-2 transition-all"
             >
@@ -36,9 +40,9 @@ export function TeamScoreboard({ teams }: Props) {
               <div className="text-[12px] font-semibold text-sky-300 font-mono tabular-nums">
                 {team.points} pts
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
     </div>
   );

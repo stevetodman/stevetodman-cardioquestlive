@@ -9,15 +9,15 @@ export function IndividualScoreboard({ players }: Props) {
   if (!players || players.length === 0) return null;
 
   return (
-    <div className="pointer-events-none select-none">
+    <div className="select-none" role="region" aria-label="Top players">
       <div className="bg-slate-900/85 border border-slate-800 rounded-2xl shadow-2xl shadow-black/30 px-3.5 py-2.5 w-[280px] max-w-xs backdrop-blur-sm">
-        <div className="text-[11px] uppercase tracking-[0.12em] text-slate-300 font-semibold mb-2 flex items-center justify-between">
+        <div className="text-[11px] uppercase tracking-[0.12em] text-slate-200 font-semibold mb-2 flex items-center justify-between">
           <span>Top players</span>
-          <span className="text-[10px] text-slate-500">Live</span>
+          <span className="text-[10px] text-slate-400">Live</span>
         </div>
-        <div className="divide-y divide-slate-800/70">
+        <ul className="divide-y divide-slate-800/70" role="list">
           {players.map((player, idx) => (
-            <div
+            <li
               key={player.userId}
               className="py-1.5 flex items-center gap-2 transition-all"
             >
@@ -32,14 +32,14 @@ export function IndividualScoreboard({ players }: Props) {
                 <div className={`text-sm truncate ${idx === 0 ? "text-white font-semibold" : "text-slate-100"}`}>
                   Player {idx + 1}
                 </div>
-                <div className="text-[11px] text-slate-500 truncate">{player.teamName}</div>
+                <div className="text-[11px] text-slate-400 truncate">{player.teamName}</div>
               </div>
               <div className="text-[12px] font-semibold text-emerald-300 font-mono tabular-nums">
                 {player.points} pts
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
     </div>
   );

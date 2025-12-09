@@ -76,6 +76,7 @@ function getStreakMultiplier(currentStreak: number) {
 
 export default function JoinSession() {
   const { joinCode } = useParams();
+  const [findAttempt, setFindAttempt] = useState(0);
   const [session, setSession] = useState<SessionData | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -248,7 +249,7 @@ export default function JoinSession() {
       }
     }
     findSession();
-  }, [joinCode, userId]);
+  }, [joinCode, userId, findAttempt]);
 
   // Subscribe to session updates
   useEffect(() => {
@@ -854,6 +855,16 @@ export default function JoinSession() {
 
   if (!joinCode) return <div className="p-8 text-center text-slate-400">No join code provided.</div>;
 
+  useEffect(() => {
+    if (!session?.currentQuestionId) return;
+    const section = document.getElementById("question-section");
+    if (!section) return;
+    if (typeof section.scrollIntoView !== "function") return;
+    const prefersReduced =
+      typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    section.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "start" });
+  }, [session?.currentQuestionId]);
+
   if (loading && !session) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50 p-4">
@@ -872,9 +883,19 @@ export default function JoinSession() {
         <p className="text-slate-400 text-center max-w-xs">
             We couldn't find a session with code <span className="font-mono text-sky-400 bg-sky-950/30 px-2 py-1 rounded mx-1">{joinCode.toUpperCase()}</span>.
         </p>
+        <p className="text-slate-500 text-sm text-center max-w-xs">
+          The session may have ended or the code might be incorrect.
+        </p>
         <Link to="/" className="mt-4 px-6 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors">
           Back to Home
         </Link>
+        <button
+          type="button"
+          onClick={() => setFindAttempt((n) => n + 1)}
+          className="px-6 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg text-sm font-medium transition-colors"
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -1110,7 +1131,7 @@ export default function JoinSession() {
 
 
         {currentQuestion ? (
-          <section className="animate-slide-up">
+          <section id="question-section" className="scroll-mt-20 animate-slide-up">
             <div className="sr-only" aria-live="polite">
               {isQuestionActive
                 ? "Question open for answers"

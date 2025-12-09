@@ -1,11 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense, lazy } from "react";
 import { HashRouter, Routes, Route, Link, useNavigate } from "react-router-dom";
-import CreateDemoSession from "./pages/CreateDemoSession";
-import PresenterSession from "./pages/PresenterSession";
-import JoinSession from "./pages/JoinSession";
-import AdminDeckEditor from "./pages/AdminDeckEditor";
 import { ensureSignedIn, isConfigured } from "./firebase";
 import { DevGatewayBadge } from "./components/DevGatewayBadge";
+import { SessionSkeleton } from "./components/SessionSkeleton";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+
+const CreateDemoSession = lazy(() => import("./pages/CreateDemoSession"));
+const PresenterSession = lazy(() => import("./pages/PresenterSession"));
+const JoinSession = lazy(() => import("./pages/JoinSession"));
+const AdminDeckEditor = lazy(() => import("./pages/AdminDeckEditor"));
 
 function Home() {
     const [joinCode, setJoinCode] = useState("");
@@ -143,6 +146,12 @@ export default function App() {
     );
   }, []);
 
+  const PageLoader = (
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50 p-4">
+      <SessionSkeleton />
+    </div>
+  );
+
   return (
     <HashRouter>
       <DevGatewayBadge />
@@ -152,13 +161,17 @@ export default function App() {
       >
         Skip to main content
       </a>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/create-demo" element={<CreateDemoSession />} />
-        <Route path="/presenter/:sessionId" element={<PresenterSession />} />
-        <Route path="/join/:joinCode" element={<JoinSession />} />
-        <Route path="/admin" element={<AdminDeckEditor />} />
-      </Routes>
+      <ErrorBoundary>
+        <Suspense fallback={PageLoader}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/create-demo" element={<CreateDemoSession />} />
+            <Route path="/presenter/:sessionId" element={<PresenterSession />} />
+            <Route path="/join/:joinCode" element={<JoinSession />} />
+            <Route path="/admin" element={<AdminDeckEditor />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </HashRouter>
   );
 }
