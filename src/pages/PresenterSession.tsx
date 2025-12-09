@@ -2310,7 +2310,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
         </div>
       )}
       <div className="flex-1 flex flex-col items-center px-4 md:px-6 pb-2 gap-2">
-        <div className="w-full max-w-[1800px] grid grid-cols-1 xl:grid-cols-[1.7fr_1fr] gap-3 items-start">
+        <div className={`w-full max-w-[1800px] grid grid-cols-1 gap-3 items-start ${presenterMode === "sim" ? "xl:grid-cols-[1.7fr_1fr]" : ""}`}>
           <div className="flex flex-col gap-3">
             <div className="relative flex-1 min-h-[62vh] max-h-[78vh]">
               {showSummary ? (
@@ -2335,21 +2335,25 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                 </div>
               ) : (
                 <>
-                  <VoicePatientOverlay
-                    voiceMode={(overlayMode as any) ?? "idle"}
-                    enabled={voice.enabled}
-                    floorHolderName={voice.floorHolderName ?? undefined}
-                    transcriptTurns={transcriptTurns}
-                    patientAudioUrl={patientAudioUrl}
-                    onClearTranscript={() => setTranscriptTurns([])}
-                  />
-                  {activeCharacter && (
-                    <div className="absolute top-4 left-4 z-30">
-                      <VoiceCharacterTile
-                        character={activeCharacter.character}
-                        state={activeCharacter.state}
+                  {presenterMode === "sim" && (
+                    <>
+                      <VoicePatientOverlay
+                        voiceMode={(overlayMode as any) ?? "idle"}
+                        enabled={voice.enabled}
+                        floorHolderName={voice.floorHolderName ?? undefined}
+                        transcriptTurns={transcriptTurns}
+                        patientAudioUrl={patientAudioUrl}
+                        onClearTranscript={() => setTranscriptTurns([])}
                       />
-                    </div>
+                      {activeCharacter && (
+                        <div className="absolute top-4 left-4 z-30">
+                          <VoiceCharacterTile
+                            character={activeCharacter.character}
+                            state={activeCharacter.state}
+                          />
+                        </div>
+                      )}
+                    </>
                   )}
                   <div
                     className="absolute inset-0 rounded-2xl shadow-2xl overflow-hidden animate-fade-in"
@@ -2392,41 +2396,44 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                 </>
               )}
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-slate-200">Transcript (by role)</div>
-                <div className="text-[10px] text-slate-500">Latest turns per role</div>
-              </div>
-              {groupedTranscript.length === 0 ? (
-                <div className="text-xs text-slate-500">No transcript yet.</div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {groupedTranscript.map((group) => (
-                    <div key={group.key} className="space-y-1">
-                      <div
-                        className={`text-[10px] uppercase tracking-[0.14em] font-semibold px-2 py-1 rounded border ${roleColor(
-                          group.key
-                        )}`}
-                      >
-                        {group.key}
-                      </div>
-                      {group.turns.slice(-3).map((turn) => (
-                        <div
-                          key={turn.id}
-                          className="bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100"
-                        >
-                          <div className="text-[10px] text-slate-500 mb-1">
-                            {new Date(turn.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                          </div>
-                          <div className="leading-snug whitespace-pre-wrap">{turn.text}</div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
+            {presenterMode === "sim" && (
+              <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-slate-200">Transcript (by role)</div>
+                  <div className="text-[10px] text-slate-500">Latest turns per role</div>
                 </div>
-              )}
-            </div>
+                {groupedTranscript.length === 0 ? (
+                  <div className="text-xs text-slate-500">No transcript yet.</div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {groupedTranscript.map((group) => (
+                      <div key={group.key} className="space-y-1">
+                        <div
+                          className={`text-[10px] uppercase tracking-[0.14em] font-semibold px-2 py-1 rounded border ${roleColor(
+                            group.key
+                          )}`}
+                        >
+                          {group.key}
+                        </div>
+                        {group.turns.slice(-3).map((turn) => (
+                          <div
+                            key={turn.id}
+                            className="bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100"
+                          >
+                            <div className="text-[10px] text-slate-500 mb-1">
+                              {new Date(turn.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                            </div>
+                            <div className="leading-snug whitespace-pre-wrap">{turn.text}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+          {presenterMode === "sim" && (
           <div className="flex flex-col gap-3">
             <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
               <div className="text-sm font-semibold text-slate-200 flex items-center justify-between">
@@ -2924,6 +2931,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
               sessionId={sessionId}
             />
           </div>
+          )}
         </div>
       </div>
       {showTelemetryPopout && simState?.telemetry && simState.telemetryWaveform && (
