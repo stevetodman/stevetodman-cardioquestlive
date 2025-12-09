@@ -1581,7 +1581,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
             <div className="text-sm font-semibold text-slate-100">Presenter View</div>
             <div className="text-xs text-slate-400">Session: {(mockSessionParam || "MOCK").toUpperCase()}</div>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap max-w-full">
             <div className="flex items-center gap-1 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1">
               <span className="text-[11px] text-slate-400 uppercase tracking-[0.14em]">Join</span>
               <span className="font-mono text-xs text-sky-200">{(mockSessionParam || "MOCK").toUpperCase()}</span>
@@ -1693,12 +1693,12 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
       className="flex flex-wrap items-center justify-between gap-3 py-2 px-3 md:px-4 border-b border-slate-900"
       data-testid="presenter-header"
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         <div className="text-sm font-semibold text-slate-100">Presenter View</div>
-        <div className="text-[11px] text-slate-400">Session: {session.joinCode}</div>
+        <div className="text-[11px] text-slate-400 truncate">Session: {session.joinCode}</div>
       </div>
-      <div className="flex items-center gap-2 flex-wrap justify-end">
-            <div className="flex items-center gap-1 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1">
+      <div className="flex items-center gap-2 flex-wrap justify-end max-w-full">
+            <div className="flex items-center gap-1 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1 min-w-[160px]">
               <span className="text-[11px] text-slate-400 uppercase tracking-[0.14em]">Join</span>
               <span className="font-mono text-xs text-sky-200">{session.joinCode}</span>
           <button
@@ -1731,7 +1731,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
         <div className="text-[11px] px-2.5 py-1 rounded-full border border-slate-700 bg-slate-900/60 text-slate-200">
           Responses: {responseTotal}
         </div>
-        <div className="text-[11px] px-2.5 py-1 rounded-full border border-slate-700 bg-slate-900/60 text-slate-200">
+        <div className="text-[11px] px-2.5 py-1 rounded-full border border-slate-700 bg-slate-900/60 text-slate-200 whitespace-nowrap">
           Voice: {mockVoiceUnavailable ? "disabled" : mockVoiceEnabled || gatewayStatus.state === "ready" ? "ready" : "disconnected"}
         </div>
         <button
