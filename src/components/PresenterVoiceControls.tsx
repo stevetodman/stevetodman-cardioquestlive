@@ -196,162 +196,188 @@ export function PresenterVoiceControls({
         <summary className="cursor-pointer list-none flex items-center gap-2 text-[11px] text-slate-400 hover:text-slate-200 select-none">
           <span className="transition-transform group-open:rotate-90">▶</span>
           <span>Quick Commands</span>
-          <span className="text-[10px] text-slate-500">(17 actions)</span>
         </summary>
-        <div className="flex flex-wrap items-center gap-1 mt-2">
-          <button
-            type="button"
-            onClick={() => emitCommand(sessionId, "pause_ai")}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-slate-700 bg-slate-900 hover:border-slate-600 text-slate-200"
-          >
-            Pause AI
-          </button>
-          <button
-            type="button"
-            onClick={() => emitCommand(sessionId, "resume_ai")}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-slate-700 bg-slate-900 hover:border-slate-600 text-slate-200"
-          >
-            Resume AI
-          </button>
-          <button
-            type="button"
-            onClick={handleForceReply}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
-          >
-            Force reply
-          </button>
-          <button
-            type="button"
-            onClick={() => emitCommand(sessionId, "end_turn")}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-rose-600/60 bg-rose-600/10 text-rose-100 hover:border-rose-500"
-          >
-            End turn
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              emitCommand(sessionId, "force_reply", { doctorUtterance: "Please grab a fresh set of vitals." }, "nurse");
-              noteQuick("Sent to nurse: vitals request");
-            }}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
-          >
-            Ask nurse: vitals
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              emitCommand(sessionId, "order", { orderType: "ekg" }, "tech");
-              noteQuick("Sent to tech: EKG");
-            }}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-sky-600/60 bg-sky-600/10 text-sky-100 hover:border-sky-500"
-          >
-            Ask tech: EKG
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              emitCommand(sessionId, "exam", {}, "nurse");
-              noteQuick("Exam requested");
-            }}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-indigo-500/60 bg-indigo-600/10 text-indigo-100 hover:border-indigo-400"
-          >
-            Bedside exam
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              emitCommand(sessionId, "toggle_telemetry", { enabled: true }, "tech");
-              noteQuick("Telemetry on");
-            }}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-emerald-500/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-400"
-          >
-            Start telemetry
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              emitCommand(sessionId, "show_ekg", {}, "tech");
-              noteQuick("Showing EKG");
-            }}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-amber-500/60 bg-amber-600/10 text-amber-100 hover:border-amber-400"
-          >
-            Show EKG
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              emitCommand(sessionId, "order", { orderType: "labs" }, "nurse");
-              noteQuick("Ordered labs (nurse)");
-            }}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-indigo-600/60 bg-indigo-600/10 text-indigo-100 hover:border-indigo-500"
-          >
-            Order labs
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              emitCommand(sessionId, "order", { orderType: "imaging" }, "tech");
-              noteQuick("Ordered imaging (tech)");
-            }}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-purple-600/60 bg-purple-600/10 text-purple-100 hover:border-purple-500"
-          >
-            Order imaging
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              emitCommand(sessionId, "treatment", { treatmentType: "oxygen" }, "nurse");
-              noteQuick("O2 applied");
-            }}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-emerald-500/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-400"
-          >
-            Give oxygen
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              emitCommand(sessionId, "treatment", { treatmentType: "fluids" }, "nurse");
-              noteQuick("Fluids bolus");
-            }}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-sky-500/60 bg-sky-600/10 text-sky-100 hover:border-sky-400"
-          >
-            Fluids bolus
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              emitCommand(sessionId, "treatment", { treatmentType: "knee-chest" }, "nurse");
-              noteQuick("Positioned knee-chest");
-            }}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-amber-500/60 bg-amber-600/10 text-amber-100 hover:border-amber-400"
-          >
-            Knee-chest
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              emitCommand(sessionId, "treatment", { treatmentType: "rate-control" }, "nurse");
-              noteQuick("Rate control med");
-            }}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-rose-500/60 bg-rose-600/10 text-rose-100 hover:border-rose-400"
-          >
-            Rate control
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              emitCommand(
-                sessionId,
-                "force_reply",
-                { doctorUtterance: "Please join at bedside for cardiology consult." },
-                "consultant"
-              );
-              noteQuick("Pinged consultant");
-            }}
-            className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-amber-600/60 bg-amber-600/10 text-amber-100 hover:border-amber-500"
-          >
-            Call consultant
-          </button>
+        <div className="mt-2 space-y-3">
+          {/* AI Controls */}
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.12em] text-slate-500 font-semibold mb-1.5">AI Control</div>
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={() => emitCommand(sessionId, "pause_ai")}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-slate-700 bg-slate-900 hover:border-slate-600 text-slate-200"
+              >
+                Pause AI
+              </button>
+              <button
+                type="button"
+                onClick={() => emitCommand(sessionId, "resume_ai")}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-slate-700 bg-slate-900 hover:border-slate-600 text-slate-200"
+              >
+                Resume AI
+              </button>
+              <button
+                type="button"
+                onClick={handleForceReply}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
+              >
+                Force reply
+              </button>
+              <button
+                type="button"
+                onClick={() => emitCommand(sessionId, "end_turn")}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-rose-600/60 bg-rose-600/10 text-rose-100 hover:border-rose-500"
+              >
+                End turn
+              </button>
+            </div>
+          </div>
+
+          {/* Clinical / Assessment */}
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.12em] text-slate-500 font-semibold mb-1.5">Clinical</div>
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  emitCommand(sessionId, "force_reply", { doctorUtterance: "Please grab a fresh set of vitals." }, "nurse");
+                  noteQuick("Sent to nurse: vitals request");
+                }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-emerald-600/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-500"
+              >
+                Ask nurse: vitals
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  emitCommand(sessionId, "exam", {}, "nurse");
+                  noteQuick("Exam requested");
+                }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-indigo-500/60 bg-indigo-600/10 text-indigo-100 hover:border-indigo-400"
+              >
+                Bedside exam
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  emitCommand(
+                    sessionId,
+                    "force_reply",
+                    { doctorUtterance: "Please join at bedside for cardiology consult." },
+                    "consultant"
+                  );
+                  noteQuick("Pinged consultant");
+                }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-amber-600/60 bg-amber-600/10 text-amber-100 hover:border-amber-500"
+              >
+                Call consultant
+              </button>
+            </div>
+          </div>
+
+          {/* Orders / Diagnostics */}
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.12em] text-slate-500 font-semibold mb-1.5">Orders</div>
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  emitCommand(sessionId, "toggle_telemetry", { enabled: true }, "tech");
+                  noteQuick("Telemetry on");
+                }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-emerald-500/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-400"
+              >
+                Start telemetry
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  emitCommand(sessionId, "order", { orderType: "ekg" }, "tech");
+                  noteQuick("Sent to tech: EKG");
+                }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-sky-600/60 bg-sky-600/10 text-sky-100 hover:border-sky-500"
+              >
+                Order EKG
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  emitCommand(sessionId, "show_ekg", {}, "tech");
+                  noteQuick("Showing EKG");
+                }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-amber-500/60 bg-amber-600/10 text-amber-100 hover:border-amber-400"
+              >
+                Show EKG
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  emitCommand(sessionId, "order", { orderType: "labs" }, "nurse");
+                  noteQuick("Ordered labs (nurse)");
+                }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-indigo-600/60 bg-indigo-600/10 text-indigo-100 hover:border-indigo-500"
+              >
+                Order labs
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  emitCommand(sessionId, "order", { orderType: "imaging" }, "tech");
+                  noteQuick("Ordered imaging (tech)");
+                }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-purple-600/60 bg-purple-600/10 text-purple-100 hover:border-purple-500"
+              >
+                Order imaging
+              </button>
+            </div>
+          </div>
+
+          {/* Treatments / Meds */}
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.12em] text-slate-500 font-semibold mb-1.5">Treatments</div>
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  emitCommand(sessionId, "treatment", { treatmentType: "oxygen" }, "nurse");
+                  noteQuick("O2 applied");
+                }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-emerald-500/60 bg-emerald-600/10 text-emerald-100 hover:border-emerald-400"
+              >
+                Give oxygen
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  emitCommand(sessionId, "treatment", { treatmentType: "fluids" }, "nurse");
+                  noteQuick("Fluids bolus");
+                }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-sky-500/60 bg-sky-600/10 text-sky-100 hover:border-sky-400"
+              >
+                Fluids bolus
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  emitCommand(sessionId, "treatment", { treatmentType: "knee-chest" }, "nurse");
+                  noteQuick("Positioned knee-chest");
+                }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-amber-500/60 bg-amber-600/10 text-amber-100 hover:border-amber-400"
+              >
+                Knee-chest
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  emitCommand(sessionId, "treatment", { treatmentType: "rate-control" }, "nurse");
+                  noteQuick("Rate control med");
+                }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold border border-rose-500/60 bg-rose-600/10 text-rose-100 hover:border-rose-400"
+              >
+                Rate control
+              </button>
+            </div>
+          </div>
         </div>
       </details>
       {quickStatus && <div className="text-[11px] text-slate-400">{quickStatus}</div>}

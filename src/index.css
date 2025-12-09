@@ -46,4 +46,28 @@ body {
   body {
     @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))] font-sans;
   }
+
+  /* Custom focus-visible states for better accessibility */
+  *:focus-visible {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Ensure buttons and inputs get the focus ring */
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: 2px;
+  }
+
+  /* Slightly different ring for links */
+  a:focus-visible {
+    outline: 2px solid hsl(var(--accent));
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
 }

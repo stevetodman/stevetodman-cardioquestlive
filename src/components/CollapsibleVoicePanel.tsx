@@ -42,7 +42,7 @@ export function CollapsibleVoicePanel({
       >
         <div className="flex-1 min-w-0">{statusBar}</div>
         <span
-          className={`ml-3 text-slate-400 text-sm transition-transform ${isExpanded ? "rotate-180" : ""}`}
+          className={`ml-3 text-slate-400 text-sm transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isExpanded ? "rotate-180" : ""}`}
           aria-hidden="true"
         >
           ⌃
@@ -50,7 +50,7 @@ export function CollapsibleVoicePanel({
       </button>
       <div
         ref={contentRef}
-        className="transition-all duration-300 ease-in-out overflow-hidden"
+        className="transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] overflow-hidden"
         style={{ maxHeight: isExpanded ? "999px" : "0px" }}
       >
         <div className="px-4 pb-4 pt-1 space-y-3">{children}</div>

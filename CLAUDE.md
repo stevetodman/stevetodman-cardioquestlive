@@ -102,6 +102,14 @@ PORT                          # Default 8081
   - CompactVitalsChip: Header vitals (HR/SpO2) with abnormal highlighting
   - Auscultation audio: Loading states, play/pause icons, buffering indicator
   - Voice panel: Reorganized sections (status → speak → actions → options)
+- **Event-driven vitals highlighting** (Dec 2024):
+  - useVitalsChange hook detects significant changes (HR ±10, SpO2 ±3%, RR ±4)
+  - Amber glow animation on VitalsMonitor and CompactVitalsChip
+  - No direction arrows (clinically appropriate for resident training)
+- **UI polish** (Dec 2024):
+  - Quick commands grouped by category (AI Control, Clinical, Orders, Treatments)
+  - Custom focus-visible states for keyboard accessibility
+  - Spring animation on collapsible panels
 
 ## Mobile (iPhone) Participant Experience
 - Safe area insets for notch/home indicator
