@@ -5,12 +5,15 @@ import { addDoc, collection, db } from "../utils/firestore";
 import { createInitialSessionData, defaultDeck } from "../data/ductalDeck";
 import { fetchDeck } from "../utils/deckService";
 import { SessionData } from "../types";
+import { QRCodeOverlay } from "../components/QRCodeOverlay";
 
 export default function CreateDemoSession() {
   const [sessionInfo, setSessionInfo] = useState<SessionData | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showQr, setShowQr] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleCreate = async () => {
     setLoading(true);
@@ -57,6 +60,39 @@ export default function CreateDemoSession() {
                 <span className="font-semibold text-white">Join Code:</span>
                 <span className="text-2xl font-mono text-sky-400 tracking-widest">{sessionInfo.joinCode}</span>
               </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  const url = `${window.location.origin}/#/join/${sessionInfo.joinCode}`;
+                  try {
+                    if ((navigator as any).share) {
+                      await (navigator as any).share({ url, text: `Join CardioQuest Live: ${sessionInfo.joinCode}` });
+                      return;
+                    }
+                  } catch {
+                    // ignore share errors, fall back to clipboard
+                  }
+                  try {
+                    await navigator.clipboard.writeText(url);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  } catch {
+                    setError("Unable to copy link. Please copy manually.");
+                  }
+                }}
+                className="px-3 py-2 rounded-lg border border-slate-600 text-slate-100 hover:border-slate-400 text-sm transition-colors"
+              >
+                {copied ? "Copied!" : "Copy link"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowQr(true)}
+                className="px-3 py-2 rounded-lg border border-slate-600 text-slate-100 hover:border-slate-400 text-sm transition-colors"
+              >
+                Show QR
+              </button>
             </div>
             
             <div className="grid grid-cols-1 gap-3">
@@ -110,6 +146,14 @@ export default function CreateDemoSession() {
             <Link to="/" className="text-xs text-slate-500 hover:text-slate-300 underline">Back to Home</Link>
         </div>
       </div>
+      {sessionInfo && showQr && (
+        <QRCodeOverlay
+          open={showQr}
+          onClose={() => setShowQr(false)}
+          code={sessionInfo.joinCode}
+          joinUrl={`${window.location.origin}/#/join/${sessionInfo.joinCode}`}
+        />
+      )}
     </div>
   );
 }

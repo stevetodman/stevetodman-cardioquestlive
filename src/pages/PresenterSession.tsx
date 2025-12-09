@@ -38,6 +38,7 @@ import { sendVoiceCommand } from "../services/voiceCommands";
 import { DebriefPanel } from "../components/DebriefPanel";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
 import { Select } from "../components/Select";
+import { QRCodeOverlay } from "../components/QRCodeOverlay";
 
 type SnapshotProps = {
   chiefComplaint: string;
@@ -189,6 +190,8 @@ const [npcCooldowns, setNpcCooldowns] = useState<Record<string, number>>({});
 const [scoringTrend, setScoringTrend] = useState<{ current: number; delta: number }>({ current: 0, delta: 0 });
 const lastRhythmRef = useRef<string | null>(null);
 const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
+const [showQr, setShowQr] = useState(false);
+const [copyToast, setCopyToast] = useState<string | null>(null);
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -203,6 +206,14 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
     const lung = (simState as any)?.exam?.lungAudioUrl as string | undefined;
     return { heart, lung };
   }, [simState]);
+  const joinUrl = session ? `${window.location.origin}/#/join/${session.joinCode}` : "";
+
+  useEffect(() => {
+    if (!copyToast) return;
+    const t = setTimeout(() => setCopyToast(null), 1500);
+    return () => clearTimeout(t);
+  }, [copyToast]);
+
   useEffect(() => {
     // Reset assessment timer on stage change
     if (simState?.stageEnteredAt) {
@@ -1440,6 +1451,11 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
 
   return (
     <div className="h-screen bg-slate-950 text-slate-50 overflow-hidden relative flex flex-col">
+      {copyToast && (
+        <div className="fixed top-4 right-4 bg-slate-900 border border-slate-700 text-slate-100 px-3 py-2 rounded-lg shadow-lg text-sm z-50">
+          {copyToast}
+        </div>
+      )}
       <div className="flex items-center justify-between px-3 md:px-4 py-1.5">
         <div className="text-[10px] uppercase tracking-[0.22em] text-slate-500 font-semibold">
           {session.title}
@@ -1853,6 +1869,38 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
             <div className="flex flex-col gap-2">
               <div className="text-[10px] text-slate-400 font-mono bg-slate-900/80 border border-slate-700 rounded px-2 py-1">
                 Join: {session.joinCode}
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!joinUrl) return;
+                    try {
+                      if ((navigator as any).share) {
+                        await (navigator as any).share({ url: joinUrl, text: `Join CardioQuest Live: ${session.joinCode}` });
+                        return;
+                      }
+                    } catch {
+                      // ignore share errors
+                    }
+                    try {
+                      await navigator.clipboard.writeText(joinUrl);
+                      setCopyToast("Copied!");
+                    } catch {
+                      setCopyToast("Copy failed");
+                    }
+                  }}
+                  className="text-[10px] px-2 py-1 rounded-lg border border-slate-700 text-slate-200 hover:border-slate-500 transition-colors"
+                >
+                  Copy link
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowQr(true)}
+                  className="text-[10px] px-2 py-1 rounded-lg border border-slate-700 text-slate-200 hover:border-slate-500 transition-colors"
+                >
+                  Show QR
+                </button>
               </div>
               <div className="text-[10px] text-slate-400">Participants: {participantCount}</div>
               <button
@@ -2575,6 +2623,14 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
             )}
           </div>
         </div>
+      )}
+      {showQr && (
+        <QRCodeOverlay
+          open={showQr}
+          onClose={() => setShowQr(false)}
+          code={session.joinCode}
+          joinUrl={joinUrl}
+        />
       )}
     </div>
   );

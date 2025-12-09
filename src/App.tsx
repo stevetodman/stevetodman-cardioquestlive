@@ -9,14 +9,38 @@ import { DevGatewayBadge } from "./components/DevGatewayBadge";
 
 function Home() {
     const [joinCode, setJoinCode] = useState("");
+    const [shake, setShake] = useState(false);
+    const [lastCode, setLastCode] = useState<string | null>(null);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const saved = localStorage.getItem("cq_last_join_code");
+        if (saved) setLastCode(saved);
+    }, []);
 
     const handleJoin = (e: React.FormEvent) => {
         e.preventDefault();
-        if(joinCode.trim().length > 0) {
-            navigate(`/join/${joinCode.trim().toUpperCase()}`);
+        const trimmed = joinCode.trim().toUpperCase();
+        if (trimmed.length === 4) {
+            localStorage.setItem("cq_last_join_code", trimmed);
+            navigate(`/join/${trimmed}`);
+            return;
         }
+        setShake(true);
+        setTimeout(() => setShake(false), 300);
     };
+
+    const handleChange = (value: string) => {
+        const next = value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+        setJoinCode(next);
+    };
+
+    const handleRejoin = () => {
+        if (!lastCode) return;
+        navigate(`/join/${lastCode}`);
+    };
+
+    const isComplete = joinCode.length === 4;
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50 p-4">
@@ -39,7 +63,7 @@ function Home() {
                 </p>
               </div>
 
-              <div className="space-y-4">
+             <div className="space-y-4">
                  <form onSubmit={handleJoin} className="space-y-2">
                     <label htmlFor="join-code" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Student Join</label>
                     <div className="flex gap-2">
@@ -47,12 +71,17 @@ function Home() {
                             id="join-code"
                             type="text" 
                             value={joinCode}
-                            onChange={(e) => setJoinCode(e.target.value)}
+                            onChange={(e) => handleChange(e.target.value)}
                             placeholder="CODE"
                             aria-describedby="join-code-help"
-                            className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-center font-mono text-lg tracking-widest uppercase focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all placeholder:text-slate-700"
+                            className={`flex-1 bg-slate-950 border rounded-lg px-4 py-3 text-center font-mono text-lg tracking-widest uppercase focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all placeholder:text-slate-700 ${
+                              isComplete ? "border-emerald-500 shadow-[0_0_0_1px_rgba(16,185,129,0.4)]" : "border-slate-700"
+                            } ${shake ? "animate-shake" : ""}`}
                             maxLength={4}
                         />
+                        {isComplete && (
+                          <span className="self-center text-emerald-400 text-sm font-semibold" aria-hidden="true">✓</span>
+                        )}
                         <button 
                             type="submit"
                             disabled={!joinCode}
@@ -65,6 +94,15 @@ function Home() {
                       Enter the 4-character code from the presenter (letters or numbers).
                     </p>
                  </form>
+                 {lastCode && (
+                   <button
+                     type="button"
+                     onClick={handleRejoin}
+                     className="w-full text-center rounded-lg border border-slate-700 text-slate-200 hover:border-slate-500 hover:bg-slate-800 py-2 text-sm transition-colors"
+                   >
+                     Rejoin session {lastCode}
+                   </button>
+                 )}
 
                  <div className="relative py-2">
                     <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>

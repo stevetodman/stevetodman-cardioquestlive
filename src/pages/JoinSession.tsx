@@ -27,6 +27,8 @@ import { ParticipantVoiceStatusBanner } from "../components/ParticipantVoiceStat
 import { sendVoiceCommand } from "../services/voiceCommands";
 import { VoiceStatusBadge } from "../components/VoiceStatusBadge";
 import { useSimplifiedVoiceState } from "../hooks/useSimplifiedVoiceState";
+import { CollapsibleVoicePanel } from "../components/CollapsibleVoicePanel";
+import { FloatingMicButton } from "../components/FloatingMicButton";
 
 function getLocalUserId(): string {
   const key = "cq_live_user_id";
@@ -116,6 +118,8 @@ export default function JoinSession() {
   const [participantCount, setParticipantCount] = useState<number>(0);
   const [showVoiceGuide, setShowVoiceGuide] = useState<boolean>(false);
   const [showAdvancedVoice, setShowAdvancedVoice] = useState(false);
+  const [isVoiceExpanded, setIsVoiceExpanded] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const voice = useVoiceState(sessionId);
   const userDisplayName = auth?.currentUser?.displayName ?? "Resident";
   useEffect(() => {
@@ -123,6 +127,24 @@ export default function JoinSession() {
     const t = setTimeout(() => setToast(null), 3000);
     return () => clearTimeout(t);
   }, [toast]);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") {
+      setIsMobile(false);
+      return;
+    }
+    const mq = window.matchMedia("(max-width: 639px)");
+    const apply = (matches: boolean) => setIsMobile(matches);
+    apply(mq.matches);
+    const handler = (e: MediaQueryListEvent) => apply(e.matches);
+    mq.addEventListener?.("change", handler);
+    const stored = localStorage.getItem("cq_voice_panel_expanded");
+    if (stored !== null) {
+      setIsVoiceExpanded(stored === "true");
+    } else {
+      setIsVoiceExpanded(!mq.matches); // default collapsed on mobile
+    }
+    return () => mq.removeEventListener?.("change", handler);
+  }, []);
   useEffect(() => {
     if (!voice) return;
     if (voice.floorHolderId !== lastFloorHolder) {
@@ -399,7 +421,6 @@ export default function JoinSession() {
   // Or if it's open but we are just showing results.
   const isQuestionActive = currentQuestion && session?.currentQuestionId === currentQuestion.id;
 
-  const connectionReady = connectionStatus.state === "ready";
   const hasFloor = voice.enabled && voice.floorHolderId === userId;
   const fallbackActive = simState?.fallback === true;
   const floorTakenByOther =
@@ -422,6 +443,367 @@ export default function JoinSession() {
     voiceStatusData.status === "unavailable" ||
     voiceStatusData.status === "waiting" ||
     voice.mode === "ai-speaking";
+  const voiceStatusBar = (
+    <div className="w-full flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <VoiceStatusBadge
+          status={voiceStatusData.status}
+          message={voiceStatusData.message}
+          detail={voiceStatusData.detail}
+        />
+      </div>
+      <div className="text-[11px] text-slate-400 whitespace-nowrap">
+        {waitingCount > 1 ? `${waitingCount} waiting` : waitingCount === 1 ? "1 waiting" : "Queue clear"}
+      </div>
+    </div>
+  );
+  const voicePanel = voice.enabled ? (
+    <CollapsibleVoicePanel
+      isExpanded={isVoiceExpanded}
+      onToggle={() => {
+        setIsVoiceExpanded((v) => {
+          const next = !v;
+          localStorage.setItem("cq_voice_panel_expanded", String(next));
+          return next;
+        });
+      }}
+      statusBar={voiceStatusBar}
+    >
+      <div className="flex flex-wrap gap-2 text-[11px]">
+        {!fallbackActive && !showExam && (
+          <button
+            type="button"
+            onClick={() =>
+              emitCommand(sessionId!, "exam", {}, "nurse").then(() => {
+                setShowExam(true);
+                setToast({ message: "Exam requested", ts: Date.now() });
+              })
+            }
+            className="px-3 py-2 rounded-lg bg-indigo-600/10 border border-indigo-500/60 text-indigo-100 hover:border-indigo-400 hover:bg-indigo-600/20 transition-colors"
+          >
+            Check exam
+          </button>
+        )}
+        {!fallbackActive && !simState?.telemetry && (
+          <button
+            type="button"
+            onClick={() =>
+              emitCommand(sessionId!, "toggle_telemetry", { enabled: true }, "tech").then(() =>
+                setToast({ message: "Telemetry requested", ts: Date.now() })
+              )
+            }
+            className="px-3 py-2 rounded-lg bg-emerald-600/10 border border-emerald-500/60 text-emerald-100 hover:border-emerald-400 hover:bg-emerald-600/20 transition-colors"
+          >
+            Start telemetry
+          </button>
+        )}
+        {latestEkg && !showEkg && (
+          <button
+            type="button"
+            onClick={() => {
+              emitCommand(sessionId!, "show_ekg", {}, "tech");
+              setShowEkg(true);
+              setToast({ message: "EKG opened", ts: Date.now() });
+            }}
+            className="px-3 py-2 rounded-lg border text-amber-100 bg-amber-600/10 border-amber-500/60 hover:border-amber-400 hover:bg-amber-600/20 transition-colors animate-pulse-slow"
+          >
+            <span className="flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              View EKG results
+            </span>
+          </button>
+        )}
+      </div>
+
+      {targetCharacter !== "patient" && (
+        <div className="mt-3 flex items-center gap-3 flex-wrap text-xs">
+          <span className="text-[11px] text-slate-400">
+            Asking: <span className="font-semibold text-slate-200 capitalize">{targetCharacter}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setTargetCharacter("patient")}
+            className="text-[11px] text-sky-400 hover:text-sky-300 underline"
+          >
+            Switch back to patient
+          </button>
+        </div>
+      )}
+
+      <div className="mt-2 border-t border-slate-800 pt-2">
+        <button
+          type="button"
+          onClick={() => setShowAdvancedVoice((v) => !v)}
+          className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-2 w-full"
+        >
+          <span>Advanced options</span>
+          <svg
+            className={`w-3 h-3 transition-transform ${showAdvancedVoice ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {showAdvancedVoice && (
+          <div className="mt-3 space-y-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <label
+                htmlFor="target-character"
+                className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold"
+              >
+                Ask
+              </label>
+              <select
+                id="target-character"
+                value={targetCharacter}
+                onChange={(e) => setTargetCharacter(e.target.value as CharacterId)}
+                className="bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100"
+              >
+                <option value="patient">Patient</option>
+                <option value="nurse">Nurse</option>
+                <option value="tech">Tech</option>
+                <option value="imaging">Imaging</option>
+                <option value="consultant">Consultant</option>
+              </select>
+              <span className="text-[11px] text-slate-500">Choose who to direct your question to</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3">
+        <ParticipantVoiceStatusBanner
+          connection={connectionStatus}
+          micStatus={micStatus}
+          hasFloor={hasFloor}
+          otherSpeaking={otherSpeaking}
+          fallback={fallbackActive}
+          throttled={simState?.budget?.throttled}
+          locked={voice.locked}
+          onRetryVoice={handleRetryVoice}
+          onRecheckMic={handleRecheckMic}
+        />
+        <div className="mt-1 text-[11px] text-slate-500">
+          {waitingCount > 1 ? `${waitingCount} residents waiting to speak` : waitingCount === 1 ? "1 resident waiting to speak" : "Queue is clear"}
+        </div>
+        <div className="text-[11px] text-slate-500">
+          Mic check: {micStatus === "blocked" ? "blocked" : micLevel > 0.2 ? "input detected" : "no input yet"}
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowVoiceGuide((v) => !v)}
+          className="mt-2 text-[11px] text-sky-300 underline"
+        >
+          {showVoiceGuide ? "Hide voice guide" : "Show voice guide"}
+        </button>
+        {showVoiceGuide && (
+          <div className="mt-1 text-[11px] text-slate-400 bg-slate-900/60 border border-slate-800 rounded-lg p-3 space-y-1">
+            <div className="font-semibold text-slate-200">Voice steps</div>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Wait for Voice: Ready.</li>
+              <li>Hold to speak. Floor is taken automatically.</li>
+              <li>Release to stop. Floor auto-releases after 2s (and 60s idle safety).</li>
+              <li>If no input, check mic or allow permissions.</li>
+              <li>If fallback on, use typed questions until voice resumes.</li>
+            </ol>
+          </div>
+        )}
+      </div>
+
+      {!isMobile && (
+        <div className="mt-3 space-y-2">
+          <HoldToSpeakButton
+            disabled={holdDisabled}
+            onPressStart={handlePressStart}
+            onPressEnd={handlePressEnd}
+            labelIdle="Hold to ask your question"
+            labelDisabled={
+              voiceStatusData.status === "waiting"
+                ? voiceStatusData.message
+                : voiceStatusData.status === "unavailable"
+                ? voiceStatusData.message
+                : voice.mode === "ai-speaking"
+                ? "Patient is speaking"
+                : "Voice unavailable"
+            }
+            helperText={
+              voiceStatusData.status === "active"
+                ? "Recording… release when you're done. Floor auto-releases after 2s."
+                : voiceStatusData.status === "ready"
+                ? "Hold to take the floor automatically and speak."
+                : voiceStatusData.status === "waiting"
+                ? voiceStatusData.detail ?? "Wait for your turn."
+                : voiceStatusData.detail ?? "Voice is not available right now."
+            }
+          />
+          {voiceError && <div className="text-[11px] text-rose-300">{voiceError}</div>}
+        </div>
+      )}
+      {voiceError && isMobile && <div className="text-[11px] text-rose-300">{voiceError}</div>}
+
+      {showExam && simState?.exam && (
+        <div className="mt-2 bg-slate-900/60 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-1">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+            Exam
+          </div>
+          {simState.exam.general && <div><span className="text-slate-500 text-[11px] mr-1">General:</span>{simState.exam.general}</div>}
+          {simState.exam.cardio && <div><span className="text-slate-500 text-[11px] mr-1">CV:</span>{simState.exam.cardio}</div>}
+          {simState.exam.lungs && <div><span className="text-slate-500 text-[11px] mr-1">Lungs:</span>{simState.exam.lungs}</div>}
+          {simState.exam.perfusion && <div><span className="text-slate-500 text-[11px] mr-1">Perfusion:</span>{simState.exam.perfusion}</div>}
+          {simState.exam.neuro && <div><span className="text-slate-500 text-[11px] mr-1">Neuro:</span>{simState.exam.neuro}</div>}
+          {simState.examAudio && simState.examAudio.length > 0 && (
+            <div className="mt-3 space-y-2">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+                Auscultation (headphones recommended)
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {simState.examAudio.map((clip) => (
+                  <button
+                    key={`${clip.type}-${clip.url}`}
+                    type="button"
+                    onClick={() => handlePlayExamClip(clip)}
+                    className={`px-3 py-2 rounded-lg border text-left text-sm transition-colors ${
+                      playingClipId === clip.url
+                        ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-100"
+                        : "border-slate-700 bg-slate-900/70 text-slate-100 hover:border-slate-500"
+                    }`}
+                  >
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                      {clip.type === "heart" ? "Heart" : "Lungs"}
+                    </div>
+                    <div className="font-semibold">{clip.label}</div>
+                    <div className="text-[11px] text-slate-400">
+                      {playingClipId === clip.url ? "Pause" : "Play clip"}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {audioError && <div className="text-[11px] text-rose-300">{audioError}</div>}
+            </div>
+          )}
+        </div>
+      )}
+      {simState?.orders && simState.orders.length > 0 && (
+        <div className="mt-2 bg-slate-900/70 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-2">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold flex items-center justify-between">
+            <span>Orders</span>
+            <span className="text-[10px] text-slate-400">Student view</span>
+          </div>
+          <div className="space-y-1">
+            {simState.orders.slice(-6).map((order) => {
+              const isDone = order.status === "complete";
+              const header =
+                order.type === "vitals"
+                  ? "Vitals"
+                  : order.type === "ekg"
+                  ? "EKG"
+                  : order.type === "labs"
+                  ? "Labs"
+                  : order.type === "imaging"
+                  ? "Imaging"
+                  : order.type;
+              const eta =
+                order.status === "pending"
+                  ? `${order.type === "vitals" ? "≈10s" : order.type === "ekg" ? "≈20s" : "≈15s"}`
+                  : null;
+              const detail = order.result?.summary;
+              const highlight =
+                order.result?.summary &&
+                /elevated|abnormal|shock|effusion|edema|ectasia|rvh|low|high|thickened/i.test(order.result.summary);
+              const keyAbnormal = order.result?.abnormal;
+              const nextAction = order.result?.nextAction;
+              return (
+                <div
+                  key={order.id}
+                  className={`rounded-lg border px-3 py-2 text-[12px] ${
+                    isDone ? "border-emerald-500/50 bg-emerald-500/5 text-emerald-100" : "border-slate-700 bg-slate-900/80 text-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold">{header}</div>
+                    <div className="text-[10px] uppercase tracking-[0.14em]">
+                      {isDone ? "Complete" : "Pending"}
+                    </div>
+                  </div>
+                  {!isDone && eta && <div className="text-[11px] text-slate-400">Result in {eta}</div>}
+                  {isDone && order.completedAt && (
+                    <div className="text-[10px] text-slate-400">
+                      {new Date(order.completedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                    </div>
+                  )}
+                  {isDone && detail && (
+                    <div
+                      className={`text-[12px] mt-1 whitespace-pre-wrap ${
+                        highlight ? "text-amber-200" : "text-slate-300"
+                      }`}
+                    >
+                      {detail}
+                      {keyAbnormal && (
+                        <div className="text-[11px] text-amber-200 mt-1">Key abnormal: {keyAbnormal}</div>
+                      )}
+                      {nextAction && (
+                        <div className="text-[11px] text-slate-300 mt-1">Next: {nextAction}</div>
+                      )}
+                      {order.result?.rationale && (
+                        <div className="text-[11px] text-slate-400 mt-1">{order.result.rationale}</div>
+                      )}
+                    </div>
+                  )}
+                  {!isDone && <div className="text-[12px] text-slate-400">Result on the way…</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {showEkg && latestEkg && (
+        <div className="mt-2 bg-slate-950/70 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">EKG</div>
+            <button
+              type="button"
+              onClick={() => setShowEkg(false)}
+              className="text-[11px] text-slate-400 hover:text-slate-200"
+            >
+              Close
+            </button>
+          </div>
+          <div className="text-slate-200 whitespace-pre-wrap">
+            {latestEkg.result?.summary ?? "EKG ready for review."}
+          </div>
+          {latestEkg.result?.imageUrl && (
+            <div className="mt-2">
+              <img
+                src={latestEkg.result.imageUrl}
+                alt="EKG strip"
+                className="w-full max-h-48 object-contain rounded border border-slate-800"
+              />
+            </div>
+          )}
+        </div>
+      )}
+      <div className="mt-2 text-[12px] text-slate-400 bg-slate-900/60 border border-slate-800 rounded-lg p-3 space-y-1">
+        <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">Scoring</div>
+        <div>Base: 100 points per correct answer.</div>
+        <div>Difficulty: easy x1.0 · medium x1.3 · hard x1.6.</div>
+        <div>Streak bonus: +10% for 2 in a row, +20% for 3, +50% for 4+.</div>
+      </div>
+    </CollapsibleVoicePanel>
+  ) : (
+    <section className="bg-slate-900/50 rounded-xl p-4 border border-slate-800/50">
+      <div className="text-center">
+        <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold mb-2">
+          Voice Interaction
+        </div>
+        <p className="text-sm text-slate-400">Voice will be available when the presenter enables it</p>
+      </div>
+    </section>
+  );
 
   if (!joinCode) return <div className="p-8 text-center text-slate-400">No join code provided.</div>;
 
@@ -669,363 +1051,8 @@ export default function JoinSession() {
             </button>
           </div>
         )}
-        {voice.enabled ? (
-          <section className="bg-slate-900 rounded-xl p-4 border border-slate-800 shadow-lg">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
-                  Voice mode
-                </div>
-                <div className="text-sm text-slate-200">
-                  Enabled
-                  {voice.mode === "ai-speaking" ? " · AI is speaking" : ""}
-                  {voice.mode === "resident-speaking" ? " · Resident is speaking" : ""}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                {connectionReady ? "Hold to speak" : "Connecting…"}
-              </div>
-            </div>
+        {!isMobile && voicePanel}
 
-            <div className="mt-3">
-              <VoiceStatusBadge
-                status={voiceStatusData.status}
-                message={voiceStatusData.message}
-                detail={voiceStatusData.detail}
-              />
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-              {!fallbackActive && !showExam && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    emitCommand(sessionId!, "exam", {}, "nurse").then(() => {
-                      setShowExam(true);
-                      setToast({ message: "Exam requested", ts: Date.now() });
-                    })
-                  }
-                  className="px-3 py-2 rounded-lg bg-indigo-600/10 border border-indigo-500/60 text-indigo-100 hover:border-indigo-400 hover:bg-indigo-600/20 transition-colors"
-                >
-                  Check exam
-                </button>
-              )}
-              {!fallbackActive && !simState?.telemetry && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    emitCommand(sessionId!, "toggle_telemetry", { enabled: true }, "tech").then(() =>
-                      setToast({ message: "Telemetry requested", ts: Date.now() })
-                    )
-                  }
-                  className="px-3 py-2 rounded-lg bg-emerald-600/10 border border-emerald-500/60 text-emerald-100 hover:border-emerald-400 hover:bg-emerald-600/20 transition-colors"
-                >
-                  Start telemetry
-                </button>
-              )}
-              {latestEkg && !showEkg && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    emitCommand(sessionId!, "show_ekg", {}, "tech");
-                    setShowEkg(true);
-                    setToast({ message: "EKG opened", ts: Date.now() });
-                  }}
-                  className="px-3 py-2 rounded-lg border text-amber-100 bg-amber-600/10 border-amber-500/60 hover:border-amber-400 hover:bg-amber-600/20 transition-colors animate-pulse-slow"
-                >
-                  <span className="flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    View EKG results
-                  </span>
-                </button>
-              )}
-            </div>
-
-            {targetCharacter !== "patient" && (
-              <div className="mt-3 flex items-center gap-3 flex-wrap text-xs">
-                <span className="text-[11px] text-slate-400">
-                  Asking: <span className="font-semibold text-slate-200 capitalize">{targetCharacter}</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setTargetCharacter("patient")}
-                  className="text-[11px] text-sky-400 hover:text-sky-300 underline"
-                >
-                  Switch back to patient
-                </button>
-              </div>
-            )}
-
-            <div className="mt-4 border-t border-slate-800 pt-3">
-              <button
-                type="button"
-                onClick={() => setShowAdvancedVoice((v) => !v)}
-                className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-2 w-full"
-              >
-                <span>Advanced options</span>
-                <svg
-                  className={`w-3 h-3 transition-transform ${showAdvancedVoice ? "rotate-180" : ""}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {showAdvancedVoice && (
-                <div className="mt-3 space-y-3">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <label
-                      htmlFor="target-character"
-                      className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold"
-                    >
-                      Ask
-                    </label>
-                    <select
-                      id="target-character"
-                      value={targetCharacter}
-                      onChange={(e) => setTargetCharacter(e.target.value as CharacterId)}
-                      className="bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100"
-                    >
-                      <option value="patient">Patient</option>
-                      <option value="nurse">Nurse</option>
-                      <option value="tech">Tech</option>
-                      <option value="imaging">Imaging</option>
-                      <option value="consultant">Consultant</option>
-                    </select>
-                    <span className="text-[11px] text-slate-500">Choose who to direct your question to</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-3">
-              <ParticipantVoiceStatusBanner
-                connection={connectionStatus}
-                micStatus={micStatus}
-                hasFloor={hasFloor}
-                otherSpeaking={otherSpeaking}
-                fallback={fallbackActive}
-                throttled={simState?.budget?.throttled}
-                locked={voice.locked}
-                onRetryVoice={handleRetryVoice}
-                onRecheckMic={handleRecheckMic}
-              />
-              <div className="mt-1 text-[11px] text-slate-500">
-                {waitingCount > 1 ? `${waitingCount} residents waiting to speak` : waitingCount === 1 ? "1 resident waiting to speak" : "Queue is clear"}
-              </div>
-              <div className="text-[11px] text-slate-500">
-                Mic check: {micStatus === "blocked" ? "blocked" : micLevel > 0.2 ? "input detected" : "no input yet"}
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowVoiceGuide((v) => !v)}
-                className="mt-2 text-[11px] text-sky-300 underline"
-              >
-                {showVoiceGuide ? "Hide voice guide" : "Show voice guide"}
-              </button>
-              {showVoiceGuide && (
-                <div className="mt-1 text-[11px] text-slate-400 bg-slate-900/60 border border-slate-800 rounded-lg p-3 space-y-1">
-                  <div className="font-semibold text-slate-200">Voice steps</div>
-                  <ol className="list-decimal list-inside space-y-1">
-                    <li>Wait for Voice: Ready.</li>
-                    <li>Hold to speak. Floor is taken automatically.</li>
-                    <li>Release to stop. Floor auto-releases after 2s (and 60s idle).</li>
-                    <li>If no input, check mic or allow permissions.</li>
-                    <li>If fallback on, use typed questions until voice resumes.</li>
-                  </ol>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-3 space-y-2">
-              <HoldToSpeakButton
-                disabled={holdDisabled}
-                onPressStart={handlePressStart}
-                onPressEnd={handlePressEnd}
-                labelIdle="Hold to ask your question"
-                labelDisabled={
-                  voiceStatusData.status === "waiting"
-                    ? voiceStatusData.message
-                    : voiceStatusData.status === "unavailable"
-                    ? voiceStatusData.message
-                    : voice.mode === "ai-speaking"
-                    ? "Patient is speaking"
-                    : "Voice unavailable"
-                }
-                helperText={
-                  voiceStatusData.status === "active"
-                    ? "Recording… release when you're done. Floor auto-releases after 2s."
-                    : voiceStatusData.status === "ready"
-                    ? "Hold to take the floor automatically and speak."
-                    : voiceStatusData.status === "waiting"
-                    ? voiceStatusData.detail ?? "Wait for your turn."
-                    : voiceStatusData.detail ?? "Voice is not available right now."
-                }
-              />
-              {voiceError && <div className="text-[11px] text-rose-300">{voiceError}</div>}
-              {showExam && simState?.exam && (
-                <div className="mt-2 bg-slate-900/60 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-1">
-                  <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
-                    Exam
-                  </div>
-                  {simState.exam.general && <div><span className="text-slate-500 text-[11px] mr-1">General:</span>{simState.exam.general}</div>}
-                  {simState.exam.cardio && <div><span className="text-slate-500 text-[11px] mr-1">CV:</span>{simState.exam.cardio}</div>}
-                  {simState.exam.lungs && <div><span className="text-slate-500 text-[11px] mr-1">Lungs:</span>{simState.exam.lungs}</div>}
-                  {simState.exam.perfusion && <div><span className="text-slate-500 text-[11px] mr-1">Perfusion:</span>{simState.exam.perfusion}</div>}
-                  {simState.exam.neuro && <div><span className="text-slate-500 text-[11px] mr-1">Neuro:</span>{simState.exam.neuro}</div>}
-                  {simState.examAudio && simState.examAudio.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
-                        Auscultation (headphones recommended)
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {simState.examAudio.map((clip) => (
-                          <button
-                            key={`${clip.type}-${clip.url}`}
-                            type="button"
-                            onClick={() => handlePlayExamClip(clip)}
-                            className={`px-3 py-2 rounded-lg border text-left text-sm transition-colors ${
-                              playingClipId === clip.url
-                                ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-100"
-                                : "border-slate-700 bg-slate-900/70 text-slate-100 hover:border-slate-500"
-                            }`}
-                          >
-                            <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                              {clip.type === "heart" ? "Heart" : "Lungs"}
-                            </div>
-                            <div className="font-semibold">{clip.label}</div>
-                            <div className="text-[11px] text-slate-400">
-                              {playingClipId === clip.url ? "Pause" : "Play clip"}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                      {audioError && <div className="text-[11px] text-rose-300">{audioError}</div>}
-                    </div>
-                  )}
-                </div>
-              )}
-              {simState?.orders && simState.orders.length > 0 && (
-                <div className="mt-2 bg-slate-900/70 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-2">
-                  <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold flex items-center justify-between">
-                    <span>Orders</span>
-                    <span className="text-[10px] text-slate-400">Student view</span>
-                  </div>
-                  <div className="space-y-1">
-                    {simState.orders.slice(-6).map((order) => {
-                      const isDone = order.status === "complete";
-                      const header =
-                        order.type === "vitals"
-                          ? "Vitals"
-                          : order.type === "ekg"
-                          ? "EKG"
-                          : order.type === "labs"
-                          ? "Labs"
-                          : order.type === "imaging"
-                          ? "Imaging"
-                          : order.type;
-                      const eta =
-                        order.status === "pending"
-                          ? `${order.type === "vitals" ? "≈10s" : order.type === "ekg" ? "≈20s" : "≈15s"}`
-                          : null;
-                      const detail = order.result?.summary;
-                      const highlight =
-                        order.result?.summary &&
-                        /elevated|abnormal|shock|effusion|edema|ectasia|rvh|low|high|thickened/i.test(order.result.summary);
-                      const keyAbnormal = order.result?.abnormal;
-                      const nextAction = order.result?.nextAction;
-                      return (
-                        <div
-                          key={order.id}
-                          className={`rounded-lg border px-3 py-2 text-[12px] ${
-                            isDone ? "border-emerald-500/50 bg-emerald-500/5 text-emerald-100" : "border-slate-700 bg-slate-900/80 text-slate-200"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="font-semibold">{header}</div>
-                            <div className="text-[10px] uppercase tracking-[0.14em]">
-                              {isDone ? "Complete" : "Pending"}
-                            </div>
-                          </div>
-                          {!isDone && eta && <div className="text-[11px] text-slate-400">Result in {eta}</div>}
-                          {isDone && order.completedAt && (
-                            <div className="text-[10px] text-slate-400">
-                              {new Date(order.completedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                            </div>
-                          )}
-                          {isDone && detail && (
-                            <div
-                              className={`text-[12px] mt-1 whitespace-pre-wrap ${
-                                highlight ? "text-amber-200" : "text-slate-300"
-                              }`}
-                            >
-                              {detail}
-                              {keyAbnormal && (
-                                <div className="text-[11px] text-amber-200 mt-1">Key abnormal: {keyAbnormal}</div>
-                              )}
-                              {nextAction && (
-                                <div className="text-[11px] text-slate-300 mt-1">Next: {nextAction}</div>
-                              )}
-                              {order.result?.rationale && (
-                                <div className="text-[11px] text-slate-400 mt-1">{order.result.rationale}</div>
-                              )}
-                            </div>
-                          )}
-                          {!isDone && <div className="text-[12px] text-slate-400">Result on the way…</div>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {showEkg && latestEkg && (
-                <div className="mt-2 bg-slate-950/70 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">EKG</div>
-                    <button
-                      type="button"
-                      onClick={() => setShowEkg(false)}
-                      className="text-[11px] text-slate-400 hover:text-slate-200"
-                    >
-                      Close
-                    </button>
-                  </div>
-                  <div className="text-slate-200 whitespace-pre-wrap">
-                    {latestEkg.result?.summary ?? "EKG ready for review."}
-                  </div>
-                  {latestEkg.result?.imageUrl && (
-                    <div className="mt-2">
-                      <img
-                        src={latestEkg.result.imageUrl}
-                        alt="EKG strip"
-                        className="w-full max-h-48 object-contain rounded border border-slate-800"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="mt-2 text-[12px] text-slate-400 bg-slate-900/60 border border-slate-800 rounded-lg p-3 space-y-1">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">Scoring</div>
-              <div>Base: 100 points per correct answer.</div>
-              <div>Difficulty: easy x1.0 · medium x1.3 · hard x1.6.</div>
-              <div>Streak bonus: +10% for 2 in a row, +20% for 3, +50% for 4+.</div>
-            </div>
-          </section>
-        ) : (
-          <section className="bg-slate-900/50 rounded-xl p-4 border border-slate-800/50">
-            <div className="text-center">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold mb-2">
-                Voice Interaction
-              </div>
-              <p className="text-sm text-slate-400">Voice will be available when the presenter enables it</p>
-            </div>
-          </section>
-        )}
 
         {currentQuestion ? (
           <section className="animate-slide-up">
@@ -1117,7 +1144,16 @@ export default function JoinSession() {
             Waiting for the next question.
           </div>
         )}
+        {isMobile && voicePanel}
       </main>
+      {isMobile && voice.enabled && (
+        <FloatingMicButton
+          disabled={holdDisabled}
+          onPressStart={handlePressStart}
+          onPressEnd={handlePressEnd}
+          statusLabel={voiceStatusData.message}
+        />
+      )}
     </div>
   );
 }
