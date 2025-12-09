@@ -31,6 +31,7 @@ import { FloatingMicButton } from "../components/FloatingMicButton";
 import { SessionSkeleton } from "../components/SessionSkeleton";
 import { TextQuestionInput } from "../components/TextQuestionInput";
 import { VoiceStatusBadge } from "../components/VoiceStatusBadge";
+import { CompactVitalsChip } from "../components/CompactVitalsChip";
 import { FLOOR_AUTO_RELEASE_MS, FLOOR_RELEASE_DELAY_MS, DEFAULT_TIMEOUT_MS } from "../constants";
 
 function getLocalUserId(): string {
@@ -144,6 +145,7 @@ export default function JoinSession() {
   });
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingClipId, setPlayingClipId] = useState<string | null>(null);
+  const [loadingClipId, setLoadingClipId] = useState<string | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [participantCount, setParticipantCount] = useState<number>(0);
   const [showVoiceGuide, setShowVoiceGuide] = useState<boolean>(false);
@@ -151,6 +153,7 @@ export default function JoinSession() {
   const [isVoiceExpanded, setIsVoiceExpanded] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isOffline, setIsOffline] = useState<boolean>(false);
+  const [showVitalsPanel, setShowVitalsPanel] = useState(false);
   const showToast = useCallback((message: string) => {
     setToast({ message, ts: Date.now() });
   }, []);
@@ -658,159 +661,27 @@ export default function JoinSession() {
       }}
       statusBar={voiceStatusBar}
     >
-      <div className="flex flex-wrap gap-2 text-[11px]">
-        {!fallbackActive && !showExam && (
-          <button
-            type="button"
-            onClick={() =>
-              emitCommand(sessionId!, "exam", {}, "nurse", logAndToast).then(() => {
-                setShowExam(true);
-                showToast("Exam requested");
-              })
-            }
-            className="px-3 py-2 rounded-lg bg-indigo-600/10 border border-indigo-500/60 text-indigo-100 hover:border-indigo-400 hover:bg-indigo-600/20 transition-colors"
-          >
-            Check exam
-          </button>
-        )}
-        {!fallbackActive && !simState?.telemetry && (
-          <button
-            type="button"
-            onClick={() =>
-              emitCommand(sessionId!, "toggle_telemetry", { enabled: true }, "tech", logAndToast).then(() => {
-                showToast("Telemetry requested");
-              })
-            }
-            className="px-3 py-2 rounded-lg bg-emerald-600/10 border border-emerald-500/60 text-emerald-100 hover:border-emerald-400 hover:bg-emerald-600/20 transition-colors"
-          >
-            Start telemetry
-          </button>
-        )}
-        {latestEkg && !showEkg && (
-          <button
-            type="button"
-            onClick={() => {
-              emitCommand(sessionId!, "show_ekg", {}, "tech", logAndToast);
-              setShowEkg(true);
-              showToast("EKG opened");
-            }}
-            className="px-3 py-2 rounded-lg border text-amber-100 bg-amber-600/10 border-amber-500/60 hover:border-amber-400 hover:bg-amber-600/20 transition-colors animate-pulse-slow"
-          >
-            <span className="flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              View EKG results
-            </span>
-          </button>
-        )}
-      </div>
+      {/* Voice Status Section */}
+      <ParticipantVoiceStatusBanner
+        connection={connectionStatus}
+        micStatus={micStatus}
+        hasFloor={hasFloor}
+        otherSpeaking={otherSpeaking}
+        fallback={fallbackActive}
+        throttled={simState?.budget?.throttled}
+        locked={voice.locked}
+        onRetryVoice={handleRetryVoice}
+        onRecheckMic={handleRecheckMic}
+        onUseTextInstead={() => {
+          setPreferTextInput(true);
+          localStorage.setItem("cq_prefer_text_input", "true");
+          setToast({ message: "Switched to text questions", ts: Date.now() });
+        }}
+      />
 
-      {targetCharacter !== "patient" && (
-        <div className="mt-3 flex items-center gap-3 flex-wrap text-xs">
-          <span className="text-[11px] text-slate-400">
-            Asking: <span className="font-semibold text-slate-200 capitalize">{targetCharacter}</span>
-          </span>
-          <button
-            type="button"
-            onClick={() => setTargetCharacter("patient")}
-            className="text-[11px] text-sky-400 hover:text-sky-300 underline"
-          >
-            Switch back to patient
-          </button>
-        </div>
-      )}
-
-      <div className="mt-2 border-t border-slate-800 pt-2">
-        <button
-          type="button"
-          onClick={() => setShowAdvancedVoice((v) => !v)}
-          className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-2 w-full"
-        >
-          <span>Advanced options</span>
-          <svg
-            className={`w-3 h-3 transition-transform ${showAdvancedVoice ? "rotate-180" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-
-        {showAdvancedVoice && (
-          <div className="mt-3 space-y-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              <label
-                htmlFor="target-character"
-                className="text-[11px] uppercase tracking-[0.14em] text-slate-300 font-semibold"
-              >
-                Ask
-              </label>
-              <select
-                id="target-character"
-                value={targetCharacter}
-                onChange={(e) => setTargetCharacter(e.target.value as CharacterId)}
-                className="bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100"
-              >
-                <option value="patient">Patient</option>
-                <option value="nurse">Nurse</option>
-                <option value="tech">Tech</option>
-                <option value="imaging">Imaging</option>
-                <option value="consultant">Consultant</option>
-              </select>
-              <span className="text-[11px] text-slate-500">Choose who to direct your question to</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-3">
-        <ParticipantVoiceStatusBanner
-          connection={connectionStatus}
-          micStatus={micStatus}
-          hasFloor={hasFloor}
-          otherSpeaking={otherSpeaking}
-          fallback={fallbackActive}
-          throttled={simState?.budget?.throttled}
-          locked={voice.locked}
-          onRetryVoice={handleRetryVoice}
-          onRecheckMic={handleRecheckMic}
-          onUseTextInstead={() => {
-            setPreferTextInput(true);
-            localStorage.setItem("cq_prefer_text_input", "true");
-            setToast({ message: "Switched to text questions", ts: Date.now() });
-          }}
-        />
-        <div className="mt-1 text-[11px] text-slate-500">
-          {waitingCount > 1 ? `${waitingCount} residents waiting to speak` : waitingCount === 1 ? "1 resident waiting to speak" : "Queue is clear"}
-        </div>
-        <div className="text-[11px] text-slate-500">
-          Mic check: {micStatus === "blocked" ? "blocked" : micLevel > 0.2 ? "input detected" : "no input yet"}
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowVoiceGuide((v) => !v)}
-          className="mt-2 text-[11px] text-sky-300 underline"
-        >
-          {showVoiceGuide ? "Hide voice guide" : "Show voice guide"}
-        </button>
-        {showVoiceGuide && (
-          <div className="mt-1 text-[11px] text-slate-400 bg-slate-900/60 border border-slate-800 rounded-lg p-3 space-y-1">
-            <div className="font-semibold text-slate-200">Voice steps</div>
-            <ol className="list-decimal list-inside space-y-1">
-              <li>Wait for Voice: Ready.</li>
-              <li>Hold to speak. Floor is taken automatically.</li>
-              <li>Release to stop. Floor auto-releases after 2s (and 60s idle safety).</li>
-              <li>If no input, check mic or allow permissions.</li>
-              <li>If fallback on, use typed questions until voice resumes.</li>
-            </ol>
-          </div>
-        )}
-      </div>
-
+      {/* Hold to Speak Button - Desktop Only */}
       {!isMobile && (
-        <div className="mt-3 space-y-2">
+        <div className="mt-3">
           <HoldToSpeakButton
             disabled={holdDisabled}
             onPressStart={handlePressStart}
@@ -827,18 +698,159 @@ export default function JoinSession() {
             }
             helperText={
               voiceStatusData.status === "active"
-                ? "Recording… release when you're done. Floor auto-releases after 2s."
+                ? "Recording… release when you're done."
                 : voiceStatusData.status === "ready"
-                ? "Hold to take the floor automatically and speak."
+                ? "Hold to take the floor and speak."
                 : voiceStatusData.status === "waiting"
                 ? voiceStatusData.detail ?? "Wait for your turn."
                 : voiceStatusData.detail ?? "Voice is not available right now."
             }
           />
-          {voiceError && <div className="text-[11px] text-rose-300">{voiceError}</div>}
+          {voiceError && <div className="mt-1 text-[11px] text-rose-300">{voiceError}</div>}
         </div>
       )}
       {voiceError && isMobile && <div className="text-[11px] text-rose-300">{voiceError}</div>}
+
+      {/* Quick Actions */}
+      {(!fallbackActive && (!showExam || !simState?.telemetry || (latestEkg && !showEkg))) && (
+        <div className="mt-3 pt-3 border-t border-slate-800/60">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold mb-2">Quick actions</div>
+          <div className="flex flex-wrap gap-2">
+            {!showExam && (
+              <button
+                type="button"
+                onClick={() =>
+                  emitCommand(sessionId!, "exam", {}, "nurse", logAndToast).then(() => {
+                    setShowExam(true);
+                    showToast("Exam requested");
+                  })
+                }
+                className="px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-200 text-xs hover:border-slate-500 hover:bg-slate-800 transition-colors flex items-center gap-1.5"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.48 0 2.88.36 4.11 1" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Exam
+              </button>
+            )}
+            {!simState?.telemetry && (
+              <button
+                type="button"
+                onClick={() =>
+                  emitCommand(sessionId!, "toggle_telemetry", { enabled: true }, "tech", logAndToast).then(() => {
+                    showToast("Telemetry requested");
+                  })
+                }
+                className="px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-200 text-xs hover:border-slate-500 hover:bg-slate-800 transition-colors flex items-center gap-1.5"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Telemetry
+              </button>
+            )}
+            {latestEkg && !showEkg && (
+              <button
+                type="button"
+                onClick={() => {
+                  emitCommand(sessionId!, "show_ekg", {}, "tech", logAndToast);
+                  setShowEkg(true);
+                  showToast("EKG opened");
+                }}
+                className="px-3 py-1.5 rounded-lg border text-amber-200 bg-amber-600/10 border-amber-500/50 hover:border-amber-400 hover:bg-amber-600/20 transition-colors flex items-center gap-1.5 text-xs animate-pulse-slow"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                View EKG
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Target Character Indicator */}
+      {targetCharacter !== "patient" && (
+        <div className="mt-2 flex items-center gap-2 text-xs bg-slate-800/40 rounded-lg px-2.5 py-1.5">
+          <span className="text-slate-400">Asking:</span>
+          <span className="font-medium text-slate-200 capitalize">{targetCharacter}</span>
+          <button
+            type="button"
+            onClick={() => setTargetCharacter("patient")}
+            className="text-sky-400 hover:text-sky-300 ml-auto"
+          >
+            Reset
+          </button>
+        </div>
+      )}
+
+      {/* Advanced Options Toggle */}
+      <div className="mt-3 pt-2 border-t border-slate-800/60">
+        <button
+          type="button"
+          onClick={() => setShowAdvancedVoice((v) => !v)}
+          className="text-[11px] text-slate-500 hover:text-slate-400 flex items-center gap-1.5 w-full"
+        >
+          <svg
+            className={`w-3 h-3 transition-transform ${showAdvancedVoice ? "rotate-90" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          <span>More options</span>
+        </button>
+
+        {showAdvancedVoice && (
+          <div className="mt-2 space-y-3 pl-4">
+            {/* Target character selector */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <label htmlFor="target-character" className="text-[11px] text-slate-400">
+                Ask:
+              </label>
+              <select
+                id="target-character"
+                value={targetCharacter}
+                onChange={(e) => setTargetCharacter(e.target.value as CharacterId)}
+                className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100"
+              >
+                <option value="patient">Patient</option>
+                <option value="nurse">Nurse</option>
+                <option value="tech">Tech</option>
+                <option value="imaging">Imaging</option>
+                <option value="consultant">Consultant</option>
+              </select>
+            </div>
+
+            {/* Queue and mic info */}
+            <div className="text-[11px] text-slate-500 space-y-0.5">
+              <div>{waitingCount > 1 ? `${waitingCount} residents waiting` : waitingCount === 1 ? "1 resident waiting" : "Queue clear"}</div>
+              <div>Mic: {micStatus === "blocked" ? "blocked" : micLevel > 0.2 ? "active" : "no input"}</div>
+            </div>
+
+            {/* Voice guide */}
+            <button
+              type="button"
+              onClick={() => setShowVoiceGuide((v) => !v)}
+              className="text-[11px] text-sky-400 hover:text-sky-300"
+            >
+              {showVoiceGuide ? "Hide guide" : "Voice guide"}
+            </button>
+            {showVoiceGuide && (
+              <div className="text-[11px] text-slate-400 bg-slate-900/60 border border-slate-800 rounded-lg p-2.5 space-y-1">
+                <ol className="list-decimal list-inside space-y-0.5 text-[10px]">
+                  <li>Wait for "Voice ready" status</li>
+                  <li>Hold mic button to speak</li>
+                  <li>Release when done</li>
+                  <li>Check mic permissions if needed</li>
+                </ol>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {showTextInput && (
         <div className="mt-3 bg-slate-900/70 border border-slate-800 rounded-lg p-3 space-y-2">
@@ -892,32 +904,76 @@ export default function JoinSession() {
           {simState.exam.neuro && <div><span className="text-slate-500 text-[11px] mr-1">Neuro:</span>{simState.exam.neuro}</div>}
           {simState.examAudio && simState.examAudio.length > 0 && (
             <div className="mt-3 space-y-2">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold flex items-center gap-2">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 18v-6a9 9 0 0 1 18 0v6" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
                 Auscultation (headphones recommended)
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {simState.examAudio.map((clip) => (
-                  <button
-                    key={`${clip.type}-${clip.url}`}
-                    type="button"
-                    onClick={() => handlePlayExamClip(clip)}
-                    className={`px-3 py-2 rounded-lg border text-left text-sm transition-colors ${
-                      playingClipId === clip.url
-                        ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-100"
-                        : "border-slate-700 bg-slate-900/70 text-slate-100 hover:border-slate-500"
-                    }`}
-                  >
-                    <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                      {clip.type === "heart" ? "Heart" : "Lungs"}
-                    </div>
-                    <div className="font-semibold">{clip.label}</div>
-                    <div className="text-[11px] text-slate-400">
-                      {playingClipId === clip.url ? "Pause" : "Play clip"}
-                    </div>
-                  </button>
-                ))}
+                {simState.examAudio.map((clip) => {
+                  const isPlaying = playingClipId === clip.url;
+                  const isLoading = loadingClipId === clip.url;
+                  const isActive = isPlaying || isLoading;
+                  return (
+                    <button
+                      key={`${clip.type}-${clip.url}`}
+                      type="button"
+                      onClick={() => handlePlayExamClip(clip)}
+                      disabled={isLoading}
+                      className={`px-3 py-2.5 rounded-lg border text-left text-sm transition-all ${
+                        isPlaying
+                          ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-100"
+                          : isLoading
+                          ? "border-amber-500/60 bg-amber-500/10 text-amber-100"
+                          : "border-slate-700 bg-slate-900/70 text-slate-100 hover:border-slate-500 active:scale-[0.98]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                            {clip.type === "heart" ? "Heart" : "Lungs"}
+                          </div>
+                          <div className="font-semibold truncate">{clip.label}</div>
+                        </div>
+                        <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                          isPlaying ? "bg-emerald-500/20" : isLoading ? "bg-amber-500/20" : "bg-slate-800"
+                        }`}>
+                          {isLoading ? (
+                            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                              <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                            </svg>
+                          ) : isPlaying ? (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                              <rect x="6" y="4" width="4" height="16" rx="1" />
+                              <rect x="14" y="4" width="4" height="16" rx="1" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+                      <div className={`text-[11px] mt-1 ${isActive ? "opacity-90" : "text-slate-400"}`}>
+                        {isLoading ? "Loading…" : isPlaying ? "Tap to pause" : "Tap to play"}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
-              {audioError && <div className="text-[11px] text-rose-300">{audioError}</div>}
+              {audioError && (
+                <div className="flex items-center gap-2 text-[11px] text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg px-2.5 py-1.5">
+                  <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  {audioError}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1121,11 +1177,12 @@ export default function JoinSession() {
       audioRef.current = null;
     }
     setPlayingClipId(null);
+    setLoadingClipId(null);
   };
 
   const handlePlayExamClip = (clip: { url: string; label: string }) => {
     setAudioError(null);
-    const isSame = playingClipId === clip.url;
+    const isSame = playingClipId === clip.url || loadingClipId === clip.url;
     if (isSame) {
       stopExamAudio();
       return;
@@ -1133,7 +1190,12 @@ export default function JoinSession() {
     stopExamAudio();
     const el = new Audio(clip.url);
     audioRef.current = el;
-    setPlayingClipId(clip.url);
+    setLoadingClipId(clip.url);
+
+    el.oncanplaythrough = () => {
+      setLoadingClipId(null);
+      setPlayingClipId(clip.url);
+    };
     el.onended = () => stopExamAudio();
     el.onerror = () => {
       setAudioError("Audio unavailable. Please try again or check assets.");
@@ -1228,29 +1290,86 @@ export default function JoinSession() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col" id="main-content">
-      <header className="p-4 border-b border-slate-900 bg-slate-950 sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 shadow-lg shadow-black/20">
-        <div className="font-bold text-slate-200 tracking-tight">CardioQuest</div>
-        <div className="text-xs font-mono bg-slate-900 px-2 py-1 rounded text-sky-400 border border-slate-800">
-          {session.joinCode}
+      <header className="p-3 border-b border-slate-900 bg-slate-950 sticky top-0 z-20 shadow-lg shadow-black/20">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="font-bold text-slate-200 tracking-tight text-sm">CardioQuest</div>
+            <div className="text-[11px] font-mono bg-slate-900 px-2 py-0.5 rounded text-sky-400 border border-slate-800">
+              {session.joinCode}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Vitals chip - shown when telemetry/vitals ordered */}
+            {simState?.vitals && (simState.telemetry || simState.orders?.some(o => o.type === "vitals" && o.status === "complete")) && (
+              <CompactVitalsChip
+                vitals={{
+                  hr: simState.vitals.hr as number | undefined,
+                  spo2: simState.vitals.spo2 as number | undefined,
+                  bp: simState.vitals.bp as string | undefined,
+                  rr: simState.vitals.rr as number | undefined,
+                }}
+                rhythmSummary={simState.rhythmSummary}
+                onClick={() => setShowVitalsPanel(v => !v)}
+              />
+            )}
+            <div
+              className={`text-[9px] uppercase tracking-[0.14em] px-1.5 py-0.5 rounded-full border ${
+                connectionStatus.state === "ready"
+                  ? "border-emerald-500/60 text-emerald-200"
+                  : connectionStatus.state === "connecting"
+                  ? "border-sky-500/60 text-sky-200"
+                  : "border-slate-700 text-slate-400"
+              }`}
+            >
+              {connectionStatus.state === "ready" ? "Live" : connectionStatus.state}
+            </div>
+            <button
+              type="button"
+              onClick={handleLeaveSession}
+              className="text-[11px] px-2 py-1 rounded-lg border border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-600 transition-colors"
+            >
+              Leave
+            </button>
+          </div>
         </div>
-        <div
-          className={`text-[10px] uppercase tracking-[0.16em] px-2 py-1 rounded-full border ${
-            connectionStatus.state === "ready"
-              ? "border-emerald-500/60 text-emerald-200"
-              : connectionStatus.state === "connecting"
-              ? "border-sky-500/60 text-sky-200"
-              : "border-slate-700 text-slate-400"
-          }`}
-        >
-          Voice: {connectionStatus.state}
-        </div>
-        <button
-          type="button"
-          onClick={handleLeaveSession}
-          className="text-xs px-3 py-1 rounded-lg border border-slate-800 bg-slate-900/70 text-slate-200 hover:border-slate-600 transition-colors"
-        >
-          Leave session
-        </button>
+        {/* Expanded vitals panel */}
+        {showVitalsPanel && simState?.vitals && (
+          <div className="mt-2 bg-slate-900/80 border border-slate-800 rounded-lg p-3 space-y-2 animate-slide-down">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">Vitals Monitor</div>
+              <button
+                type="button"
+                onClick={() => setShowVitalsPanel(false)}
+                className="text-slate-500 hover:text-slate-300 text-xs"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="grid grid-cols-4 gap-2 text-center">
+              <div>
+                <div className="text-lg font-bold text-slate-100">{simState.vitals.hr ?? "—"}</div>
+                <div className="text-[9px] text-slate-500 uppercase">HR</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-slate-100">{simState.vitals.bp ?? "—"}</div>
+                <div className="text-[9px] text-slate-500 uppercase">BP</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-slate-100">{simState.vitals.spo2 ?? "—"}%</div>
+                <div className="text-[9px] text-slate-500 uppercase">SpO₂</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-slate-100">{simState.vitals.rr ?? "—"}</div>
+                <div className="text-[9px] text-slate-500 uppercase">RR</div>
+              </div>
+            </div>
+            {simState.rhythmSummary && (
+              <div className="text-xs text-slate-300 border-t border-slate-800 pt-2 mt-2">
+                <span className="text-slate-500">Rhythm:</span> {simState.rhythmSummary}
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       <main className="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6 pb-[env(safe-area-inset-bottom)]">
@@ -1422,6 +1541,8 @@ export default function JoinSession() {
           onPressStart={handlePressStart}
           onPressEnd={handlePressEnd}
           statusLabel={voiceStatusData.message}
+          connectionState={connectionStatus.state === "ready" ? "connected" : connectionStatus.state === "connecting" ? "connecting" : "disconnected"}
+          aiSpeaking={voice.mode === "ai-speaking"}
         />
       )}
     </div>

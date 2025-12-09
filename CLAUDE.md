@@ -97,3 +97,15 @@ PORT                          # Default 8081
 - Dynamic rhythm generation
 - Separated state visibility (presenter vs participant)
 - Scenario-specific auscultation clips for AirPods listening
+- **Mobile UX improvements** (Dec 2024):
+  - FloatingMicButton: 68x68px touch target, pulse animation, haptic feedback
+  - CompactVitalsChip: Header vitals (HR/SpO2) with abnormal highlighting
+  - Auscultation audio: Loading states, play/pause icons, buffering indicator
+  - Voice panel: Reorganized sections (status → speak → actions → options)
+
+## Mobile (iPhone) Participant Experience
+- Safe area insets for notch/home indicator
+- Hold-to-speak with pointer capture for reliable touch
+- Compact header with expandable vitals panel
+- Floating mic button with visual state feedback
+- Collapsible voice panel to maximize content area

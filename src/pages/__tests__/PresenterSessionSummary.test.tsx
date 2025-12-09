@@ -110,6 +110,8 @@ describe("PresenterSession summary toggle", () => {
     );
 
     expect(await screen.findByText(/Test Session/i)).toBeInTheDocument();
+    // Switch to gamification mode first (Session summary button is only visible there)
+    await user.click(screen.getByTestId("presenter-mode-gamification"));
     await user.click(screen.getByRole("button", { name: /Session summary/i }));
     expect(screen.getByText(/Results & Standings/i)).toBeInTheDocument();
   });
