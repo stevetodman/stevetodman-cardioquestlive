@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Presenter creates session and participant answers", () => {
   test("end-to-end happy path", async ({ browser }) => {
     const presenter = await browser.newPage();
-    await presenter.goto("/#/create-demo");
+    await presenter.goto("/#/create-demo?mockSession=MOCK");
 
     // Create a session.
     await presenter.getByRole("button", { name: /create new session/i }).click();
@@ -33,10 +33,6 @@ test.describe("Presenter creates session and participant answers", () => {
     await participant.goto(`/#/join/${joinCode}`);
 
     const option = participant.getByRole("button", { name: /A\)|B\)|C\)|D\)/i }).first();
-    if (!(await option.count())) {
-      test.skip(true, "Question options not present for participant");
-    }
-
     await option.click();
     await expect(option).toHaveClass(/selected|bg/i, { timeout: 1000 });
 

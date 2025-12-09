@@ -223,6 +223,34 @@ export default function JoinSession() {
 
   // Find session by joinCode once
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mockSession = params.get("mockSession") || localStorage.getItem("cq_mock_session");
+    const mockNotFoundFlag = params.get("mockNotFound");
+    if (mockNotFoundFlag) {
+      setSession(null);
+      setSessionId(null);
+      setLoading(false);
+      return;
+    }
+    if (mockSession) {
+      const code = mockSession.toUpperCase();
+      const mock: SessionData = {
+        id: "MOCK",
+        title: "Mock Session",
+        joinCode: code,
+        createdAt: new Date().toISOString(),
+        currentSlideIndex: 0,
+        currentQuestionId: "mock-q1",
+        showResults: false,
+        slides: [{ id: "mock-slide-1", index: 0, type: "content", html: "<div>Mock slide</div>" as any }],
+        questions: [{ id: "mock-q1", stem: "Mock question?", choices: ["A", "B", "C", "D"], correctIndex: 2 }],
+      };
+      setSession(mock);
+      setSessionId("MOCK");
+      setLoading(false);
+      return;
+    }
+
     async function findSession() {
       if (!joinCode) return;
       if (isConfigured && !userId) return;
