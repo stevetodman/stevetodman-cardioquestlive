@@ -960,16 +960,24 @@ export default function JoinSession() {
         <p className="text-slate-500 text-sm text-center max-w-xs">
           The session may have ended or the code might be incorrect.
         </p>
-        <Link to="/" className="mt-4 px-6 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors">
-          Back to Home
-        </Link>
-        <button
-          type="button"
-          onClick={() => setFindAttempt((n) => n + 1)}
-          className="px-6 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg text-sm font-medium transition-colors"
-        >
-          Try again
-        </button>
+        <div className="w-full max-w-xs space-y-2">
+          <button
+            type="button"
+            onClick={() => setFindAttempt((n) => n + 1)}
+            className="w-full px-6 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors border border-slate-700 text-slate-100"
+          >
+            Retry this code
+          </button>
+          <Link
+            to="/"
+            className="w-full inline-flex justify-center px-6 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg text-sm font-semibold transition-colors text-white"
+          >
+            Enter a new code
+          </Link>
+        </div>
+        <p className="text-xs text-slate-500 text-center max-w-xs">
+          Tip: Confirm the presenter’s latest join code and check for typos.
+        </p>
       </div>
     );
   }
@@ -1225,6 +1233,12 @@ export default function JoinSession() {
             </h3>
             
             <div className="bg-slate-900 rounded-xl p-4 border border-slate-800 shadow-lg relative overflow-hidden">
+                {!isQuestionActive && !session.showResults && (
+                  <div className="mb-3 flex items-center gap-2 text-xs text-amber-200 bg-amber-900/30 border border-amber-800 rounded-lg px-3 py-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" aria-hidden="true"></span>
+                    Waiting for presenter to open this question
+                  </div>
+                )}
                 <p className="text-sm font-semibold mb-4 leading-relaxed">
                     {currentQuestion.stem}
                 </p>
