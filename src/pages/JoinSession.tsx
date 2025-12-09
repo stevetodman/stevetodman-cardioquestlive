@@ -1116,6 +1116,8 @@ export default function JoinSession() {
   };
 
   const handleLeaveSession = () => {
+    const shouldLeave = window.confirm("Leave this session?");
+    if (!shouldLeave) return;
     try {
       voiceGatewayClient.disconnect();
     } catch {

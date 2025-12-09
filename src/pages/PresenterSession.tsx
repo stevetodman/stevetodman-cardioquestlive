@@ -1552,6 +1552,8 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
   }
 
   const handlePresenterLeave = () => {
+    const shouldLeave = window.confirm("Leave this session?");
+    if (!shouldLeave) return;
     try {
       voiceGatewayClient.disconnect();
     } catch {
