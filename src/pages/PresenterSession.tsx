@@ -1782,7 +1782,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
           <PresenterModeTabs activeMode={presenterMode} onModeChange={setPresenterMode} />
         </div>
         <div className="flex items-center gap-3 flex-wrap justify-end">
-          {presenterMode === "gamification" && (
+          {presenterMode === "slides" && (
             <div className="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-sm shadow-black/20">
               <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
                 Gamification
@@ -1825,7 +1825,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
             </div>
           )}
           {/* Autonomous Simulation Panel - replaces complex voice controls */}
-          {sessionId && presenterMode === "voice" && (
+          {sessionId && presenterMode === "sim" && (
             <AutonomousSimPanel
               sessionId={sessionId}
               voice={voice}
@@ -1841,7 +1841,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
               onScenarioChange={handleScenarioSelect}
             />
           )}
-          {simState && (
+          {presenterMode === "sim" && simState && (
             <div className="mt-2 text-[12px] text-slate-300 flex flex-wrap items-center gap-3">
               <span className="px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-800">
                 Stage: {simState.stageId || "unknown"}
@@ -2106,50 +2106,52 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
               )}
             </div>
           )}
-          <div className="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-sm shadow-black/20">
-            <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
-              Voice
-            </span>
-            <div className="flex items-center gap-1.5">
-              <div className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${
-                voice.enabled ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-100" : "border-slate-800 bg-slate-900 text-slate-400"
-              }`}>
-                {voice.enabled ? "Enabled" : "Disabled"}
-              </div>
-              {voice.enabled && (
-                <div className="text-[11px] text-slate-400">
-                  {voice.floorHolderName ? `Floor: ${voice.floorHolderName}` : "Floor open"}
+          {presenterMode === "sim" && (
+            <div className="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-sm shadow-black/20">
+              <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+                Voice
+              </span>
+              <div className="flex items-center gap-1.5">
+                <div className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${
+                  voice.enabled ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-100" : "border-slate-800 bg-slate-900 text-slate-400"
+                }`}>
+                  {voice.enabled ? "Enabled" : "Disabled"}
                 </div>
-              )}
-              <div
-                className={`text-[10px] uppercase tracking-[0.14em] px-2 py-1 rounded-full border ${
-                  gatewayStatus.state === "ready"
-                    ? "border-emerald-500/60 text-emerald-200"
-                    : gatewayStatus.state === "connecting"
-                    ? "border-sky-500/60 text-sky-200"
-                    : "border-slate-700 text-slate-400"
-                }`}
-              >
-                {gatewayStatus.state}
-              </div>
-              <button
-                type="button"
-                onClick={toggleVoice}
-                className="px-2.5 py-1 rounded-lg border border-slate-700 text-[11px] font-semibold bg-slate-900 hover:border-slate-600"
-              >
-                {voice.enabled ? "Turn off" : "Turn on"}
-              </button>
-              {voice.enabled && voice.floorHolderId && (
+                {voice.enabled && (
+                  <div className="text-[11px] text-slate-400">
+                    {voice.floorHolderName ? `Floor: ${voice.floorHolderName}` : "Floor open"}
+                  </div>
+                )}
+                <div
+                  className={`text-[10px] uppercase tracking-[0.14em] px-2 py-1 rounded-full border ${
+                    gatewayStatus.state === "ready"
+                      ? "border-emerald-500/60 text-emerald-200"
+                      : gatewayStatus.state === "connecting"
+                      ? "border-sky-500/60 text-sky-200"
+                      : "border-slate-700 text-slate-400"
+                  }`}
+                >
+                  {gatewayStatus.state}
+                </div>
                 <button
                   type="button"
-                  onClick={handleReleaseFloor}
-                  className="px-2 py-1 rounded-lg border border-slate-700 text-[11px] font-semibold bg-slate-900 hover:border-slate-600"
+                  onClick={toggleVoice}
+                  className="px-2.5 py-1 rounded-lg border border-slate-700 text-[11px] font-semibold bg-slate-900 hover:border-slate-600"
                 >
-                  Release floor
+                  {voice.enabled ? "Turn off" : "Turn on"}
                 </button>
-              )}
+                {voice.enabled && voice.floorHolderId && (
+                  <button
+                    type="button"
+                    onClick={handleReleaseFloor}
+                    className="px-2 py-1 rounded-lg border border-slate-700 text-[11px] font-semibold bg-slate-900 hover:border-slate-600"
+                  >
+                    Release floor
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
           {isQuestionSlide && (
             <div className="hidden md:flex items-center gap-1.5 text-[11px]">
               <button
@@ -2227,57 +2229,50 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                 </button>
               </div>
               <div className="text-[10px] text-slate-400">Participants: {participantCount}</div>
-              <button
-                type="button"
-                onClick={() => setVoiceGuideOpen((v) => !v)}
-                className="text-[10px] text-sky-300 underline"
-              >
-                {voiceGuideOpen ? "Hide voice guide" : "Show voice guide"}
-              </button>
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-200">
-              <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
-                <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Case</span>
-                <span className="px-2 py-0.5 rounded-full border border-slate-700 text-slate-100 text-xs">
-                  {snapshot?.chiefComplaint ?? selectedScenario}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
-                <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Voice</span>
-                <span
-                  className={`px-2 py-0.5 rounded-full border text-xs ${
-                    freezeStatus === "frozen"
-                      ? "border-amber-500/60 text-amber-100"
-                      : voiceLocked
-                      ? "border-rose-500/60 text-rose-100"
-                      : "border-emerald-500/60 text-emerald-100"
-                  }`}
-                >
-                  {voiceLocked ? "Locked" : freezeStatus === "frozen" ? "Paused" : "Live"}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
-                <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Queue</span>
-                <span className="px-2 py-0.5 rounded-full border border-slate-700 text-slate-100 text-xs">
-                  {participantCount}
-                </span>
-                {participantCount > 1 && voice.floorHolderId && (
-                  <span className="text-[10px] text-slate-500">Waiting: {Math.max(0, participantCount - 1)}</span>
-                )}
-              </div>
             </div>
-              {voiceGuideOpen && (
-                <div className="mt-2 bg-slate-900/70 border border-slate-800 rounded-lg p-3 text-[11px] text-slate-300 space-y-1">
-                  <div className="text-slate-200 font-semibold">Voice guide</div>
-                  <ol className="list-decimal list-inside space-y-1">
-                    <li>Check status: Voice {gatewayStatus.state}. If disconnected, tap Retry in banner.</li>
-                    <li>Manage floor: Take/Release or Lock floor to control resident speaking.</li>
-                    <li>Queue: if residents waiting, keep turns brief; floor auto-releases after 60s idle.</li>
-                    <li>Fallback: switch to text Q&amp;A; resume voice when budget allows.</li>
-                    <li>Mic issues: ask resident to re-check mic; if blocked, have them allow permissions.</li>
-                  </ol>
-                </div>
+        </div>
+      </div>
+      {/* Simulation-specific status bar - only in sim mode */}
+      {presenterMode === "sim" && (
+        <div className="flex flex-col gap-2 px-3 md:px-4 py-2 border-b border-slate-800/50">
+          <button
+            type="button"
+            onClick={() => setVoiceGuideOpen((v) => !v)}
+            className="text-[10px] text-sky-300 underline self-start"
+          >
+            {voiceGuideOpen ? "Hide voice guide" : "Show voice guide"}
+          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-[11px] text-slate-200">
+            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
+              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Case</span>
+              <span className="px-2 py-0.5 rounded-full border border-slate-700 text-slate-100 text-xs">
+                {snapshot?.chiefComplaint ?? selectedScenario}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
+              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Voice</span>
+              <span
+                className={`px-2 py-0.5 rounded-full border text-xs ${
+                  freezeStatus === "frozen"
+                    ? "border-amber-500/60 text-amber-100"
+                    : voiceLocked
+                    ? "border-rose-500/60 text-rose-100"
+                    : "border-emerald-500/60 text-emerald-100"
+                }`}
+              >
+                {voiceLocked ? "Locked" : freezeStatus === "frozen" ? "Paused" : "Live"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
+              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Queue</span>
+              <span className="px-2 py-0.5 rounded-full border border-slate-700 text-slate-100 text-xs">
+                {participantCount}
+              </span>
+              {participantCount > 1 && voice.floorHolderId && (
+                <span className="text-[10px] text-slate-500">Waiting: {Math.max(0, participantCount - 1)}</span>
               )}
-              <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
+            </div>
+            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
               <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Budget</span>
               <span className="font-mono text-xs text-slate-200">
                 ${simState?.budget?.usdEstimate?.toFixed(2) ?? "0.00"} · {simState?.budget?.voiceSeconds ? `${Math.round(simState.budget.voiceSeconds)}s` : "0s"}
@@ -2300,8 +2295,20 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
               )}
             </div>
           </div>
+          {voiceGuideOpen && (
+            <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-3 text-[11px] text-slate-300 space-y-1">
+              <div className="text-slate-200 font-semibold">Voice guide</div>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Check status: Voice {gatewayStatus.state}. If disconnected, tap Retry in banner.</li>
+                <li>Manage floor: Take/Release or Lock floor to control resident speaking.</li>
+                <li>Queue: if residents waiting, keep turns brief; floor auto-releases after 60s idle.</li>
+                <li>Fallback: switch to text Q&amp;A; resume voice when budget allows.</li>
+                <li>Mic issues: ask resident to re-check mic; if blocked, have them allow permissions.</li>
+              </ol>
+            </div>
+          )}
         </div>
-      </div>
+      )}
       <div className="flex-1 flex flex-col items-center px-4 md:px-6 pb-2 gap-2">
         <div className="w-full max-w-[1800px] grid grid-cols-1 xl:grid-cols-[1.7fr_1fr] gap-3 items-start">
           <div className="flex flex-col gap-3">

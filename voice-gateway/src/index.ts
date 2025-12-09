@@ -140,11 +140,14 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
 
   switch (parsed.type) {
     case "start_speaking": {
+      log("start_speaking received", simId, parsed.userId);
       const result = sessionManager.requestFloor(simId, parsed.userId);
       if (!result.granted) {
+        log("start_speaking floor denied (held by)", simId, result.previous);
         send(ws, { type: "error", message: "floor_taken" });
         return;
       }
+      log("start_speaking floor granted", simId, parsed.userId);
       if (result.previous && result.previous !== parsed.userId) {
         sessionManager.broadcastToSession(simId, {
           type: "participant_state",

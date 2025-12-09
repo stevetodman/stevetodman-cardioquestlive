@@ -1,9 +1,0 @@
-Use this recap to resume quickly:
-- Decks: Gemini-styled cases 1–11 in `src/data/case1Deck.ts`–`case11Deck.ts` and `ductalDeck.ts`; slides are trusted HTML strings. Presenter has interactive tiles where implemented; participants see static tiles.
-- Presenter: `PresenterSession` renders slide HTML with top-bar poll controls, in-slide poll overlay (showResults + responses), keyboard nav (arrows/Space), and presenter-only clue tiles.
-- Participants: join via code, answer MCQs; responses stored as `sessions/{sessionId}/responses/{uid_questionId}` (deterministic IDs enforce one per user/question).
-- Gamification: `sessions/{sessionId}/participants/{userId}` stores teamId/teamName/points/streak/correct/incorrect. Scoring is session-only, first-answer-only per question, with difficulty + streak multipliers. Teams auto-assign to least-loaded (Team Ductus/Cyanosis/QpQs). Presenter overlays show team standings and top individuals with toggles.
-- Admin: `AdminDeckEditor` offers templates/snippets, paste-to-data-URL images (soft warning >2 MB + optional alt), live presenter preview. Deck config saved to `configs/deck`.
-- Firestore rules: auth required for reads; creator/admin writes sessions; deterministic responses; participants readable by any authed user, writable by owner with validated shape; configs admin-write-only. See `firestore.rules`.
-- Emulators: Firestore/Auth emulators supported via `VITE_USE_EMULATORS=true`; default ports 8088/9188 for Firestore, 9099 for Auth (see `firebase.json`). Tests can be run against the emulator with `firebase emulators:exec --only firestore --project cardioquest-live-test "npm test -- --runInBand"`.
-- Next actions: optional participant interactivity on tiles; keep images small or move to Storage if needed; dry run with residents to validate presenter/admin/gamification UX.

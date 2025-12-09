@@ -12,7 +12,14 @@ export function usePresenterMode(): [PresenterMode, (mode: PresenterMode) => voi
     if (typeof window === "undefined") return DEFAULT_PRESENTER_MODE;
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored && ["presentation", "voice", "gamification"].includes(stored)) {
+      // Handle migration from old mode names
+      if (stored === "presentation" || stored === "gamification" || stored === "scores") {
+        return "slides";
+      }
+      if (stored === "voice") {
+        return "sim";
+      }
+      if (stored && ["slides", "sim"].includes(stored)) {
         return stored as PresenterMode;
       }
     } catch {

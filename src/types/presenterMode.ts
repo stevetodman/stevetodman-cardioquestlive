@@ -1,25 +1,21 @@
 /**
- * Presenter view modes for focused UI sections.
- * Each mode shows relevant controls while hiding others to reduce clutter.
+ * Presenter view modes - mutually exclusive views.
+ * "slides" shows the presentation slides (full screen).
+ * "sim" shows the patient simulation with voice controls.
  */
-export type PresenterMode = "presentation" | "voice" | "gamification";
+export type PresenterMode = "slides" | "sim";
 
 export const PRESENTER_MODES: { id: PresenterMode; label: string; description: string }[] = [
   {
-    id: "presentation",
-    label: "Presentation",
-    description: "Slide view with question controls",
+    id: "slides",
+    label: "Slides",
+    description: "Presentation slides, questions, scores",
   },
   {
-    id: "voice",
-    label: "Voice & Sim",
+    id: "sim",
+    label: "Simulation",
     description: "Voice controls, patient simulation, transcripts",
-  },
-  {
-    id: "gamification",
-    label: "Scores",
-    description: "Team scores, leaderboards, session stats",
   },
 ];
 
-export const DEFAULT_PRESENTER_MODE: PresenterMode = "presentation";
+export const DEFAULT_PRESENTER_MODE: PresenterMode = "slides";

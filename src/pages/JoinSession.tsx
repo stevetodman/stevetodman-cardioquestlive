@@ -584,10 +584,13 @@ export default function JoinSession() {
       setVoiceError("Voice is locked by the presenter right now.");
       return;
     }
-    if (micStatus !== "blocked" && micLevel < 0.05) {
-      setVoiceError("No mic input detected. Check your input device or unmute in system settings.");
-      return;
-    }
+    // Skip pre-flight mic level check on mobile - iOS Safari AudioContext may be suspended
+    // until user gesture triggers actual capture. The real capture will fail with a
+    // proper error if mic is truly unavailable.
+    // if (micStatus !== "blocked" && micLevel < 0.05) {
+    //   setVoiceError("No mic input detected. Check your input device or unmute in system settings.");
+    //   return;
+    // }
     try {
       setVoiceError(null);
       if (!hasFloor) {

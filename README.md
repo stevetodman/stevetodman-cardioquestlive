@@ -23,7 +23,9 @@ Interactive pediatric cardiology teaching with presenter + student modes, Gemini
 
 ## Features
 
-- **Presenter mode**: start a session, advance slides, open/close questions, show poll results inside the slide.
+- **Presenter view** with two mutually exclusive modes:
+  - **Slides mode**: Full-screen presentation with slides, questions, scores, gamification overlays
+  - **Sim mode**: Patient simulation with voice controls, vitals monitoring, telemetry, interventions
 - **Student mode**: join by code or QR, answer MCQs, view static interactive tiles, and quickly rejoin the last session.
 - **Gamification (session-only)**:
   - Per-participant points/streaks; first answer per question counts for scoring.

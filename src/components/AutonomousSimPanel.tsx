@@ -246,20 +246,18 @@ export function AutonomousSimPanel({
             </button>
           )}
 
-          {/* Interventions toggle */}
-          {isActive && (
-            <button
-              type="button"
-              onClick={() => setShowInterventions(!showInterventions)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                showInterventions
-                  ? "bg-indigo-600/20 border-indigo-500/60 text-indigo-100"
-                  : "bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600"
-              }`}
-            >
-              Intervene
-            </button>
-          )}
+          {/* Interventions toggle - always available */}
+          <button
+            type="button"
+            onClick={() => setShowInterventions(!showInterventions)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              showInterventions
+                ? "bg-indigo-600/20 border-indigo-500/60 text-indigo-100"
+                : "bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600"
+            }`}
+          >
+            Intervene
+          </button>
         </div>
       </div>
 
@@ -270,8 +268,8 @@ export function AutonomousSimPanel({
         </div>
       )}
 
-      {/* Intervention controls */}
-      {showInterventions && isActive && (
+      {/* Intervention controls - always available when toggled */}
+      {showInterventions && (
         <div className="flex flex-col gap-3 bg-slate-950/50 rounded-lg border border-slate-800 p-3">
           <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
             Presenter Controls

@@ -56,7 +56,8 @@ All medications use PALS-accurate mg/kg dosing. Patient demographics (age, weigh
 # Development
 npm run dev                    # Frontend (localhost:3000)
 npm run dev:stack:local        # Full stack with emulators
-npm run dev:tunnel             # Via Cloudflare tunnel
+npm run dev:tunnel:clean       # Via Cloudflare tunnel (recommended - auto-cleans ports)
+npm run dev:tunnel             # Via Cloudflare tunnel (raw, no cleanup)
 
 # Voice Gateway
 cd voice-gateway
@@ -91,7 +92,18 @@ PORT                          # Default 8081
 - Playwright E2E with mock sessions
 - Jest unit tests for gateway logic
 
+## Presenter View Modes
+Two mutually exclusive view modes (`src/types/presenterMode.ts`):
+- **Slides mode**: Full-screen presentation with slides, questions, scores, gamification
+- **Sim mode**: Patient simulation with voice controls, vitals, telemetry, interventions
+
+Toggle via the mode switch in presenter header. Mode persists in localStorage.
+
 ## Recent Changes
+- **Presenter mode simplification** (Dec 2024):
+  - Reduced from 3 modes to 2 mutually exclusive modes: "slides" and "sim"
+  - Slides mode hides all simulation UI (vitals status bar, voice controls)
+  - Sim mode hides slide presentation controls
 - Autonomous simulation mode
 - PALS-accurate medications and HR thresholds
 - Dynamic rhythm generation

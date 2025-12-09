@@ -49,7 +49,12 @@ export function FloatingMicButton({
   }, [disabled, onPressStart, state]);
 
   const handleUp = useCallback(async () => {
-    if (state !== "recording" && state !== "requesting") return;
+    // Only send stop_speaking if we were actually recording (start_speaking succeeded)
+    // Don't send stop if we were still in "requesting" state (start_speaking not yet sent)
+    if (state !== "recording") {
+      setState("idle");
+      return;
+    }
     // Haptic feedback on release
     try {
       navigator.vibrate?.(50);
