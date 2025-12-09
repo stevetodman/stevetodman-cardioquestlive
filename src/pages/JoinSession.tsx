@@ -534,7 +534,7 @@ export default function JoinSession() {
     queueCount: waitingCount,
     mockStatus: mockVoice as any,
   });
-  const showTextInput = fallbackActive || preferTextInput;
+  const showTextInput = fallbackActive || preferTextInput || voiceStatusData.status === "unavailable";
   const holdDisabled =
     voiceStatusData.status === "unavailable" ||
     voiceStatusData.status === "waiting" ||
@@ -749,6 +749,12 @@ export default function JoinSession() {
 
       {showTextInput && (
         <div className="mt-3 bg-slate-900/70 border border-slate-800 rounded-lg p-3 space-y-2">
+          {(fallbackActive || voiceStatusData.status === "unavailable") && (
+            <div className="flex items-center gap-2 text-[11px] text-amber-200 bg-amber-900/40 border border-amber-800 rounded-lg px-3 py-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" aria-hidden="true"></span>
+              Voice is unavailable right now—type your question below.
+            </div>
+          )}
           <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
             Text fallback
           </div>
@@ -1106,6 +1112,15 @@ export default function JoinSession() {
     voiceGatewayClient.connect(sessionId, userId, userDisplayName, "participant");
   };
 
+  const handleLeaveSession = () => {
+    try {
+      voiceGatewayClient.disconnect();
+    } catch {
+      // best effort
+    }
+    window.location.assign("/#/");
+  };
+
   const handleRecheckMic = async () => {
     try {
       await voicePatientService.recheckPermission();
@@ -1186,7 +1201,7 @@ export default function JoinSession() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col" id="main-content">
-      <header className="p-4 border-b border-slate-900 bg-slate-950 sticky top-0 z-20 flex justify-between items-center shadow-lg shadow-black/20">
+      <header className="p-4 border-b border-slate-900 bg-slate-950 sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 shadow-lg shadow-black/20">
         <div className="font-bold text-slate-200 tracking-tight">CardioQuest</div>
         <div className="text-xs font-mono bg-slate-900 px-2 py-1 rounded text-sky-400 border border-slate-800">
           {session.joinCode}
@@ -1202,6 +1217,13 @@ export default function JoinSession() {
         >
           Voice: {connectionStatus.state}
         </div>
+        <button
+          type="button"
+          onClick={handleLeaveSession}
+          className="text-xs px-3 py-1 rounded-lg border border-slate-800 bg-slate-900/70 text-slate-200 hover:border-slate-600 transition-colors"
+        >
+          Leave session
+        </button>
       </header>
 
       <main className="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6 pb-[env(safe-area-inset-bottom)]">

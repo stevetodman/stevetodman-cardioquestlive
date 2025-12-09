@@ -12,11 +12,11 @@ Use this to choose the smallest reliable test set for your change. Prefer the sm
   - Optionally sanity-check: `npm run sim:harness` (ScenarioEngine/ToolGate) and `GW_URL=ws://localhost:8081/ws/voice npm run ws:harness` against a running gateway.
 - **E2E Playwright (mocked sessions, no Firestore)**
   - Start dev server: `npm run dev -- --host 127.0.0.1 --port 5173 --strictPort --clearScreen false`
-  - Run: `PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 PLAYWRIGHT_USE_CHROMIUM=true npx playwright test`
+  - Run: `PLAYWRIGHT_BROWSERS_PATH=0 PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 PLAYWRIGHT_USE_CHROMIUM=true PLAYWRIGHT_CHROMIUM_CHANNEL= npx playwright test` (forces bundled Chromium to avoid system Chrome Crashpad permissions)
   - Suite uses mock hooks (`?mockSession`, `mockVoice`, `mockNotFound`) and hash router query params.
 - **E2E Playwright (emulator-backed smoke)**
   - Start emulators + app (`npm run dev:stack:local` or equivalent with `VITE_USE_EMULATORS=true` on 127.0.0.1:5173)
-  - Run: `E2E_EMULATOR=1 PLAYWRIGHT_USE_CHROMIUM=true npx playwright test e2e/emulator-smoke.spec.ts`
+  - Run: `PLAYWRIGHT_BROWSERS_PATH=0 E2E_EMULATOR=1 PLAYWRIGHT_USE_CHROMIUM=true PLAYWRIGHT_CHROMIUM_CHANNEL= npx playwright test e2e/emulator-smoke.spec.ts`
   - Skips automatically if `E2E_EMULATOR` is not set.
 - **Firestore rules**
   - `npm run test:rules`

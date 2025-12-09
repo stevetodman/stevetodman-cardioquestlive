@@ -5,6 +5,7 @@ test.describe("Optimistic answer submission (UI)", () => {
     await page.goto("/#/join/ANSWER?mockSession=ANSWER");
 
     const option = page.getByTestId("answer-option-0");
+    await expect(option).toBeVisible({ timeout: 5000 });
     await option.click();
     await expect(option).toHaveClass(/selected|bg/i, { timeout: 1000 });
   });

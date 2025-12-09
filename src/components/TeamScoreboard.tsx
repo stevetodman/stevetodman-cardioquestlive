@@ -6,7 +6,21 @@ interface Props {
 }
 
 export function TeamScoreboard({ teams }: Props) {
-  if (!teams || teams.length === 0) return null;
+  if (!teams || teams.length === 0) {
+    return (
+      <div className="select-none" role="region" aria-label="Team scores">
+        <div className="bg-slate-900/85 border border-slate-800 rounded-2xl shadow-2xl shadow-black/30 px-3.5 py-2.5 w-[270px] max-w-xs backdrop-blur-sm">
+          <div className="text-[11px] uppercase tracking-[0.12em] text-slate-200 font-semibold mb-2 flex items-center justify-between">
+            <span>Team scores</span>
+            <span className="text-[10px] text-slate-400">Live</span>
+          </div>
+          <div className="text-sm text-slate-400 text-center py-2">
+            No team scores yet. Waiting for the first answers.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

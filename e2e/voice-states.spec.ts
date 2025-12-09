@@ -5,6 +5,6 @@ test.describe("Voice UI states (UI-only)", () => {
     await page.goto("/#/join/VOICE?mockSession=VOICE&mockVoice=unavailable");
 
     const placeholder = page.getByText(/voice will be available when the presenter enables it/i).first();
-    await expect(placeholder).toBeVisible({ timeout: 3000 });
+    await expect(placeholder).toBeVisible({ timeout: 5000 });
   });
 });

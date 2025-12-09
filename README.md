@@ -135,10 +135,10 @@ Mic access: allow microphone for `127.0.0.1` in your browser, then tap **Re-chec
 
 - Unit/UI/rules tests: `npm test -- --runInBand`
 - E2E (Playwright, mock sessions): start dev server `npm run dev -- --host 127.0.0.1 --port 5173 --strictPort --clearScreen false`, then in another shell run  
-  `PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 PLAYWRIGHT_USE_CHROMIUM=true npx playwright test`  
-  If browsers are missing, install them with `npx playwright install --with-deps chromium webkit`.
+  `PLAYWRIGHT_BROWSERS_PATH=0 PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 PLAYWRIGHT_USE_CHROMIUM=true PLAYWRIGHT_CHROMIUM_CHANNEL= npx playwright test`  
+  (This forces the bundled Chromium to avoid system Chrome Crashpad permission issues.) If browsers are missing, install once with `PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium webkit`.
 - E2E (Firestore/Auth emulators, optional): start emulators + app (`npm run dev:stack:local` or your emulator stack on 127.0.0.1:5173 with `VITE_USE_EMULATORS=true`), then run  
-  `E2E_EMULATOR=1 PLAYWRIGHT_USE_CHROMIUM=true npx playwright test e2e/emulator-smoke.spec.ts` (or `npm run test:e2e:emu`). Skips if `E2E_EMULATOR` is not set.
+  `PLAYWRIGHT_BROWSERS_PATH=0 E2E_EMULATOR=1 PLAYWRIGHT_USE_CHROMIUM=true PLAYWRIGHT_CHROMIUM_CHANNEL= npx playwright test e2e/emulator-smoke.spec.ts` (or `npm run test:e2e:emu`). Skips if `E2E_EMULATOR` is not set.
 - To run rules tests against the emulator, you can wrap with:
 
 ```bash

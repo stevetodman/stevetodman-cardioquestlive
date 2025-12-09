@@ -1550,6 +1550,15 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
     );
   }
 
+  const handlePresenterLeave = () => {
+    try {
+      voiceGatewayClient.disconnect();
+    } catch {
+      // best effort disconnect
+    }
+    window.location.assign("/#/");
+  };
+
   if (mockSessionParam) {
     const mockJoinUrl = `${window.location.origin}/#/join/${(mockSessionParam || "MOCK").toUpperCase()}`;
     const mockVoiceBadge = mockVoiceState === "unavailable" ? "Voice: disabled" : "Voice: ready";
@@ -1597,6 +1606,13 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
             <div className="text-[11px] px-2.5 py-1 rounded-full border border-slate-700 bg-slate-900/60 text-slate-200">
               {mockVoiceBadge}
             </div>
+            <button
+              type="button"
+              onClick={handlePresenterLeave}
+              className="text-[11px] px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-slate-200 hover:border-slate-500 transition-colors"
+            >
+              Leave
+            </button>
           </div>
         </div>
         <div className="mt-4 p-4 rounded-xl border border-slate-800 bg-slate-900 space-y-4">
@@ -1715,6 +1731,13 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
         <div className="text-[11px] px-2.5 py-1 rounded-full border border-slate-700 bg-slate-900/60 text-slate-200">
           Voice: {mockVoiceUnavailable ? "disabled" : mockVoiceEnabled || gatewayStatus.state === "ready" ? "ready" : "disconnected"}
         </div>
+        <button
+          type="button"
+          onClick={handlePresenterLeave}
+          className="text-[11px] px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-slate-200 hover:border-slate-500 transition-colors"
+        >
+          Leave
+        </button>
       </div>
     </div>
   );

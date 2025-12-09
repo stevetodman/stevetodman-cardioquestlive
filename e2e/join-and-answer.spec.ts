@@ -25,6 +25,7 @@ test.describe("Presenter creates session and participant answers", () => {
     await participant.goto(`/#/join/${joinCode}?mockSession=MOCK`);
 
     const option = participant.getByTestId("answer-option-0");
+    await expect(option).toBeVisible({ timeout: 5000 });
     await option.click();
     await expect(option).toHaveClass(/selected|bg/i, { timeout: 1000 });
 
