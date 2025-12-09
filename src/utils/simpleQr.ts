@@ -470,19 +470,21 @@ const QRUtil = {
   },
 };
 
-// Only support versions 1-4 (enough for short join URLs)
+// Support versions 1-6 (enough for join URLs up to ~100 bytes)
 const RS_BLOCK_TABLE = [
   1, 26, 19, 1, 26, 16, 1, 26, 13, 1, 26, 9, // v1 L/M/Q/H
   1, 44, 34, 1, 44, 28, 1, 44, 22, 1, 44, 16, // v2
   1, 70, 55, 1, 70, 44, 2, 35, 17, 2, 35, 13, // v3
   1, 100, 80, 2, 50, 32, 2, 50, 24, 4, 25, 9, // v4
+  1, 134, 108, 2, 67, 43, 2, 33, 15, 2, 33, 11, // v5 (adds ~108 bytes for L)
+  2, 86, 68, 4, 43, 27, 4, 43, 19, 4, 43, 15, // v6 (adds more capacity)
 ];
 
-// Helper to create QR code with automatic typeNumber selection (small text)
+// Helper to create QR code with automatic typeNumber selection
 function createQRCode(text: string, errorCorrectLevel: QRErrorCorrectLevelKey) {
   let typeNumber = 1;
   const errorLevelMap: Record<QRErrorCorrectLevelKey, number> = { L: 1, M: 0, Q: 3, H: 2 };
-  for (typeNumber = 1; typeNumber <= 4; typeNumber++) {
+  for (typeNumber = 1; typeNumber <= 6; typeNumber++) {
     const qr = new (QRCodeModel as any)(typeNumber, errorLevelMap[errorCorrectLevel]);
     qr.addData(text);
     try {
@@ -492,14 +494,14 @@ function createQRCode(text: string, errorCorrectLevel: QRErrorCorrectLevelKey) {
       continue;
     }
   }
-  const qr = new (QRCodeModel as any)(4, errorLevelMap[errorCorrectLevel]);
+  const qr = new (QRCodeModel as any)(6, errorLevelMap[errorCorrectLevel]);
   qr.addData(text);
   qr.make();
   return qr;
 }
 
 export function generateQrSvgData(text: string, size = 256) {
-  const qr = createQRCode(text, "M");
+  const qr = createQRCode(text, "L"); // L = low error correction, more capacity
   const count = qr.getModuleCount();
   const cell = size / count;
   let path = "";
