@@ -9,8 +9,23 @@ interface QRCodeOverlayProps {
 }
 
 export function QRCodeOverlay({ open, onClose, joinUrl, code }: QRCodeOverlayProps) {
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = React.useRef<HTMLButtonElement | null>(null);
   if (!open) return null;
   const dataUrl = generateQrSvgData(joinUrl, 280);
+
+  React.useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      previouslyFocused?.focus?.();
+    };
+  }, [onClose]);
 
   return (
     <div
@@ -19,12 +34,16 @@ export function QRCodeOverlay({ open, onClose, joinUrl, code }: QRCodeOverlayPro
       aria-modal="true"
       aria-label="Join code QR"
     >
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl shadow-black/40 relative">
+      <div
+        ref={panelRef}
+        className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl shadow-black/40 relative"
+      >
         <button
           type="button"
+          ref={closeButtonRef}
           onClick={onClose}
           className="absolute top-3 right-3 text-slate-400 hover:text-slate-200 text-sm"
-          aria-label="Close"
+          aria-label="Close QR overlay"
         >
           ✕
         </button>
