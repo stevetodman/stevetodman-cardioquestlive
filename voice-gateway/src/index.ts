@@ -38,7 +38,8 @@ const realtimeApiKey = process.env.OPENAI_API_KEY || "";
 const softBudgetUsd = Number(process.env.SOFT_BUDGET_USD || 3.5);
 const hardBudgetUsd = Number(process.env.HARD_BUDGET_USD || 4.5);
 const scenarioHeartbeatMs = Number(process.env.SCENARIO_HEARTBEAT_MS || 1000);
-const commandCooldownMs = Number(process.env.COMMAND_COOLDOWN_MS || 3000);
+// Reduced from 3000ms to 1000ms for faster autonomous conversation flow
+const commandCooldownMs = Number(process.env.COMMAND_COOLDOWN_MS || 1000);
 const lastAutoReplyAt: Map<string, number> = new Map();
 const lastAutoReplyByUser: Map<string, number> = new Map();
 const lastDoctorUtterance: Map<string, { text: string; ts: number }> = new Map();
@@ -222,7 +223,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
         }
         case "treatment": {
           const treatmentType = typeof parsed.payload?.treatmentType === "string" ? parsed.payload.treatmentType : undefined;
-          handleTreatment(simId, treatmentType);
+          handleTreatment(simId, treatmentType, parsed.payload);
           break;
         }
         case "show_ekg": {
@@ -372,6 +373,191 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
         }
         case "mute_user": {
           // no-op
+          break;
+        }
+        case "scenario_event": {
+          // Presenter-triggered scenario events (vitals changes, rhythm changes, clinical events)
+          const event = parsed.payload?.event as string | undefined;
+          if (!event) break;
+
+          log("Scenario event", event, "session", simId, "payload", parsed.payload);
+
+          // Get current scenario to determine age-appropriate vitals
+          const state = runtime.scenarioEngine.getState();
+          const scenarioId = state.scenarioId;
+
+          // Age group mapping for pediatric-appropriate vitals
+          // infant (<1yr): ductal_shock
+          // toddler (1-3yr): cyanotic_spell
+          // preschool (3-5yr): kawasaki
+          // school-age/preteen (6-12yr): myocarditis
+          // teen (13-18yr): syncope, exertional_chest_pain, palpitations_svt, exertional_syncope_hcm
+          type AgeGroup = "infant" | "toddler" | "preschool" | "child" | "teen";
+          const ageGroupMap: Record<string, AgeGroup> = {
+            ductal_shock: "infant",
+            cyanotic_spell: "toddler",
+            kawasaki: "preschool",
+            myocarditis: "child",
+            syncope: "teen",
+            exertional_chest_pain: "teen",
+            palpitations_svt: "teen",
+            exertional_syncope_hcm: "teen",
+          };
+          const ageGroup = ageGroupMap[scenarioId] ?? "child";
+
+          // Pediatric vital sign ranges by age group
+          // Reference: PALS guidelines
+          const pediatricVitals: Record<AgeGroup, {
+            normalHr: number;
+            tachyHr: number;
+            normalBp: string;
+            hypoBp: string;
+            normalSpo2: number;
+            rhythmHr: Record<string, number>;
+            deteriorateVitals: { hr: number; spo2: number; bp: string };
+          }> = {
+            infant: {
+              // 0-12 months: HR 100-160, BP ~70-90/50-65
+              normalHr: 140,
+              tachyHr: 200,
+              normalBp: "75/50",
+              hypoBp: "50/30",
+              normalSpo2: 95,
+              rhythmHr: { vtach: 220, svt: 260, afib: 180, sinus: 140 },
+              deteriorateVitals: { hr: 200, spo2: 75, bp: "55/35" },
+            },
+            toddler: {
+              // 1-3 years: HR 80-130, BP ~80-100/55-70
+              normalHr: 110,
+              tachyHr: 180,
+              normalBp: "90/58",
+              hypoBp: "60/35",
+              normalSpo2: 96,
+              rhythmHr: { vtach: 200, svt: 240, afib: 160, sinus: 110 },
+              deteriorateVitals: { hr: 180, spo2: 80, bp: "65/40" },
+            },
+            preschool: {
+              // 3-5 years: HR 80-120, BP ~85-105/55-70
+              normalHr: 100,
+              tachyHr: 170,
+              normalBp: "95/60",
+              hypoBp: "65/40",
+              normalSpo2: 97,
+              rhythmHr: { vtach: 190, svt: 220, afib: 150, sinus: 100 },
+              deteriorateVitals: { hr: 170, spo2: 82, bp: "70/45" },
+            },
+            child: {
+              // 6-12 years: HR 70-110, BP ~90-115/60-75
+              normalHr: 90,
+              tachyHr: 160,
+              normalBp: "105/65",
+              hypoBp: "75/45",
+              normalSpo2: 98,
+              rhythmHr: { vtach: 180, svt: 200, afib: 140, sinus: 90 },
+              deteriorateVitals: { hr: 160, spo2: 85, bp: "75/50" },
+            },
+            teen: {
+              // 13-18 years: HR 60-100, BP ~100-120/60-80
+              normalHr: 80,
+              tachyHr: 150,
+              normalBp: "115/70",
+              hypoBp: "80/50",
+              normalSpo2: 99,
+              rhythmHr: { vtach: 180, svt: 180, afib: 130, sinus: 80 },
+              deteriorateVitals: { hr: 150, spo2: 88, bp: "80/50" },
+            },
+          };
+
+          const vitals = pediatricVitals[ageGroup];
+
+          // Handle vitals changes with age-appropriate values
+          if (event === "hypoxia") {
+            runtime.scenarioEngine.applyIntent({
+              type: "intent_updateVitals",
+              delta: { spo2: parsed.payload?.spo2 as number ?? 80 },
+              reason: "presenter_triggered_hypoxia",
+            });
+          } else if (event === "tachycardia") {
+            runtime.scenarioEngine.applyIntent({
+              type: "intent_updateVitals",
+              delta: { hr: parsed.payload?.hr as number ?? vitals.tachyHr },
+              reason: "presenter_triggered_tachycardia",
+            });
+          } else if (event === "hypotension") {
+            runtime.scenarioEngine.applyIntent({
+              type: "intent_updateVitals",
+              delta: { bp: parsed.payload?.bp as string ?? vitals.hypoBp },
+              reason: "presenter_triggered_hypotension",
+            });
+          } else if (event === "fever") {
+            runtime.scenarioEngine.applyIntent({
+              type: "intent_updateVitals",
+              delta: { temp: parsed.payload?.temp as number ?? 39.5 },
+              reason: "presenter_triggered_fever",
+            });
+          } else if (event === "stabilize") {
+            // Return to baseline vitals for current stage
+            const stageDef = runtime.scenarioEngine.getStageDef(state.stageId);
+            if (stageDef?.vitals) {
+              runtime.scenarioEngine.applyIntent({
+                type: "intent_updateVitals",
+                delta: stageDef.vitals,
+                reason: "presenter_triggered_stabilize",
+              });
+            }
+          } else if (event === "rhythm_change") {
+            // Rhythm changes - these affect telemetry display
+            const rhythm = parsed.payload?.rhythm as string;
+            if (rhythm) {
+              // Update rhythm via telemetry history
+              const telemetryHistory = state.telemetryHistory ?? [];
+              telemetryHistory.push({ ts: Date.now(), rhythm, note: "presenter_triggered" });
+              // Also adjust HR based on rhythm using age-appropriate values
+              const hr = vitals.rhythmHr[rhythm];
+              if (hr) {
+                runtime.scenarioEngine.applyIntent({
+                  type: "intent_updateVitals",
+                  delta: { hr },
+                  reason: `rhythm_change_${rhythm}`,
+                });
+              }
+            }
+          } else if (event === "deteriorate") {
+            // General deterioration - age-appropriate critical vitals
+            runtime.scenarioEngine.applyIntent({
+              type: "intent_updateVitals",
+              delta: vitals.deteriorateVitals,
+              reason: "presenter_triggered_deterioration",
+            });
+          } else if (event === "improve") {
+            // General improvement - return towards baseline
+            const stageDef = runtime.scenarioEngine.getStageDef(state.stageId);
+            runtime.scenarioEngine.applyIntent({
+              type: "intent_updateVitals",
+              delta: stageDef?.vitals ?? { hr: vitals.normalHr, spo2: vitals.normalSpo2, bp: vitals.normalBp },
+              reason: "presenter_triggered_improvement",
+            });
+          } else if (event === "code_blue") {
+            // Cardiac arrest - critical vitals (pulseless)
+            runtime.scenarioEngine.applyIntent({
+              type: "intent_updateVitals",
+              delta: { hr: 0, spo2: 0, bp: "0/0" },
+              reason: "presenter_triggered_code_blue",
+            });
+          }
+
+          // Update rhythm based on vitals changes from the event
+          const newRhythm = runtime.scenarioEngine.getDynamicRhythm();
+          runtime.scenarioEngine.setRhythm(newRhythm, `scenario_event: ${event}`);
+
+          // Broadcast updated sim state
+          broadcastSimState(simId, {
+            ...runtime.scenarioEngine.getState(),
+            stageIds: runtime.scenarioEngine.getStageIds(),
+            fallback: runtime.fallback,
+            budget: runtime.cost.getState?.() ?? undefined,
+          });
+          logEvent("scenario.event.triggered", { sessionId: simId, event, payload: parsed.payload });
           break;
         }
       }
@@ -974,8 +1160,10 @@ function broadcastSimState(
   }
   const scenarioId = (validated.scenarioId ?? getScenarioForSession(sessionId)) as PatientScenarioId;
   const examAudio = getAuscultationClips(scenarioId, validated.stageId);
-  sessionManager.broadcastToSession(sessionId, {
-    type: "sim_state",
+
+  // Full state for presenters - they see everything for monitoring
+  const fullState = {
+    type: "sim_state" as const,
     sessionId,
     stageId: validated.stageId,
     stageIds: validated.stageIds,
@@ -994,7 +1182,44 @@ function broadcastSimState(
     telemetryHistory: (state as any).telemetryHistory,
     treatmentHistory: (state as any).treatmentHistory,
     stageEnteredAt: (state as any).stageEnteredAt,
-  });
+  };
+
+  // Send full state to presenters
+  sessionManager.broadcastToPresenters(sessionId, fullState);
+
+  // For participants: only show vitals/telemetry if they've ordered them
+  // Check completed orders to determine what participant can see
+  const completedOrders = (validated.orders ?? []).filter(o => o.status === "complete");
+  const hasVitalsOrder = completedOrders.some(o => o.type === "vitals");
+  const hasEkgOrder = completedOrders.some(o => o.type === "ekg");
+  const hasTelemetryEnabled = validated.telemetry === true;
+
+  // Participants only see:
+  // - Vitals if they ordered vitals OR telemetry is on (continuous monitoring)
+  // - Telemetry/rhythm if they ordered EKG or turned on telemetry
+  // - Exam findings only if they examined the patient
+  const participantState = {
+    type: "sim_state" as const,
+    sessionId,
+    stageId: validated.stageId,
+    scenarioId,
+    // Vitals revealed when ordered or telemetry on
+    vitals: (hasVitalsOrder || hasTelemetryEnabled) ? (validated.vitals ?? {}) : {},
+    // Exam available if they did physical exam (check findings)
+    exam: (validated.findings?.length ?? 0) > 0 ? (validated.exam ?? {}) : {},
+    examAudio: (validated.findings?.length ?? 0) > 0 ? examAudio : [],
+    // Telemetry/rhythm only if EKG ordered or telemetry enabled
+    telemetry: hasTelemetryEnabled,
+    rhythmSummary: (hasEkgOrder || hasTelemetryEnabled) ? validated.rhythmSummary : undefined,
+    telemetryWaveform: (hasEkgOrder || hasTelemetryEnabled) ? validated.telemetryWaveform : undefined,
+    findings: validated.findings ?? [],
+    fallback: validated.fallback,
+    // Orders always visible (so they know status)
+    orders: validated.orders,
+    ekgHistory: (hasEkgOrder || hasTelemetryEnabled) ? (state as any).ekgHistory : undefined,
+  };
+
+  sessionManager.broadcastToParticipants(sessionId, participantState);
   persistSimState(sessionId, state as any).catch(() => {});
 }
 
@@ -1127,12 +1352,29 @@ function handleShowEkg(sessionId: string) {
   logSimEvent(sessionId, { type: "ekg.viewed", payload: { summary, imageUrl } }).catch(() => {});
 }
 
-function handleTreatment(sessionId: string, treatmentType?: string) {
+/**
+ * Enhanced treatment handler supporting:
+ * - Weight-based medication dosing (mg/kg)
+ * - Specific routes (IV, IO, IM, etc.)
+ * - Cardioversion/defibrillation (J/kg)
+ * - Nurse confirmation of exact dose given
+ */
+function handleTreatment(
+  sessionId: string,
+  treatmentType?: string,
+  payload?: Record<string, unknown>
+) {
   const runtime = ensureRuntime(sessionId);
+  const weightKg = runtime.scenarioEngine.getPatientWeight();
+  const demographics = runtime.scenarioEngine.getDemographics();
+
   const key = `${sessionId}:${(treatmentType ?? "").toLowerCase()}`;
   const now = Date.now();
   const last = lastTreatmentAt.get(key) || 0;
-  if (now - last < 8000) {
+
+  // Minimum interval between same treatments (prevents spam)
+  const minIntervalMs = treatmentType === "cardioversion" || treatmentType === "defibrillation" ? 3000 : 8000;
+  if (now - last < minIntervalMs) {
     sessionManager.broadcastToPresenters(sessionId, {
       type: "patient_transcript_delta",
       sessionId,
@@ -1142,83 +1384,303 @@ function handleTreatment(sessionId: string, treatmentType?: string) {
     return;
   }
   lastTreatmentAt.set(key, now);
+
   const delta: any = {};
-  let note = "";
-  let decayMs = 120000; // effects decay over ~2 minutes
-  let rhythmNote: string | undefined;
+  let nurseResponse = "";
+  let techResponse: string | undefined;
+  let decayMs = 120000;
   let decayIntent: ToolIntent | null = null;
+
+  // Extract dose/route from payload
+  const doseOrdered = payload?.dose as number | undefined;
+  const routeOrdered = payload?.route as string | undefined;
+  const joules = payload?.joules as number | undefined;
+
   switch ((treatmentType ?? "").toLowerCase()) {
+    // ===== SUPPORTIVE CARE =====
     case "oxygen":
-    case "o2":
+    case "o2": {
       delta.spo2 = 3;
       delta.hr = -3;
-      note = "Oxygen applied";
-      rhythmNote = "Improved oxygenation, rate easing slightly.";
+      nurseResponse = "Oxygen on. SpO2 should improve.";
+      techResponse = "Oxygenation improving on the monitor.";
       decayIntent = { type: "intent_updateVitals", delta: { spo2: -2, hr: 2 } as any };
       break;
+    }
     case "fluids":
-    case "bolus":
+    case "bolus": {
+      // Standard: 20 mL/kg NS bolus
+      const volumeMl = doseOrdered ?? Math.round(20 * weightKg);
       delta.hr = -4;
       delta.sbpPerMin = 6;
       delta.dbpPerMin = 4;
-      note = "Fluid bolus given";
-      rhythmNote = "Perfusion improving with fluids.";
+      nurseResponse = `NS bolus ${volumeMl} mL IV running in. That's ${Math.round(volumeMl / weightKg)} mL/kg.`;
+      techResponse = "Perfusion improving with fluids.";
       decayIntent = { type: "intent_updateVitals", delta: { hr: 2, sbpPerMin: -4, dbpPerMin: -3 } as any };
       break;
+    }
     case "position":
-    case "knee-chest":
+    case "knee-chest": {
       delta.spo2 = 4;
       delta.hr = -5;
-      note = "Position changed (knee-chest)";
-      rhythmNote = "Squatting/knee-chest reduces shunt; sats improving.";
+      nurseResponse = "Got them into knee-chest position. Sats improving.";
+      techResponse = "Squatting/knee-chest reducing right-to-left shunt; sats coming up.";
       decayIntent = { type: "intent_updateVitals", delta: { spo2: -3, hr: 3 } as any };
       break;
-    case "medication":
-    case "rate-control":
-      delta.hr = -10;
-      delta.spo2 = 1;
-      decayMs = 180000;
-      note = "Rate control medication administered";
-      rhythmNote = "Rate slowing after medication.";
-      decayIntent = { type: "intent_updateVitals", delta: { hr: 6, spo2: -1 } as any };
+    }
+
+    // ===== CARDIAC MEDICATIONS =====
+    case "adenosine": {
+      // PALS: First dose 0.1 mg/kg IV rapid push (max 6mg), second dose 0.2 mg/kg (max 12mg)
+      // Must be given rapid IV push followed immediately by NS flush
+      const maxFirst = 6;
+      const recommendedDose = doseOrdered ?? Math.min(0.1 * weightKg, maxFirst);
+      const actualDose = Math.round(recommendedDose * 100) / 100;
+      delta.hr = -80; // SVT conversion
+      decayMs = 10000; // Half-life <10 seconds
+      nurseResponse = `Adenosine ${actualDose} mg IV rapid push given. That's ${(actualDose / weightKg).toFixed(2)} mg/kg. Flushing with 5 mL NS.`;
+      techResponse = "Rate dropping... watching for conversion...";
+      decayIntent = { type: "intent_updateVitals", delta: { hr: 60 } as any }; // May revert if not converted
       break;
+    }
+    case "amiodarone": {
+      // 5 mg/kg IV over 20-60 min (max 300mg for arrest)
+      const recommendedDose = doseOrdered ?? Math.min(5 * weightKg, 300);
+      const actualDose = Math.round(recommendedDose);
+      delta.hr = -15;
+      decayMs = 300000; // Long-acting
+      nurseResponse = `Amiodarone ${actualDose} mg IV loading. That's ${(actualDose / weightKg).toFixed(1)} mg/kg. Running over 20 minutes.`;
+      techResponse = "Rate control medication infusing. Should see gradual effect.";
+      decayIntent = { type: "intent_updateVitals", delta: { hr: 5 } as any };
+      break;
+    }
+    case "epinephrine":
+    case "epi": {
+      // Arrest: 0.01 mg/kg IV/IO (1:10,000) = 0.1 mL/kg
+      // Anaphylaxis: 0.01 mg/kg IM (1:1,000)
+      const route = routeOrdered ?? "iv";
+      const recommendedDose = doseOrdered ?? 0.01 * weightKg;
+      const actualDose = Math.round(recommendedDose * 1000) / 1000; // mg
+      delta.hr = 20;
+      delta.sbpPerMin = 10;
+      decayMs = 180000;
+      const concentration = route.toLowerCase() === "im" ? "1:1,000" : "1:10,000";
+      nurseResponse = `Epinephrine ${actualDose} mg ${route.toUpperCase()} given (${concentration}). That's ${(actualDose / weightKg * 1000).toFixed(0)} mcg/kg.`;
+      techResponse = "Heart rate increasing, perfusion improving.";
+      decayIntent = { type: "intent_updateVitals", delta: { hr: -10, sbpPerMin: -5 } as any };
+      break;
+    }
+    case "atropine": {
+      // PALS: 0.02 mg/kg IV/IO (min 0.1mg to avoid paradoxical bradycardia, max 0.5mg child / 1mg adolescent)
+      // May repeat once; total max 1mg child, 2mg adolescent
+      const minDose = 0.1;
+      const maxDose = demographics.ageYears >= 12 ? 1.0 : 0.5;
+      const recommendedDose = doseOrdered ?? Math.max(minDose, Math.min(0.02 * weightKg, maxDose));
+      const actualDose = Math.round(recommendedDose * 100) / 100;
+      delta.hr = 20;
+      decayMs = 180000;
+      nurseResponse = `Atropine ${actualDose} mg IV push given. That's ${(actualDose / weightKg * 1000).toFixed(0)} mcg/kg (${(actualDose * 1000).toFixed(0)} mcg).`;
+      techResponse = "Watching for rate increase...";
+      decayIntent = { type: "intent_updateVitals", delta: { hr: -10 } as any };
+      break;
+    }
+    case "morphine": {
+      // 0.05-0.1 mg/kg IV (max 4mg)
+      const recommendedDose = doseOrdered ?? Math.min(0.1 * weightKg, 4);
+      const actualDose = Math.round(recommendedDose * 100) / 100;
+      delta.hr = -5;
+      decayMs = 240000;
+      nurseResponse = `Morphine ${actualDose} mg IV given slowly. That's ${(actualDose / weightKg).toFixed(2)} mg/kg. Monitoring respiratory status.`;
+      break;
+    }
+    case "prostaglandin":
+    case "pge1":
+    case "alprostadil": {
+      // 0.05-0.1 mcg/kg/min infusion for ductal-dependent lesions
+      const infusionRate = doseOrdered ?? 0.05;
+      delta.spo2 = 5;
+      delta.hr = -5;
+      decayMs = 600000; // Continuous infusion
+      nurseResponse = `PGE1 infusion started at ${infusionRate} mcg/kg/min. That's ${(infusionRate * weightKg).toFixed(2)} mcg/min total.`;
+      techResponse = "Watching for duct reopening. Sats should improve.";
+      break;
+    }
+    case "lidocaine": {
+      // PALS: 1 mg/kg IV/IO bolus (max 100mg), then 20-50 mcg/kg/min infusion
+      // Used for VF/pVT refractory to defibrillation
+      const recommendedDose = doseOrdered ?? Math.min(1 * weightKg, 100);
+      const actualDose = Math.round(recommendedDose);
+      delta.hr = -5;
+      decayMs = 600000;
+      nurseResponse = `Lidocaine ${actualDose} mg IV bolus given. That's ${(actualDose / weightKg).toFixed(1)} mg/kg.`;
+      techResponse = "Antiarrhythmic on board.";
+      decayIntent = { type: "intent_updateVitals", delta: { hr: 3 } as any };
+      break;
+    }
+    case "calcium":
+    case "calcium_chloride":
+    case "cacl": {
+      // PALS: Calcium chloride 20 mg/kg IV slow push (max 2g) - only for hypocalcemia, hyperkalemia, Ca-blocker OD
+      // CaCl2 10% = 100 mg/mL = 27.2 mg/mL elemental Ca
+      const recommendedDose = doseOrdered ?? Math.min(20 * weightKg, 2000);
+      const actualDose = Math.round(recommendedDose);
+      const volumeMl = Math.round(actualDose / 100 * 10) / 10; // 10% solution
+      delta.hr = 5;
+      delta.sbpPerMin = 5;
+      decayMs = 300000;
+      nurseResponse = `Calcium chloride ${actualDose} mg (${volumeMl} mL of 10%) IV slow push over 30 seconds. That's ${Math.round(actualDose / weightKg)} mg/kg.`;
+      techResponse = "Monitoring for improved contractility.";
+      break;
+    }
+    case "sodium_bicarbonate":
+    case "bicarb":
+    case "nahco3": {
+      // PALS: 1 mEq/kg IV slow push - only for documented acidosis, hyperkalemia, TCA OD
+      // 8.4% solution = 1 mEq/mL
+      const recommendedDose = doseOrdered ?? weightKg; // 1 mEq/kg
+      const actualDose = Math.round(recommendedDose);
+      decayMs = 300000;
+      nurseResponse = `Sodium bicarbonate ${actualDose} mEq (${actualDose} mL of 8.4%) IV slow push. That's ${(actualDose / weightKg).toFixed(1)} mEq/kg.`;
+      techResponse = "Bicarb given. Check follow-up gas.";
+      break;
+    }
+    case "magnesium":
+    case "mag":
+    case "mgso4": {
+      // PALS: 25-50 mg/kg IV over 10-20 min (max 2g) - for torsades, hypomagnesemia
+      const recommendedDose = doseOrdered ?? Math.min(50 * weightKg, 2000);
+      const actualDose = Math.round(recommendedDose);
+      delta.hr = -10;
+      decayMs = 600000;
+      nurseResponse = `Magnesium sulfate ${actualDose} mg IV over 15 minutes. That's ${Math.round(actualDose / weightKg)} mg/kg.`;
+      techResponse = "Magnesium infusing for rhythm stabilization.";
+      break;
+    }
+    case "procainamide": {
+      // PALS: 15 mg/kg IV over 30-60 min (max 17 mg/kg or 1g)
+      // For SVT unresponsive to adenosine, wide-complex tachycardia
+      const recommendedDose = doseOrdered ?? Math.min(15 * weightKg, 1000);
+      const actualDose = Math.round(recommendedDose);
+      delta.hr = -20;
+      decayMs = 600000;
+      nurseResponse = `Procainamide ${actualDose} mg IV infusing over 30 minutes. That's ${Math.round(actualDose / weightKg)} mg/kg. Monitoring BP and QRS.`;
+      techResponse = "Watching QRS width and BP during infusion.";
+      break;
+    }
+
+    // ===== CARDIOVERSION / DEFIBRILLATION =====
+    case "cardioversion":
+    case "sync_cardioversion": {
+      // Synchronized cardioversion: 0.5-1 J/kg, may increase to 2 J/kg
+      const joulesOrdered = joules ?? Math.round(0.5 * weightKg);
+      delta.hr = -80; // Convert rhythm
+      nurseResponse = `Synchronized cardioversion at ${joulesOrdered} J delivered. That's ${(joulesOrdered / weightKg).toFixed(1)} J/kg. Patient sedated.`;
+      techResponse = "Shock delivered... watching rhythm... ";
+      break;
+    }
+    case "defibrillation":
+    case "defib": {
+      // VF/pVT: 2 J/kg first, then 4 J/kg
+      const joulesOrdered = joules ?? Math.round(2 * weightKg);
+      delta.hr = 0; // Pulseless - either converts or stays in arrest
+      nurseResponse = `Defibrillation at ${joulesOrdered} J delivered! That's ${(joulesOrdered / weightKg).toFixed(0)} J/kg. Resuming compressions.`;
+      techResponse = "Shock delivered. Checking rhythm...";
+      break;
+    }
+
+    // ===== OTHER TREATMENTS =====
+    case "ibuprofen":
+    case "motrin": {
+      // 10 mg/kg PO (max 400mg)
+      const recommendedDose = doseOrdered ?? Math.min(10 * weightKg, 400);
+      const actualDose = Math.round(recommendedDose);
+      delta.temp = -0.5;
+      decayMs = 21600000; // 6 hours
+      nurseResponse = `Ibuprofen ${actualDose} mg PO given. That's ${Math.round(actualDose / weightKg)} mg/kg.`;
+      break;
+    }
+    case "acetaminophen":
+    case "tylenol": {
+      // 15 mg/kg PO (max 1000mg)
+      const recommendedDose = doseOrdered ?? Math.min(15 * weightKg, 1000);
+      const actualDose = Math.round(recommendedDose);
+      delta.temp = -0.5;
+      decayMs = 14400000; // 4 hours
+      nurseResponse = `Acetaminophen ${actualDose} mg PO given. That's ${Math.round(actualDose / weightKg)} mg/kg.`;
+      break;
+    }
+    case "aspirin":
+    case "asa": {
+      // Kawasaki: 80-100 mg/kg/day divided q6h (high dose) or 3-5 mg/kg/day (low dose)
+      const recommendedDose = doseOrdered ?? Math.min(20 * weightKg, 650); // Single dose
+      const actualDose = Math.round(recommendedDose);
+      nurseResponse = `Aspirin ${actualDose} mg PO given. That's ${Math.round(actualDose / weightKg)} mg/kg.`;
+      break;
+    }
+
     default:
+      // Unknown treatment - nurse asks for clarification
+      sessionManager.broadcastToSession(sessionId, {
+        type: "patient_transcript_delta",
+        sessionId,
+        text: `I need the medication name, dose, and route. Patient weighs ${weightKg} kg.`,
+        character: "nurse",
+      });
       return;
   }
+
+  // Apply vitals changes
   runtime.scenarioEngine.applyVitalsAdjustment(delta);
+
+  // Update rhythm based on new vitals (treatments affecting HR change the rhythm)
+  const newRhythm = runtime.scenarioEngine.getDynamicRhythm();
+  runtime.scenarioEngine.setRhythm(newRhythm, `treatment: ${treatmentType}`);
+
   const telemetryWaveform = runtime.scenarioEngine.getState().telemetry
     ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
     : undefined;
+
   maybeAdvanceStageFromTreatment(runtime, treatmentType);
+
+  // Record in treatment history
   const history = runtime.scenarioEngine.getState().treatmentHistory ?? [];
   runtime.scenarioEngine.setTreatmentHistory([
     ...history,
-    { ts: Date.now(), treatmentType: treatmentType ?? "unknown", note },
+    { ts: Date.now(), treatmentType: treatmentType ?? "unknown", note: nurseResponse },
   ]);
+
+  // Broadcast updated state
   broadcastSimState(sessionId, {
     ...runtime.scenarioEngine.getState(),
     stageIds: runtime.scenarioEngine.getStageIds(),
     telemetryWaveform,
     treatmentHistory: runtime.scenarioEngine.getState().treatmentHistory,
   });
-  if (note) {
+
+  // Nurse confirms dose
+  if (nurseResponse) {
     sessionManager.broadcastToSession(sessionId, {
       type: "patient_transcript_delta",
       sessionId,
-      text: `${note}. Vitals updating.`,
+      text: nurseResponse,
       character: "nurse",
     });
-    if (rhythmNote && runtime.scenarioEngine.getState().telemetry) {
+    if (techResponse && runtime.scenarioEngine.getState().telemetry) {
       sessionManager.broadcastToSession(sessionId, {
         type: "patient_transcript_delta",
         sessionId,
-        text: rhythmNote,
+        text: techResponse,
         character: "tech",
       });
     }
   }
-  logSimEvent(sessionId, { type: "treatment.applied", payload: { treatmentType, note } }).catch(() => {});
 
+  logSimEvent(sessionId, {
+    type: "treatment.applied",
+    payload: { treatmentType, weightKg, ...payload, nurseResponse },
+  }).catch(() => {});
+
+  // Schedule effect decay
   if (decayIntent) {
     setTimeout(() => {
       const rt = runtimes.get(sessionId);

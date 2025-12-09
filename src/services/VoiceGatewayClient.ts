@@ -9,6 +9,7 @@ import {
   VoiceConnectionStatus,
   CharacterId,
 } from "../types/voiceGateway";
+import { VoiceCommandType } from "../types";
 
 type PatientStateListener = (state: PatientState, character?: CharacterId, displayName?: string) => void;
 type TranscriptListener = (text: string) => void;
@@ -197,7 +198,7 @@ class VoiceGatewayClient {
   }
 
   sendVoiceCommand(
-    commandType: "pause_ai" | "resume_ai" | "force_reply" | "end_turn" | "mute_user" | "freeze" | "unfreeze" | "skip_stage",
+    commandType: VoiceCommandType,
     payload?: Record<string, unknown>,
     character?: CharacterId
   ) {

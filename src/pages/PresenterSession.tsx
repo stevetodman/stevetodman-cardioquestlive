@@ -20,6 +20,7 @@ import { useVoiceState, releaseFloor, setVoiceEnabled } from "../hooks/useVoiceS
 import { auth } from "../firebase";
 import { VoicePatientOverlay, TranscriptTurn } from "../components/VoicePatientOverlay";
 import { PresenterVoiceControls } from "../components/PresenterVoiceControls";
+import { AutonomousSimPanel } from "../components/AutonomousSimPanel";
 import { VoiceCharacterTile } from "../components/VoiceCharacterTile";
 import { VitalsMonitor } from "../components/VitalsMonitor";
 import { voiceGatewayClient } from "../services/VoiceGatewayClient";
@@ -40,6 +41,8 @@ import { sanitizeHtml } from "../utils/sanitizeHtml";
 import { Select } from "../components/Select";
 import { QRCodeOverlay } from "../components/QRCodeOverlay";
 import { FLOOR_AUTO_RELEASE_MS } from "../constants";
+import { PresenterModeTabs } from "../components/PresenterModeTabs";
+import { usePresenterMode } from "../hooks/usePresenterMode";
 
 type SnapshotProps = {
   chiefComplaint: string;
@@ -120,6 +123,8 @@ function ScenarioSnapshotCard({ snapshot }: { snapshot: SnapshotProps | null }) 
 
 export default function PresenterSession() {
   const { sessionId } = useParams();
+  const [presenterMode, setPresenterMode] = usePresenterMode();
+
   // Test hook: allow Playwright/local to supply a mock session without Firestore.
   const mockSessionParam = useMemo(() => {
     const hash = typeof window !== "undefined" ? window.location.hash : "";
@@ -1773,64 +1778,70 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
         </div>
       )}
       <div className="flex items-center justify-between px-3 md:px-4 py-1.5">
-        <div className="text-[10px] uppercase tracking-[0.22em] text-slate-500 font-semibold">
-          {session.title}
+        <div className="flex items-center gap-3">
+          <div className="text-[10px] uppercase tracking-[0.22em] text-slate-500 font-semibold">
+            {session.title}
+          </div>
+          <PresenterModeTabs activeMode={presenterMode} onModeChange={setPresenterMode} />
         </div>
         <div className="flex items-center gap-3 flex-wrap justify-end">
-          <div className="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-sm shadow-black/20">
-            <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
-              Gamification
-            </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setShowSummary((v) => !v)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
-                  showSummary
-                    ? "bg-indigo-600/20 border-indigo-500/60 text-indigo-100 shadow-sm shadow-indigo-900/30"
-                    : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
-                }`}
-              >
-                Session summary
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowTeamScores((v) => !v)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
-                  showTeamScores
-                    ? "bg-sky-600/20 border-sky-500/60 text-sky-100 shadow-sm shadow-sky-900/30"
-                    : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
-                }`}
-              >
-                Team scores
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowIndividualScores((v) => !v)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
-                  showIndividualScores
-                    ? "bg-emerald-600/15 border-emerald-500/60 text-emerald-100 shadow-sm shadow-emerald-900/30"
-                    : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
-                }`}
-              >
-                Top players
-              </button>
+          {presenterMode === "gamification" && (
+            <div className="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-sm shadow-black/20">
+              <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+                Gamification
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowSummary((v) => !v)}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
+                    showSummary
+                      ? "bg-indigo-600/20 border-indigo-500/60 text-indigo-100 shadow-sm shadow-indigo-900/30"
+                      : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+                  }`}
+                >
+                  Session summary
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTeamScores((v) => !v)}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
+                    showTeamScores
+                      ? "bg-sky-600/20 border-sky-500/60 text-sky-100 shadow-sm shadow-sky-900/30"
+                      : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+                  }`}
+                >
+                  Team scores
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowIndividualScores((v) => !v)}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
+                    showIndividualScores
+                      ? "bg-emerald-600/15 border-emerald-500/60 text-emerald-100 shadow-sm shadow-emerald-900/30"
+                      : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+                  }`}
+                >
+                  Top players
+                </button>
+              </div>
             </div>
-          </div>
-          {sessionId && (
-            <PresenterVoiceControls
+          )}
+          {/* Autonomous Simulation Panel - replaces complex voice controls */}
+          {sessionId && presenterMode === "voice" && (
+            <AutonomousSimPanel
               sessionId={sessionId}
               voice={voice}
-              doctorQuestion={doctorQuestionText}
-              onDoctorQuestionChange={setDoctorQuestionText}
-              onForceReply={forceReplyWithQuestion}
-              autoForceReply={autoForceReply}
-              onToggleAutoForceReply={setAutoForceReply}
+              connectionStatus={gatewayStatus}
+              transcriptLog={transcriptLog}
+              simState={simState ? {
+                stageId: simState.stageId,
+                vitals: simState.vitals,
+                budget: simState.budget,
+              } : undefined}
               scenarioId={selectedScenario}
               scenarioOptions={scenarioOptions}
               onScenarioChange={handleScenarioSelect}
-              character={targetCharacter}
-              onCharacterChange={setTargetCharacter}
             />
           )}
           {simState && (
@@ -2186,9 +2197,6 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
             </div>
           )}
             <div className="flex flex-col gap-2">
-              <div className="text-[10px] text-slate-400 font-mono bg-slate-900/80 border border-slate-700 rounded px-2 py-1">
-                Join: {session.joinCode}
-              </div>
               <div className="flex gap-2 flex-wrap">
                 <button
                   type="button"

@@ -59,7 +59,8 @@ export type ClientToServerMessage =
         | "exam"
         | "toggle_telemetry"
         | "show_ekg"
-        | "treatment";
+        | "treatment"
+        | "scenario_event";
       payload?: Record<string, unknown>;
     }
   | {

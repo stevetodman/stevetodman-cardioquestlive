@@ -44,10 +44,19 @@ export type StageDef = {
   transitions?: StageTransition[];
 };
 
+export type PatientDemographics = {
+  ageYears: number;
+  ageMonths?: number;
+  weightKg: number;
+  sex?: "male" | "female";
+};
+
 export type ScenarioDef = {
   id: ScenarioId;
   version: string;
   persona?: string;
+  /** Patient demographics for weight-based dosing */
+  demographics: PatientDemographics;
   stages: StageDef[];
   initialStage: string;
 };

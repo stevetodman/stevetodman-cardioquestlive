@@ -5,6 +5,7 @@ const syncopeScenario: ScenarioDef = {
   id: "syncope",
   version: "1.0.0",
   persona: "You are a 15-year-old who gets lightheaded with exertion. Stay in character.",
+  demographics: { ageYears: 15, weightKg: 55, sex: "male" },
   initialStage: "stage_1_baseline",
   stages: [
     {
@@ -53,6 +54,7 @@ const scenarioMap: Record<ScenarioId, ScenarioDef> = {
     id: "exertional_chest_pain",
     version: "1.0.0",
     persona: "You are a teen with exertional chest pain and palpitations. Stay in character.",
+    demographics: { ageYears: 16, weightKg: 62, sex: "male" },
     initialStage: "stage_1_baseline",
     stages: [
       {
@@ -92,6 +94,7 @@ const scenarioMap: Record<ScenarioId, ScenarioDef> = {
     id: "palpitations_svt",
     version: "1.0.0",
     persona: "You are a teen with recurrent palpitations. Stay in character.",
+    demographics: { ageYears: 14, weightKg: 50, sex: "female" },
     initialStage: "stage_1_baseline",
     stages: [
       {
@@ -131,6 +134,7 @@ const scenarioMap: Record<ScenarioId, ScenarioDef> = {
     id: "myocarditis",
     version: "1.0.0",
     persona: "You are a pre-teen recovering from a viral illness, now with chest discomfort and fatigue. Stay in character.",
+    demographics: { ageYears: 11, weightKg: 38, sex: "male" },
     initialStage: "stage_1_baseline",
     stages: [
       {
@@ -160,6 +164,7 @@ const scenarioMap: Record<ScenarioId, ScenarioDef> = {
     id: "exertional_syncope_hcm",
     version: "1.0.0",
     persona: "You are a teen with presyncope during intense exercise. Stay in character; short answers.",
+    demographics: { ageYears: 17, weightKg: 70, sex: "male" },
     initialStage: "stage_1_baseline",
     stages: [
       {
@@ -189,6 +194,7 @@ const scenarioMap: Record<ScenarioId, ScenarioDef> = {
     id: "ductal_shock",
     version: "1.0.0",
     persona: "You are an ill infant with poor perfusion; responses are limited to grunts/crying cues.",
+    demographics: { ageYears: 0, ageMonths: 1, weightKg: 3.5 },
     initialStage: "stage_1_shock",
     stages: [
       {
@@ -218,6 +224,7 @@ const scenarioMap: Record<ScenarioId, ScenarioDef> = {
     id: "cyanotic_spell",
     version: "1.0.0",
     persona: "You are a toddler with cyanotic episodes; often squats to feel better.",
+    demographics: { ageYears: 2, weightKg: 12, sex: "male" },
     initialStage: "stage_1_baseline",
     stages: [
       {
@@ -247,6 +254,7 @@ const scenarioMap: Record<ScenarioId, ScenarioDef> = {
     id: "kawasaki",
     version: "1.0.0",
     persona: "You are a febrile preschooler with rash and red eyes. Irritable and tired.",
+    demographics: { ageYears: 4, weightKg: 16, sex: "male" },
     initialStage: "stage_1_fever",
     stages: [
       {
@@ -266,6 +274,7 @@ const scenarioMap: Record<ScenarioId, ScenarioDef> = {
     id: "coarctation_shock",
     version: "1.0.0",
     persona: "You are a young infant in low-output shock; minimal verbal cues.",
+    demographics: { ageYears: 0, ageMonths: 2, weightKg: 4.5 },
     initialStage: "stage_1_shock",
     stages: [
       {
@@ -285,6 +294,7 @@ const scenarioMap: Record<ScenarioId, ScenarioDef> = {
     id: "arrhythmogenic_syncope",
     version: "1.0.0",
     persona: "You are a teen who collapsed during sports; short, anxious answers.",
+    demographics: { ageYears: 15, weightKg: 58, sex: "male" },
     initialStage: "stage_1_baseline",
     stages: [
       {
@@ -590,6 +600,14 @@ export class ScenarioEngine {
     return this.state;
   }
 
+  getDemographics() {
+    return this.scenario.demographics;
+  }
+
+  getPatientWeight(): number {
+    return this.scenario.demographics.weightKg;
+  }
+
   setFallback(fallback: boolean) {
     this.state = { ...this.state, fallback };
   }
@@ -626,6 +644,144 @@ export class ScenarioEngine {
 
   setTreatmentHistory(history: { ts: number; treatmentType: string; note?: string }[]) {
     this.state = { ...this.state, treatmentHistory: history };
+  }
+
+  /**
+   * Update the rhythm summary and log to telemetry history.
+   * Used when treatments or events change the cardiac rhythm.
+   */
+  setRhythm(rhythmSummary: string, note?: string) {
+    const history = this.state.telemetryHistory ?? [];
+    this.state = {
+      ...this.state,
+      rhythmSummary,
+      telemetryHistory: [...history, { ts: Date.now(), rhythm: rhythmSummary, note }],
+    };
+  }
+
+  /**
+   * Get age-dependent heart rate thresholds based on PALS guidelines.
+   * Returns { nsrLow, nsrHigh, tachyThreshold, bradyThreshold, svtThreshold }
+   */
+  private getAgeBasedHRThresholds(): {
+    nsrLow: number;
+    nsrHigh: number;
+    tachyThreshold: number;
+    bradyThreshold: number;
+    svtThreshold: number;
+  } {
+    const demo = this.scenario.demographics;
+    const ageMonths = (demo.ageYears * 12) + (demo.ageMonths ?? 0);
+
+    // PALS age-based heart rate ranges
+    if (ageMonths < 1) {
+      // Neonate (0-28 days): NSR 100-180, tachy >180, brady <100, SVT >220
+      return { nsrLow: 100, nsrHigh: 180, tachyThreshold: 180, bradyThreshold: 100, svtThreshold: 220 };
+    } else if (ageMonths < 12) {
+      // Infant (1-12 months): NSR 100-160, tachy >160, brady <100, SVT >220
+      return { nsrLow: 100, nsrHigh: 160, tachyThreshold: 160, bradyThreshold: 100, svtThreshold: 220 };
+    } else if (ageMonths < 36) {
+      // Toddler (1-3 years): NSR 90-150, tachy >150, brady <90, SVT >220
+      return { nsrLow: 90, nsrHigh: 150, tachyThreshold: 150, bradyThreshold: 90, svtThreshold: 220 };
+    } else if (ageMonths < 72) {
+      // Preschool (3-6 years): NSR 80-120, tachy >120, brady <80, SVT >220
+      return { nsrLow: 80, nsrHigh: 120, tachyThreshold: 120, bradyThreshold: 80, svtThreshold: 220 };
+    } else if (ageMonths < 144) {
+      // School-age (6-12 years): NSR 70-110, tachy >110, brady <70, SVT >220
+      return { nsrLow: 70, nsrHigh: 110, tachyThreshold: 110, bradyThreshold: 70, svtThreshold: 220 };
+    } else {
+      // Adolescent (>12 years): NSR 60-100, tachy >100, brady <60, SVT >220
+      return { nsrLow: 60, nsrHigh: 100, tachyThreshold: 100, bradyThreshold: 60, svtThreshold: 220 };
+    }
+  }
+
+  /**
+   * Get rhythm description based on heart rate and scenario context.
+   * Uses age-dependent thresholds per PALS guidelines.
+   * SVT threshold is >220 bpm regardless of age.
+   */
+  getDynamicRhythm(): string {
+    const hr = this.state.vitals.hr ?? 80;
+    const spo2 = this.state.vitals.spo2 ?? 98;
+    const scenarioId = this.state.scenarioId as ScenarioId;
+    const stageId = this.state.stageId;
+    const thresholds = this.getAgeBasedHRThresholds();
+
+    // Cardiac arrest states
+    if (hr === 0) return "Asystole / PEA - no cardiac output";
+    if (hr < 20) return "Agonal rhythm - impending arrest";
+
+    // VF - chaotic, no discernible rate
+    if (scenarioId === "arrhythmogenic_syncope" && hr >= 300) {
+      return "Ventricular fibrillation - coarse";
+    }
+
+    // Polymorphic VT / Torsades (very fast, irregular VT)
+    if (hr >= 250) {
+      return `Polymorphic VT / Torsades de Pointes`;
+    }
+
+    // SVT (>220 bpm per PALS) - narrow complex, regular, no P waves
+    if (hr > thresholds.svtThreshold) {
+      if (scenarioId === "palpitations_svt") {
+        return `SVT ${hr} bpm, narrow complex, regular, P waves absent`;
+      }
+      if (scenarioId === "arrhythmogenic_syncope") {
+        return `Monomorphic VT ${hr} bpm, wide complex, AV dissociation`;
+      }
+      // Differentiate SVT vs sinus tachy in infants (can have very high sinus rates)
+      if (scenarioId === "ductal_shock" || scenarioId === "coarctation_shock") {
+        // In infants, SVT is typically >220 with NO rate variability
+        return `SVT vs extreme sinus tachycardia ${hr} bpm - no beat-to-beat variability suggests SVT`;
+      }
+      return `Narrow complex tachycardia ${hr} bpm - SVT vs sinus tachycardia with aberrancy`;
+    }
+
+    // Ventricular tachycardia (wide complex, regular)
+    if (scenarioId === "arrhythmogenic_syncope" && hr >= 150) {
+      if (stageId.includes("episode") || stageId.includes("decomp")) {
+        return `Monomorphic VT ${hr} bpm, wide complex, regular`;
+      }
+      // PVCs - can be conducted (wide) or may trigger compensatory pause
+      return `Sinus rhythm ${hr} bpm with frequent PVCs (wide, compensatory pause)`;
+    }
+
+    // Sinus tachycardia (age-dependent threshold)
+    if (hr > thresholds.tachyThreshold) {
+      let base = `Sinus tachycardia ${hr} bpm`;
+      // Add scenario-specific findings
+      if (scenarioId === "myocarditis") return `${base}, low voltage QRS, diffuse ST-T changes`;
+      if (scenarioId === "cyanotic_spell") return `${base}, RVH pattern, right axis`;
+      if (scenarioId === "kawasaki") return `${base} (fever-related)`;
+      if (scenarioId === "ductal_shock" || scenarioId === "coarctation_shock") return `${base}, RV strain pattern`;
+      if (scenarioId === "exertional_syncope_hcm") return `${base}, LVH with repolarization changes`;
+      if (spo2 < 90) return `${base}, hypoxia`;
+      return base;
+    }
+
+    // Sinus bradycardia (age-dependent threshold)
+    if (hr < thresholds.bradyThreshold) {
+      if (hr < thresholds.bradyThreshold - 30) {
+        return `Severe sinus bradycardia ${hr} bpm - consider junctional escape`;
+      }
+      return `Sinus bradycardia ${hr} bpm`;
+    }
+
+    // Normal sinus rhythm (within age-appropriate range)
+    let nsr = `Normal sinus rhythm ${hr} bpm`;
+
+    // Add scenario-specific baseline findings
+    if (scenarioId === "syncope") return `${nsr}, normal intervals, no preexcitation`;
+    if (scenarioId === "exertional_chest_pain") return `${nsr}, nonspecific ST-T changes`;
+    if (scenarioId === "palpitations_svt") return `${nsr}, no delta wave, normal PR`;
+    if (scenarioId === "myocarditis") return `${nsr}, low voltage, diffuse ST-T abnormalities`;
+    if (scenarioId === "exertional_syncope_hcm") return `${nsr}, LVH voltage, deep Q waves V5-V6`;
+    if (scenarioId === "arrhythmogenic_syncope") return `${nsr}, occasional PACs (conducted)`;
+    if (scenarioId === "ductal_shock" || scenarioId === "coarctation_shock") return `${nsr}, RVH pattern`;
+    if (scenarioId === "cyanotic_spell") return `${nsr}, RVH, right axis deviation`;
+    if (scenarioId === "kawasaki") return `${nsr}, no ischemic changes`;
+
+    return nsr;
   }
 
   setStage(stageId: string): boolean {

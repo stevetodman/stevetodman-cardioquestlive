@@ -91,7 +91,8 @@ export type VoiceCommandType =
   | "exam"
   | "toggle_telemetry"
   | "show_ekg"
-  | "treatment";
+  | "treatment"
+  | "scenario_event";
 
 export interface VoiceCommandDoc {
   type: VoiceCommandType;

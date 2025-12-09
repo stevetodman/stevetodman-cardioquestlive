@@ -43,6 +43,7 @@ const voiceCommandSchema = z.object({
     "toggle_telemetry",
     "show_ekg",
     "treatment",
+    "scenario_event",
   ]),
   payload: z.record(z.any()).optional(),
 });
