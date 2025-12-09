@@ -97,7 +97,11 @@ export default function CreateDemoSession() {
         </div>
 
         {error && (
-          <p className="text-sm text-rose-400 bg-rose-950/30 p-3 rounded border border-rose-900">
+          <p
+            className="text-sm text-rose-400 bg-rose-950/30 p-3 rounded border border-rose-900"
+            role="status"
+            aria-live="polite"
+          >
             Error: {error}
           </p>
         )}

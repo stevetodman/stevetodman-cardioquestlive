@@ -324,7 +324,11 @@ export default function AdminDeckEditor() {
           <p className="text-slate-400 text-sm text-center">
             Enter the admin access code to modify the CardioQuest Live deck.
           </p>
+          <label htmlFor="admin-access-code" className="text-xs uppercase text-slate-500 font-semibold">
+            Access code
+          </label>
           <input
+            id="admin-access-code"
             type="password"
             value={codeInput}
             onChange={(event) => setCodeInput(event.target.value)}
@@ -340,11 +344,16 @@ export default function AdminDeckEditor() {
                 setStatus("Incorrect access code");
               }
             }}
-            className="w-full rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2 transition-colors"
+            className="w-full rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+            disabled={!codeInput.trim()}
           >
             Unlock Editor
           </button>
-          {status && <p className="text-sm text-rose-400 text-center">{status}</p>}
+          {status && (
+            <p className="text-sm text-rose-400 text-center" role="status" aria-live="polite">
+              {status}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -454,7 +463,7 @@ export default function AdminDeckEditor() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 text-sm font-semibold disabled:opacity-60"
+              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 text-sm font-semibold disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {saving ? "Saving..." : "Save Deck"}
             </button>
@@ -462,7 +471,11 @@ export default function AdminDeckEditor() {
         </header>
 
         {status && (
-          <div className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-200">
+          <div
+            className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-200"
+            role="status"
+            aria-live="polite"
+          >
             {status}
           </div>
         )}
@@ -548,7 +561,11 @@ export default function AdminDeckEditor() {
                 {selectedSlide ? (
                   <SlidePreview html={selectedSlide.html} />
                 ) : (
-                  <div className="text-sm text-slate-500 text-center py-12">
+                  <div
+                    className="text-sm text-slate-500 text-center py-12"
+                    role="status"
+                    aria-live="polite"
+                  >
                     Select a slide to preview.
                   </div>
                 )}
@@ -561,10 +578,11 @@ export default function AdminDeckEditor() {
                 <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900 p-4">
                   <div className="flex flex-wrap gap-3 text-sm">
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs uppercase text-slate-500">
+                      <label className="text-xs uppercase text-slate-500" htmlFor="slide-type">
                         Type
                       </label>
                       <select
+                        id="slide-type"
                         value={selectedSlide.type}
                         onChange={(event) =>
                           updateSlide(
@@ -580,10 +598,11 @@ export default function AdminDeckEditor() {
                       </select>
                     </div>
                     <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
-                      <label className="text-xs uppercase text-slate-500">
+                      <label className="text-xs uppercase text-slate-500" htmlFor="slide-question-id">
                         Question ID
                       </label>
                       <select
+                        id="slide-question-id"
                         value={selectedSlide.questionId ?? ""}
                         onChange={(event) =>
                           updateSlide(
@@ -593,7 +612,7 @@ export default function AdminDeckEditor() {
                           )
                         }
                         disabled={selectedSlide.type !== "question"}
-                        className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm disabled:opacity-50"
+                        className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm disabled:opacity-70 disabled:cursor-not-allowed"
                       >
                         <option value="">Select question</option>
                         {deck.questions.map((question) => (
@@ -750,10 +769,11 @@ export default function AdminDeckEditor() {
             {selectedQuestion ? (
               <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900 p-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs uppercase text-slate-500">
+                  <label className="text-xs uppercase text-slate-500" htmlFor="question-id-input">
                     Question ID
                   </label>
                   <input
+                    id="question-id-input"
                     value={selectedQuestion.id}
                     onChange={(event) =>
                       updateQuestion(selectedQuestion.id, (q) => ({
@@ -765,29 +785,31 @@ export default function AdminDeckEditor() {
                   />
                 </div>
 
-                <label className="text-xs uppercase text-slate-500">
+                <label className="text-xs uppercase text-slate-500" htmlFor="question-stem">
                   Question Stem
-                  <textarea
-                    value={selectedQuestion.stem}
-                    onChange={(event) =>
-                      updateQuestion(selectedQuestion.id, (q) => ({
-                        ...q,
-                        stem: event.target.value,
-                      }))
-                    }
-                    rows={4}
-                    className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm"
-                  />
                 </label>
+                <textarea
+                  id="question-stem"
+                  value={selectedQuestion.stem}
+                  onChange={(event) =>
+                    updateQuestion(selectedQuestion.id, (q) => ({
+                      ...q,
+                      stem: event.target.value,
+                    }))
+                  }
+                  rows={4}
+                  className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm"
+                />
 
-                <div className="space-y-2">
-                  <p className="text-xs uppercase text-slate-500">Options</p>
+                <fieldset className="space-y-2">
+                  <legend className="text-xs uppercase text-slate-500">Options</legend>
                   {selectedQuestion.options.map((option, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <input
                         type="radio"
                         name="correctOption"
                         checked={selectedQuestion.correctIndex === idx}
+                        aria-label={`Mark option ${idx + 1} as correct`}
                         onChange={() =>
                           updateQuestion(selectedQuestion.id, (q) => ({
                             ...q,
@@ -797,6 +819,7 @@ export default function AdminDeckEditor() {
                       />
                       <input
                         value={option}
+                        aria-label={`Option ${idx + 1} text`}
                         onChange={(event) =>
                           updateQuestion(selectedQuestion.id, (q) => {
                             const options = [...q.options];
@@ -808,22 +831,23 @@ export default function AdminDeckEditor() {
                       />
                     </div>
                   ))}
-                </div>
+                </fieldset>
 
-                <label className="text-xs uppercase text-slate-500">
+                <label className="text-xs uppercase text-slate-500" htmlFor="question-explanation">
                   Explanation
-                  <textarea
-                    value={selectedQuestion.explanation ?? ""}
-                    onChange={(event) =>
-                      updateQuestion(selectedQuestion.id, (q) => ({
-                        ...q,
-                        explanation: event.target.value,
-                      }))
-                    }
-                    rows={3}
-                    className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm"
-                  />
                 </label>
+                <textarea
+                  id="question-explanation"
+                  value={selectedQuestion.explanation ?? ""}
+                  onChange={(event) =>
+                    updateQuestion(selectedQuestion.id, (q) => ({
+                      ...q,
+                      explanation: event.target.value,
+                    }))
+                  }
+                  rows={3}
+                  className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm"
+                />
               </div>
             ) : (
               <p className="text-slate-400 text-sm">

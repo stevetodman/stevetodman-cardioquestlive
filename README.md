@@ -36,6 +36,11 @@ Interactive pediatric cardiology teaching with presenter + student modes, Gemini
   - Optional TTS audio plays on the presenter side when OpenAI TTS is configured in `voice-gateway/.env`.
   - Push-to-talk resident questions are transcribed via OpenAI STT to auto-fill the doctor question box; optional auto Force Reply toggle.
   - Presenter can switch between predefined patient cases (exertional chest pain, syncope, SVT).
+- **Virtual patient voice (student) — simplified**
+  - Single hold-to-speak button auto-takes/releases the floor; no manual take/release buttons.
+  - Unified status badge (ready / active / waiting / unavailable) with clear recovery hints.
+  - Auto-release after 2s when you stop pressing (and after 60s idle safety).
+  - Advanced options hidden by default; defaults to asking the patient.
 
 ## Data & Architecture (brief)
 

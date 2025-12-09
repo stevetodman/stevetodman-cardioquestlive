@@ -41,24 +41,29 @@ function Home() {
 
               <div className="space-y-4">
                  <form onSubmit={handleJoin} className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Student Join</label>
+                    <label htmlFor="join-code" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Student Join</label>
                     <div className="flex gap-2">
                         <input 
+                            id="join-code"
                             type="text" 
                             value={joinCode}
                             onChange={(e) => setJoinCode(e.target.value)}
                             placeholder="CODE"
+                            aria-describedby="join-code-help"
                             className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-center font-mono text-lg tracking-widest uppercase focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all placeholder:text-slate-700"
                             maxLength={4}
                         />
                         <button 
                             type="submit"
                             disabled={!joinCode}
-                            className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-semibold px-6 rounded-lg transition-colors"
+                            className="bg-slate-800 hover:bg-slate-700 disabled:opacity-70 disabled:cursor-not-allowed text-white font-semibold px-6 rounded-lg transition-colors"
                         >
                             Join
                         </button>
                     </div>
+                    <p id="join-code-help" className="text-[11px] text-slate-500">
+                      Enter the 4-character code from the presenter (letters or numbers).
+                    </p>
                  </form>
 
                  <div className="relative py-2">

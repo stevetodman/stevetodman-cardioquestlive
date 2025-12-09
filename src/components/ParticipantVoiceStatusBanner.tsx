@@ -76,7 +76,12 @@ export function ParticipantVoiceStatusBanner({
   }
 
   return (
-    <div className={`rounded-xl border px-3 py-2 text-sm flex items-start justify-between gap-3 ${toneClasses(tone)}`}>
+    <div
+      className={`rounded-xl border px-3 py-2 text-sm flex items-start justify-between gap-3 ${toneClasses(tone)}`}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <div>
         <div className="text-[12px] uppercase tracking-[0.12em] font-semibold">{title}</div>
         <div className="text-[12px] text-slate-200/90">{body}</div>

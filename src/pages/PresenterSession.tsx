@@ -124,7 +124,8 @@ export default function PresenterSession() {
   const [showTeamScores, setShowTeamScores] = useState(true);
   const [showIndividualScores, setShowIndividualScores] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
-  const [participantCount, setParticipantCount] = useState<number>(0);
+const [participantCount, setParticipantCount] = useState<number>(0);
+const [voiceGuideOpen, setVoiceGuideOpen] = useState<boolean>(false);
   const [overallAccuracy, setOverallAccuracy] = useState<number>(0);
   const [questionsAnsweredCount, setQuestionsAnsweredCount] = useState<number>(0);
   const [totalResponses, setTotalResponses] = useState<number>(0);
@@ -168,8 +169,8 @@ const [isAnalyzing, setIsAnalyzing] = useState(false);
 const [debriefResult, setDebriefResult] = useState<AnalysisResult | null>(null);
 const [timelineCopyStatus, setTimelineCopyStatus] = useState<"idle" | "copied" | "error">("idle");
 const [timelineFilter, setTimelineFilter] = useState<string>("all");
-  const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 const [timelineSearch, setTimelineSearch] = useState<string>("");
 const [timelineExtras, setTimelineExtras] = useState<{ id: string; ts: number; label: string; detail: string }[]>([]);
 const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exported" | "error">("idle");
@@ -828,6 +829,19 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
       if (snap.exists()) {
         setSession({ ...(snap.data() as SessionData), id: snap.id });
       }
+    });
+    return () => unsub();
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const ref = collection(db, "sessions", sessionId, "participants");
+    const unsub = onSnapshot(ref as any, (snap: any) => {
+      if (!snap) return;
+      const docsArray = (typeof snap.forEach === "function" && !Array.isArray(snap))
+        ? (() => { const arr: any[] = []; snap.forEach((d: any) => arr.push(d)); return arr; })()
+        : snap.docs ?? [];
+      setParticipantCount(docsArray.length ?? 0);
     });
     return () => unsub();
   }, [sessionId]);
@@ -1836,76 +1850,86 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
               </button>
             </div>
           )}
-          <div className="text-[10px] text-slate-400 font-mono bg-slate-900/80 border border-slate-700 rounded px-2 py-1">
-            Join: {session.joinCode}
-          </div>
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-200">
-            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
-              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Case</span>
-              <span className="px-2 py-0.5 rounded-full border border-slate-700 text-slate-100 text-xs">
-                {snapshot?.chiefComplaint ?? selectedScenario}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
-              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Voice</span>
-              <span
-                className={`px-2 py-0.5 rounded-full border text-xs ${
-                  freezeStatus === "frozen"
-                    ? "border-amber-500/60 text-amber-100"
-                    : voiceLocked
-                    ? "border-rose-500/60 text-rose-100"
-                    : "border-emerald-500/60 text-emerald-100"
-                }`}
+            <div className="flex flex-col gap-2">
+              <div className="text-[10px] text-slate-400 font-mono bg-slate-900/80 border border-slate-700 rounded px-2 py-1">
+                Join: {session.joinCode}
+              </div>
+              <div className="text-[10px] text-slate-400">Participants: {participantCount}</div>
+              <button
+                type="button"
+                onClick={() => setVoiceGuideOpen((v) => !v)}
+                className="text-[10px] text-sky-300 underline"
               >
-                {voiceLocked ? "Locked" : freezeStatus === "frozen" ? "Paused" : "Live"}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
-              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Score</span>
-              <span
-                className={`px-2 py-0.5 rounded-full border text-xs ${
-                  scoringSummary.score >= 85
-                    ? "border-emerald-500/60 text-emerald-100"
-                    : scoringSummary.score >= 70
-                    ? "border-amber-500/60 text-amber-100"
-                    : "border-rose-500/60 text-rose-100"
-                }`}
-                title={`Score: ${scoringSummary.score} | ${scoringSummary.items.join("; ")}`}
-              >
-                {scoringSummary.score}
-                {scoringTrend.delta !== 0 && (
-                  <span className={scoringTrend.delta > 0 ? "text-emerald-300 ml-1" : "text-rose-300 ml-1"}>
-                    {scoringTrend.delta > 0 ? "▴" : "▾"} {Math.abs(scoringTrend.delta)}
-                  </span>
+                {voiceGuideOpen ? "Hide voice guide" : "Show voice guide"}
+              </button>
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-200">
+              <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
+                <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Case</span>
+                <span className="px-2 py-0.5 rounded-full border border-slate-700 text-slate-100 text-xs">
+                  {snapshot?.chiefComplaint ?? selectedScenario}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
+                <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Voice</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full border text-xs ${
+                    freezeStatus === "frozen"
+                      ? "border-amber-500/60 text-amber-100"
+                      : voiceLocked
+                      ? "border-rose-500/60 text-rose-100"
+                      : "border-emerald-500/60 text-emerald-100"
+                  }`}
+                >
+                  {voiceLocked ? "Locked" : freezeStatus === "frozen" ? "Paused" : "Live"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
+                <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Queue</span>
+                <span className="px-2 py-0.5 rounded-full border border-slate-700 text-slate-100 text-xs">
+                  {participantCount}
+                </span>
+                {participantCount > 1 && voice.floorHolderId && (
+                  <span className="text-[10px] text-slate-500">Waiting: {Math.max(0, participantCount - 1)}</span>
                 )}
-              </span>
+              </div>
             </div>
-          <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
-            <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Budget</span>
-            <span className="font-mono text-xs text-slate-200">
-              ${simState?.budget?.usdEstimate?.toFixed(2) ?? "0.00"} · {simState?.budget?.voiceSeconds ? `${Math.round(simState.budget.voiceSeconds)}s` : "0s"}
-            </span>
-            {budgetAlert && (
-              <span
-                className={`px-2 py-0.5 rounded-full border text-[10px] ${
-                  budgetAlert.level === "hard"
-                    ? "border-red-600 text-red-200 bg-red-900/50"
-                    : "border-amber-500 text-amber-100 bg-amber-900/40"
-                }`}
-              >
-                ! {budgetAlert.message}
+              {voiceGuideOpen && (
+                <div className="mt-2 bg-slate-900/70 border border-slate-800 rounded-lg p-3 text-[11px] text-slate-300 space-y-1">
+                  <div className="text-slate-200 font-semibold">Voice guide</div>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Check status: Voice {gatewayStatus.state}. If disconnected, tap Retry in banner.</li>
+                    <li>Manage floor: Take/Release or Lock floor to control resident speaking.</li>
+                    <li>Queue: if residents waiting, keep turns brief; floor auto-releases after 60s idle.</li>
+                    <li>Fallback: switch to text Q&amp;A; resume voice when budget allows.</li>
+                    <li>Mic issues: ask resident to re-check mic; if blocked, have them allow permissions.</li>
+                  </ol>
+                </div>
+              )}
+              <div className="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1.5">
+              <span className="uppercase tracking-[0.14em] text-slate-500 font-semibold">Budget</span>
+              <span className="font-mono text-xs text-slate-200">
+                ${simState?.budget?.usdEstimate?.toFixed(2) ?? "0.00"} · {simState?.budget?.voiceSeconds ? `${Math.round(simState.budget.voiceSeconds)}s` : "0s"}
               </span>
-            )}
-            {alarmNotice && (
-              <span className="px-2 py-0.5 rounded-full border text-[10px] border-red-600 text-red-200 bg-red-900/40">
-                ! {alarmNotice.replace("ALARM: ", "")}
-              </span>
-            )}
+              {budgetAlert && (
+                <span
+                  className={`px-2 py-0.5 rounded-full border text-[10px] ${
+                    budgetAlert.level === "hard"
+                      ? "border-red-600 text-red-200 bg-red-900/50"
+                      : "border-amber-500 text-amber-100 bg-amber-900/40"
+                  }`}
+                >
+                  ! {budgetAlert.message}
+                </span>
+              )}
+              {alarmNotice && (
+                <span className="px-2 py-0.5 rounded-full border text-[10px] border-red-600 text-red-200 bg-red-900/40">
+                  ! {alarmNotice.replace("ALARM: ", "")}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
-      </div>
-
       <div className="flex-1 flex flex-col items-center px-4 md:px-6 pb-2 gap-2">
         <div className="w-full max-w-[1800px] grid grid-cols-1 xl:grid-cols-[1.7fr_1fr] gap-3 items-start">
           <div className="flex flex-col gap-3">
@@ -2081,7 +2105,9 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="text-sm font-semibold text-slate-200">Timeline</div>
                   <div className="flex items-center gap-2">
+                    <label htmlFor="timeline-filter" className="sr-only">Timeline filter</label>
                     <select
+                      id="timeline-filter"
                       value={timelineFilter}
                       onChange={(e) => setTimelineFilter(e.target.value)}
                       className="bg-slate-900 border border-slate-700 text-[10px] text-slate-200 rounded px-2 py-1"
@@ -2097,7 +2123,9 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
                       <option value="LABS">Labs</option>
                       <option value="IMAGING">Imaging</option>
                     </select>
+                    <label htmlFor="timeline-search" className="sr-only">Search timeline</label>
                     <input
+                      id="timeline-search"
                       value={timelineSearch}
                       onChange={(e) => setTimelineSearch(e.target.value)}
                       placeholder="Search"
@@ -2241,8 +2269,11 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
                   </div>
                 </div>
                 <div className="flex flex-col gap-1 text-[10px] text-slate-200">
-                  <label className="text-slate-400">Log assessment response</label>
+                  <label className="text-slate-400" htmlFor="assessment-response">
+                    Log assessment response
+                  </label>
                   <textarea
+                    id="assessment-response"
                     value={assessmentResponse}
                     onChange={(e) => setAssessmentResponse(e.target.value)}
                     placeholder="Document differential, plan, next steps…"
@@ -2345,14 +2376,16 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
                   >
                     {exportStatus === "exporting" ? "Exporting…" : "Export session"}
                   </button>
-                  {timelineCopyStatus === "copied" && <span className="text-[10px] text-emerald-300">Copied</span>}
-                  {timelineCopyStatus === "error" && <span className="text-[10px] text-rose-300">Copy failed</span>}
-                  {timelineSaveStatus === "saved" && <span className="text-[10px] text-emerald-300">Saved</span>}
-                  {timelineSaveStatus === "error" && <span className="text-[10px] text-rose-300">Save failed</span>}
-                  {transcriptSaveStatus === "saved" && <span className="text-[10px] text-emerald-300">Transcript saved</span>}
-                  {transcriptSaveStatus === "error" && <span className="text-[10px] text-rose-300">Transcript save failed</span>}
-                  {exportStatus === "exported" && <span className="text-[10px] text-emerald-300">Exported</span>}
-                  {exportStatus === "error" && <span className="text-[10px] text-rose-300">Export failed</span>}
+                  <div role="status" aria-live="polite" className="flex flex-wrap gap-1 items-center">
+                    {timelineCopyStatus === "copied" && <span className="text-[10px] text-emerald-300">Copied</span>}
+                    {timelineCopyStatus === "error" && <span className="text-[10px] text-rose-300">Copy failed</span>}
+                    {timelineSaveStatus === "saved" && <span className="text-[10px] text-emerald-300">Saved</span>}
+                    {timelineSaveStatus === "error" && <span className="text-[10px] text-rose-300">Save failed</span>}
+                    {transcriptSaveStatus === "saved" && <span className="text-[10px] text-emerald-300">Transcript saved</span>}
+                    {transcriptSaveStatus === "error" && <span className="text-[10px] text-rose-300">Transcript save failed</span>}
+                    {exportStatus === "exported" && <span className="text-[10px] text-emerald-300">Exported</span>}
+                    {exportStatus === "error" && <span className="text-[10px] text-rose-300">Export failed</span>}
+                  </div>
                 </div>
               </div>
               {(filteredTimeline.length === 0) ? (
@@ -2443,8 +2476,11 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
                   Reveal clue
                 </button>
                 <div className="flex items-center gap-1 text-xs text-slate-300">
-                  Stage:
+                  <label htmlFor="stage-select" className="text-xs text-slate-300">
+                    Stage:
+                  </label>
                   <select
+                    id="stage-select"
                     value={selectedStage}
                     onChange={(e) => setSelectedStage(e.target.value)}
                     className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100"
@@ -2458,7 +2494,7 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
                   <button
                     type="button"
                     onClick={handleSkipStage}
-                    className="px-2 py-1 rounded-md text-xs font-semibold bg-slate-700 text-slate-50 hover:bg-slate-600"
+                    className="px-2 py-1 rounded-md text-xs font-semibold bg-slate-700 text-slate-50 hover:bg-slate-600 disabled:opacity-70 disabled:cursor-not-allowed"
                     disabled={!selectedStage}
                   >
                     Skip
@@ -2470,7 +2506,11 @@ const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
               </div>
             </div>
             {fallbackActive && (
-              <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-amber-50">
+              <div
+                className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-amber-50"
+                role="status"
+                aria-live="polite"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold">Voice paused to protect budget</div>

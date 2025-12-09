@@ -102,10 +102,11 @@ export function PresenterVoiceControls({
         <div className="text-[10px] text-slate-500">Force reply uses typed question</div>
       </div>
       <div className="flex items-center gap-2 text-[11px] text-slate-300">
-        <label className="uppercase tracking-[0.12em] text-slate-500 font-semibold">
+        <label htmlFor="presenter-scenario" className="uppercase tracking-[0.12em] text-slate-500 font-semibold">
           Patient case
         </label>
         <select
+          id="presenter-scenario"
           value={scenarioId}
           onChange={(e) => onScenarioChange(e.target.value as PatientScenarioId)}
           className="text-sm bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-slate-100"
@@ -118,10 +119,11 @@ export function PresenterVoiceControls({
         </select>
       </div>
       <div className="flex items-center gap-2 text-[11px] text-slate-300">
-        <label className="uppercase tracking-[0.12em] text-slate-500 font-semibold">
+        <label htmlFor="presenter-target-role" className="uppercase tracking-[0.12em] text-slate-500 font-semibold">
           Target role
         </label>
         <select
+          id="presenter-target-role"
           value={character}
           onChange={(e) => onCharacterChange(e.target.value as CharacterId)}
           className="text-sm bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-slate-100"
@@ -163,10 +165,11 @@ export function PresenterVoiceControls({
         </button>
       </div>
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] uppercase tracking-[0.12em] text-slate-500 font-semibold">
+        <label htmlFor="presenter-doctor-question" className="text-[11px] uppercase tracking-[0.12em] text-slate-500 font-semibold">
           Doctor/Resident question
         </label>
         <textarea
+          id="presenter-doctor-question"
           value={localQuestion}
           onChange={handleQuestionChange}
           rows={2}
