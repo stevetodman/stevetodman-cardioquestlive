@@ -15,10 +15,19 @@ export default function CreateDemoSession() {
   const [showQr, setShowQr] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const getSearchParams = () => {
+    const hash = typeof window !== "undefined" ? window.location.hash : "";
+    const hashQueryIndex = hash.indexOf("?");
+    if (hashQueryIndex !== -1) {
+      return new URLSearchParams(hash.substring(hashQueryIndex));
+    }
+    return new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  };
+
   // Test hook: allow Playwright/local environments to preload a mock session via localStorage or query param.
   useEffect(() => {
     const stored = localStorage.getItem("cq_mock_session");
-    const params = new URLSearchParams(window.location.search);
+    const params = getSearchParams();
     const qpMock = params.get("mockSession");
 
     const loadMock = (joinCode: string, id?: string) => {

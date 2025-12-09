@@ -10,6 +10,10 @@ Use this to choose the smallest reliable test set for your change. Prefer the sm
 - **Voice gateway (transport/orchestration/domain)**
   - `npm run test:gateway`
   - Optionally sanity-check: `npm run sim:harness` (ScenarioEngine/ToolGate) and `GW_URL=ws://localhost:8081/ws/voice npm run ws:harness` against a running gateway.
+- **E2E Playwright (mocked sessions, no Firestore)**
+  - Start dev server: `npm run dev -- --host 127.0.0.1 --port 5173 --strictPort --clearScreen false`
+  - Run: `PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 PLAYWRIGHT_USE_CHROMIUM=true npx playwright test`
+  - Suite uses mock hooks (`?mockSession`, `mockVoice`, `mockNotFound`) and hash router query params.
 - **Firestore rules**
   - `npm run test:rules`
   - If emulator ports clash: `FIRESTORE_PORT=62088 FIRESTORE_WS_PORT=62188 FIREBASE_HUB_PORT=62402 FIREBASE_LOGGING_PORT=62502 npm run test:rules:ports`

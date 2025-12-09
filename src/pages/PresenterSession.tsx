@@ -121,7 +121,12 @@ export default function PresenterSession() {
   const { sessionId } = useParams();
   // Test hook: allow Playwright/local to supply a mock session without Firestore.
   const mockSessionParam = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
+    const hash = typeof window !== "undefined" ? window.location.hash : "";
+    const hashQueryIndex = hash.indexOf("?");
+    const params =
+      hashQueryIndex !== -1
+        ? new URLSearchParams(hash.substring(hashQueryIndex))
+        : new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
     return params.get("mockSession");
   }, []);
 
@@ -143,20 +148,22 @@ export default function PresenterSession() {
       id: idSource,
       joinCode: joinCodeSource.toUpperCase(),
       title: "Mock Session",
+      createdAt: new Date().toISOString(),
       currentSlideIndex: 0,
       slides: [
         {
           id: "mock-slide-1",
-          title: "Mock Slide",
-          body: "<p>Mock content</p>",
-          type: "info",
+          index: 0,
+          type: "question",
+          questionId: "mock-q1",
+          html: "<p>Mock question</p>",
         },
       ],
       questions: [
         {
           id: "mock-q1",
           stem: "Mock question?",
-          choices: ["A", "B", "C", "D"],
+          options: ["A) Mock A", "B) Mock B", "C) Mock C", "D) Mock D"],
           correctIndex: 2,
         },
       ],
@@ -164,7 +171,7 @@ export default function PresenterSession() {
       showResults: false,
       isQuestionSlide: true,
     };
-  }, [mockSessionParam]);
+  }, [mockSessionParam, mockSessionStored]);
   const [session, setSession] = useState<SessionData | null>(null);
   const [mockQuestionOpen, setMockQuestionOpen] = useState(false);
   const [mockShowResults, setMockShowResults] = useState(false);
@@ -944,7 +951,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
       }
     });
     return () => unsub();
-  }, [sessionId]);
+  }, [sessionId, mockSessionData]);
 
   useEffect(() => {
     if (!sessionId) return;

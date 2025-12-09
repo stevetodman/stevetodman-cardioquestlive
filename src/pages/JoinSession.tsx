@@ -25,7 +25,6 @@ import { VoiceConnectionStatus, CharacterId } from "../types/voiceGateway";
 import { MicStatus } from "../services/VoicePatientService";
 import { ParticipantVoiceStatusBanner } from "../components/ParticipantVoiceStatusBanner";
 import { sendVoiceCommand } from "../services/voiceCommands";
-import { VoiceStatusBadge } from "../components/VoiceStatusBadge";
 import { useSimplifiedVoiceState } from "../hooks/useSimplifiedVoiceState";
 import { CollapsibleVoicePanel } from "../components/CollapsibleVoicePanel";
 import { FloatingMicButton } from "../components/FloatingMicButton";
@@ -77,6 +76,15 @@ function getStreakMultiplier(currentStreak: number) {
 
 export default function JoinSession() {
   const { joinCode } = useParams();
+  const getSearchParams = () => {
+    // Hash router keeps query params after the # segment.
+    const hash = typeof window !== "undefined" ? window.location.hash : "";
+    const hashQueryIndex = hash.indexOf("?");
+    if (hashQueryIndex !== -1) {
+      return new URLSearchParams(hash.substring(hashQueryIndex));
+    }
+    return new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  };
   const [findAttempt, setFindAttempt] = useState(0);
   const [session, setSession] = useState<SessionData | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -154,7 +162,7 @@ export default function JoinSession() {
       setIsVoiceExpanded(!mq.matches); // default collapsed on mobile
     }
     // Test hook for mock voice state
-    const params = new URLSearchParams(window.location.search);
+    const params = getSearchParams();
     const mockVoiceParam = params.get("mockVoice");
     if (mockVoiceParam) {
       setMockVoice(mockVoiceParam);
@@ -231,8 +239,17 @@ export default function JoinSession() {
 
   // Find session by joinCode once
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const mockSession = params.get("mockSession") || localStorage.getItem("cq_mock_session");
+    const params = getSearchParams();
+    const storedMockRaw = localStorage.getItem("cq_mock_session");
+    let storedMock: { joinCode?: string; sessionId?: string } | null = null;
+    if (storedMockRaw) {
+      try {
+        storedMock = JSON.parse(storedMockRaw);
+      } catch {
+        // ignore malformed stored mock
+      }
+    }
+    const mockSession = params.get("mockSession") || storedMock?.joinCode || storedMockRaw;
     const mockNotFoundFlag = params.get("mockNotFound");
     const mockVoiceParam = params.get("mockVoice");
     if (mockNotFoundFlag) {
@@ -243,19 +260,29 @@ export default function JoinSession() {
     }
     if (mockSession) {
       const code = mockSession.toUpperCase();
+      const mockQuestion: Question = {
+        id: "mock-q1",
+        stem: "Mock question?",
+        options: ["A) Mock A", "B) Mock B", "C) Mock C", "D) Mock D"],
+        correctIndex: 2,
+        difficulty: "easy",
+      };
+      const mockSlides: any[] = [
+        { id: "mock-slide-1", index: 0, type: "question", questionId: mockQuestion.id, html: "" },
+      ];
       const mock: SessionData = {
-        id: "MOCK",
+        id: storedMock?.sessionId ?? "MOCK",
         title: "Mock Session",
         joinCode: code,
         createdAt: new Date().toISOString(),
         currentSlideIndex: 0,
-        currentQuestionId: "mock-q1",
+        currentQuestionId: mockQuestion.id,
         showResults: false,
-        slides: [{ id: "mock-slide-1", index: 0, type: "content", html: "<div>Mock slide</div>" as any }],
-        questions: [{ id: "mock-q1", stem: "Mock question?", choices: ["A", "B", "C", "D"], correctIndex: 2 }],
+        slides: mockSlides as any,
+        questions: [mockQuestion as any],
       };
       setSession(mock);
-      setSessionId("MOCK");
+      setSessionId(storedMock?.sessionId ?? "MOCK");
       setLoading(false);
       if (mockVoiceParam) {
         setMockVoice(mockVoiceParam);
@@ -507,7 +534,7 @@ export default function JoinSession() {
       </div>
     </div>
   );
-  const voicePanel = voice.enabled ? (
+  const voicePanel = (voice.enabled && mockVoice !== "unavailable") ? (
     <CollapsibleVoicePanel
       isExpanded={isVoiceExpanded}
       onToggle={() => {
@@ -925,7 +952,10 @@ export default function JoinSession() {
         </div>
         <h2 className="text-xl font-bold">Session Not Found</h2>
         <p className="text-slate-400 text-center max-w-xs">
-            We couldn't find a session with code <span className="font-mono text-sky-400 bg-sky-950/30 px-2 py-1 rounded mx-1">{joinCode.toUpperCase()}</span>.
+            We couldn't find a session with code{" "}
+            <span className="font-mono text-sky-400 bg-sky-950/30 px-2 py-1 rounded mx-1">
+              {(joinCode || "????").toUpperCase?.() ?? "????"}
+            </span>.
         </p>
         <p className="text-slate-500 text-sm text-center max-w-xs">
           The session may have ended or the code might be incorrect.
@@ -1222,6 +1252,7 @@ export default function JoinSession() {
                     return (
                     <button
                         key={i}
+                        data-testid={`answer-option-${i}`}
                         disabled={submitting || (!isQuestionActive && !session.showResults)}
                         onClick={() => handleChoice(i)}
                         className={`w-full text-left rounded-xl border px-4 py-3 text-base sm:text-lg transition-all duration-200 relative overflow-hidden group whitespace-normal break-words leading-tight shadow-sm

@@ -8,7 +8,7 @@ test.describe("Mobile layout", () => {
   test("question card visible on mobile with mock session", async ({ page }) => {
     await page.goto("/#/join/MOBL?mockSession=MOBL&mockVoice=ready");
 
-    await expect(page.getByText(/Mock Session/i)).toBeVisible({ timeout: 3000 });
-    await expect(page.getByText(/Mock question/i)).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText(/mock question/i)).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText(/MOBL/i)).toBeVisible({ timeout: 3000 });
   });
 });

@@ -27,6 +27,7 @@ npm install
 npm run dev:stack:local   # emulators + voice gateway + web on 127.0.0.1:5173
 # Then create a session at http://127.0.0.1:5173/#/create-demo and join with the code shown.
 # Allow microphone for 127.0.0.1 in your browser for voice; tap "Re-check mic" if blocked.
+# For mock-only (no Firestore), open http://127.0.0.1:5173/#/create-demo?mockSession=MOCK (hash query params are honored across create/presenter/join).
 ```
 
 Key routes: Presenter `/#/create-demo` → `/#/presenter/:sessionId`; Student `/#/join/CODE`; Admin `/#/admin`.

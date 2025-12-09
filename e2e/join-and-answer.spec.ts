@@ -1,46 +1,35 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Presenter creates session and participant answers", () => {
-  test("end-to-end happy path", async ({ browser }) => {
+  test("end-to-end happy path (mocked)", async ({ browser }) => {
+    // Use the mocked create-demo route so we don't hit real Firestore.
     const presenter = await browser.newPage();
     await presenter.goto("/#/create-demo?mockSession=MOCK");
 
-    // Create a session.
-    await presenter.getByRole("button", { name: /create new session/i }).click();
-
+    // Join code should be available immediately from the mock.
     const joinCodeBadge = presenter.locator('[data-testid="join-code"]');
-    if (!(await joinCodeBadge.count())) {
-      test.skip(true, "Join code not rendered; session creation likely needs backend");
-    }
-    await expect(joinCodeBadge).toBeVisible({ timeout: 10000 });
-
+    await expect(joinCodeBadge).toBeVisible({ timeout: 5000 });
     const codeText = await joinCodeBadge.innerText();
     const codeMatch = codeText.match(/([A-Z0-9]{4})/i);
-    const joinCode = codeMatch ? codeMatch[1] : null;
-    if (!joinCode) {
-      test.skip(true, "Could not extract join code");
-    }
+    const joinCode = codeMatch ? codeMatch[1] : "MOCK";
 
-    // Navigate presenter view (opens in same tab).
+    // Launch presenter view for the mock session.
     const presenterLink = presenter.getByRole("link", { name: /launch presenter view/i });
     if (await presenterLink.count()) {
       await presenterLink.click();
       await expect(presenter).toHaveURL(/#\/presenter\//i);
     }
 
-    // Participant joins and answers.
+    // Participant joins and answers a question.
     const participant = await browser.newPage();
-    await participant.goto(`/#/join/${joinCode}`);
+    await participant.goto(`/#/join/${joinCode}?mockSession=MOCK`);
 
-    const option = participant.getByRole("button", { name: /A\)|B\)|C\)|D\)/i }).first();
+    const option = participant.getByTestId("answer-option-0");
     await option.click();
     await expect(option).toHaveClass(/selected|bg/i, { timeout: 1000 });
 
-    // Verify presenter sees some response indicator.
+    // Presenter sees responses header in mock view.
     const responsesIndicator = presenter.getByText(/responses/i).first();
-    if (!(await responsesIndicator.count())) {
-      test.skip(true, "Presenter responses UI not available in this environment");
-    }
     await expect(responsesIndicator).toBeVisible({ timeout: 5000 });
 
     await participant.close();

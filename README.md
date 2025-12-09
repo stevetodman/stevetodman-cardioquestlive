@@ -134,6 +134,9 @@ Mic access: allow microphone for `127.0.0.1` in your browser, then tap **Re-chec
 ## Testing
 
 - Unit/UI/rules tests: `npm test -- --runInBand`
+- E2E (Playwright, mock sessions): start dev server `npm run dev -- --host 127.0.0.1 --port 5173 --strictPort --clearScreen false`, then in another shell run  
+  `PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 PLAYWRIGHT_USE_CHROMIUM=true npx playwright test`  
+  If browsers are missing, install them with `npx playwright install --with-deps chromium webkit`.
 - To run rules tests against the emulator, you can wrap with:
 
 ```bash
@@ -153,6 +156,10 @@ Emulator ports are set in `firebase.json` (Firestore 8088/9188). The test suite 
 - Slides are trusted HTML strings rendered in presenter mode; keep content trusted.
 - Poll responses are deterministic IDs `uid_questionId` to enforce one answer per user/question.
 - Participants subcollection powers scores/teams; presenter overlays listen to participants in real time.
+- Mock/test hooks (hash router keeps query after `#`):
+  - `?mockSession=CODE` on `/#/create-demo`, `/#/presenter/:sessionId`, or `/#/join/CODE` seeds an in-memory session with a default question (skips Firestore). LocalStorage `cq_mock_session` (`{"joinCode":"MOCK","sessionId":"MOCK-SESSION"}`) is also respected.
+  - `?mockVoice=ready|unavailable` forces participant voice banner state; `?mockNotFound=true` renders the Session Not Found view.
+  - Playwright E2E relies on these mocks; run dev server with `--host 127.0.0.1 --port 5173 --strictPort` before `npx playwright test`.
 
 For admin editing tips: [docs/ADMIN_SLIDE_EDITING.md](docs/ADMIN_SLIDE_EDITING.md).  
 For architecture details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
