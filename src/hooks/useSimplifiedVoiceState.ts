@@ -13,6 +13,7 @@ interface SimplifiedVoiceStateOptions {
   fallbackActive: boolean;
   userId: string | null;
   queueCount?: number;
+  mockStatus?: "ready" | "waiting" | "unavailable" | "active";
 }
 
 export function useSimplifiedVoiceState({
@@ -22,8 +23,17 @@ export function useSimplifiedVoiceState({
   fallbackActive,
   userId,
   queueCount = 0,
+  mockStatus,
 }: SimplifiedVoiceStateOptions): SimplifiedVoiceState {
   return useMemo(() => {
+    if (mockStatus) {
+      if (mockStatus === "ready") return { status: "ready", message: "Ready to speak", detail: "Mock voice ready" };
+      if (mockStatus === "waiting")
+        return { status: "waiting", message: "Another resident is speaking", detail: "Mock queue" };
+      if (mockStatus === "active") return { status: "active", message: "Recording", detail: "Mock speaking" };
+      return { status: "unavailable", message: "Voice paused", detail: "Mock unavailable" };
+    }
+
     if (!voice.enabled) {
       return {
         status: "unavailable",

@@ -31,6 +31,7 @@ import { CollapsibleVoicePanel } from "../components/CollapsibleVoicePanel";
 import { FloatingMicButton } from "../components/FloatingMicButton";
 import { SessionSkeleton } from "../components/SessionSkeleton";
 import { TextQuestionInput } from "../components/TextQuestionInput";
+import { VoiceStatusBadge } from "../components/VoiceStatusBadge";
 
 function getLocalUserId(): string {
   const key = "cq_live_user_id";
@@ -485,6 +486,7 @@ export default function JoinSession() {
     fallbackActive,
     userId,
     queueCount: waitingCount,
+    mockStatus: mockVoice as any,
   });
   const showTextInput = fallbackActive || preferTextInput;
   const holdDisabled =
