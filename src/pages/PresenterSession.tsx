@@ -120,12 +120,12 @@ function ScenarioSnapshotCard({ snapshot }: { snapshot: SnapshotProps | null }) 
 export default function PresenterSession() {
   const { sessionId } = useParams();
   // Test hook: allow Playwright/local to supply a mock session without Firestore.
-  const mockSessionParam = React.useMemo(() => {
+  const mockSessionParam = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("mockSession");
   }, []);
 
-  const mockSessionStored = React.useMemo(() => {
+  const mockSessionStored = useMemo(() => {
     try {
       const stored = localStorage.getItem("cq_mock_session");
       if (!stored) return null;
@@ -135,7 +135,7 @@ export default function PresenterSession() {
     }
   }, []);
 
-  const mockSessionData = React.useMemo(() => {
+  const mockSessionData = useMemo(() => {
     const joinCodeSource = mockSessionParam || mockSessionStored?.joinCode;
     const idSource = mockSessionStored?.sessionId || "MOCK-SESSION";
     if (!joinCodeSource) return null;
