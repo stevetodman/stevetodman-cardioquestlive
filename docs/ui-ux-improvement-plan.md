@@ -258,11 +258,10 @@ export function SessionSkeleton() {
 **Current state:** `aria-live="polite"` on status badge.
 
 **Changes:**
-- [ ] Announce question open/close: "Question now open for answers"
 - [x] Announce question open/close: "Question now open for answers"
-- [ ] Announce voice state changes: "Recording started", "Patient is responding"
+- [x] Announce voice state changes: "Recording started", "Patient is responding"
 - [x] Announce correct answer reveal: "Results are shown" status message
-- [ ] Add `role="status"` to toast messages
+- [x] Add `role="status"` to toast messages
 
 **Acceptance criteria:**
 - VoiceOver announces all state changes without visual focus

@@ -1064,6 +1064,10 @@ export default function JoinSession() {
       </header>
 
       <main className="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6 pb-[env(safe-area-inset-bottom)]">
+        <div className="sr-only" aria-live="polite">
+          Voice status: {voiceStatusData.message}
+          {voiceStatusData.detail ? `, ${voiceStatusData.detail}` : ""}
+        </div>
         {toast && (
           <div
             className="bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-2 text-[12px] text-slate-100 shadow-md shadow-black/30"
