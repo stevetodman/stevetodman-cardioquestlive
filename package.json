@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "jest",
+    "test:e2e": "playwright test",
     "dev:ngrok-hint": "echo \"1) ngrok http 8081; 2) ngrok http 3000; 3) VITE_VOICE_GATEWAY_URL=wss://<gw-url>/ws/voice npm run dev -- --host 0.0.0.0 --port 3000\"",
     "dev:vp": "concurrently -k -n gateway,tunnel,web \"cd voice-gateway && npm start\" \"cloudflared tunnel --url http://localhost:8081\" \"npm run dev -- --host 0.0.0.0 --port 3000\"",
     "dev:vp:quick": "node scripts/dev-vp-quick.cjs",
@@ -28,6 +29,7 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.0",
+    "@playwright/test": "^1.57.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",

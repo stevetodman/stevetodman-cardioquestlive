@@ -18,6 +18,7 @@ const config: Config = {
     "<rootDir>/voice-gateway/dist/",
     "<rootDir>/voice-gateway/src/__tests__/persistence.test.ts",
     "<rootDir>/voice-gateway/dist/__tests__/persistence.test.js",
+    "<rootDir>/e2e/",
   ],
   moduleNameMapper: {
     "\\.(css|less|scss|sass)$": "<rootDir>/test/styleMock.js",
