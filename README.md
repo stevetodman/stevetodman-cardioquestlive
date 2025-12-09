@@ -77,6 +77,11 @@ Deeper dive: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 # One-shot stack (emulators + gateway + web; keeps ports aligned)
 npm run dev:stack:local
 # Then in the browser: http://127.0.0.1:5173/#/create-demo → create session → join code.
+
+# Cloudflare tunnel (app.cardioquestlive.com / voice.cardioquestlive.com)
+npm run dev:tunnel
+# Opens app at https://app.cardioquestlive.com (via tunnel) and voice WS at wss://voice.cardioquestlive.com/ws/voice
+# Requires: cloudflared tunnel run virtual-patient (see config) and ALLOW_INSECURE_VOICE_WS=true for local dev.
 ```
 
 **Voice gateway / AI patient**
@@ -113,6 +118,10 @@ Mic access: allow microphone for `127.0.0.1` in your browser, then tap **Re-chec
 - Firebase: Firestore/Auth in Native mode. Emulator defaults: Firestore 8088/9188, Auth 9099 (override via `VITE_*_PORT` envs).
 - Build tooling: Vite 6, React 19, TypeScript (checked by `npm run build`).
 - Voice gateway: Node 18+; `/ws/voice` on port 8081 by default; OpenAI models default to `gpt-4.1-mini` (text) and `gpt-4o-mini-tts` (TTS) unless overridden in `voice-gateway/.env`.
+- Cloudflare tunnel (named `virtual-patient` expected):
+  - App: `https://app.cardioquestlive.com` → localhost:3000
+  - Voice WS: `wss://voice.cardioquestlive.com/ws/voice` → localhost:8081
+  - Suggested env for tunnel dev: `VITE_USE_EMULATORS=false`, `VITE_VOICE_GATEWAY_URL=wss://voice.cardioquestlive.com/ws/voice`, `ALLOW_INSECURE_VOICE_WS=true` (gateway dev).
 
 ## Testing
 
