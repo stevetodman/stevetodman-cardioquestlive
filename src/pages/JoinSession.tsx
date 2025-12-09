@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import {
@@ -138,6 +138,7 @@ export default function JoinSession() {
   const [showAdvancedVoice, setShowAdvancedVoice] = useState(false);
   const [isVoiceExpanded, setIsVoiceExpanded] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [isOffline, setIsOffline] = useState<boolean>(false);
   const voice = useVoiceState(sessionId);
   const userDisplayName = auth?.currentUser?.displayName ?? "Resident";
   useEffect(() => {
@@ -348,6 +349,19 @@ export default function JoinSession() {
     });
     return () => unsub();
   }, [sessionId]);
+
+  // Offline / reconnect indicator
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    setIsOffline(!navigator.onLine);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const unsub = voicePatientService.onPermissionChange((status) => setMicStatus(status));
@@ -961,6 +975,21 @@ export default function JoinSession() {
           The session may have ended or the code might be incorrect.
         </p>
         <div className="w-full max-w-xs space-y-2">
+          <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3 space-y-2">
+            <label htmlFor="retry-code" className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+              Enter a join code
+            </label>
+            <input
+              id="retry-code"
+              type="text"
+              inputMode="text"
+              maxLength={4}
+              defaultValue={joinCode?.toUpperCase() ?? ""}
+              onChange={(e) => handleInlineCodeChange(e.target.value)}
+              className="w-full text-center font-mono tracking-widest bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-lg uppercase focus:outline-none focus:ring-2 focus:ring-sky-500"
+              placeholder="CODE"
+            />
+          </div>
           <button
             type="button"
             onClick={() => setFindAttempt((n) => n + 1)}
@@ -972,7 +1001,7 @@ export default function JoinSession() {
             to="/"
             className="w-full inline-flex justify-center px-6 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg text-sm font-semibold transition-colors text-white"
           >
-            Enter a new code
+            Go to home
           </Link>
         </div>
         <p className="text-xs text-slate-500 text-center max-w-xs">
@@ -1044,6 +1073,12 @@ export default function JoinSession() {
     }
     setPlayingClipId(null);
   };
+
+  const handleInlineCodeChange = useCallback((value: string) => {
+    const trimmed = value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    if (!trimmed) return;
+    window.location.hash = `#/join/${trimmed}`;
+  }, []);
 
   const handlePlayExamClip = (clip: { url: string; label: string }) => {
     setAudioError(null);
@@ -1172,6 +1207,12 @@ export default function JoinSession() {
       </header>
 
       <main className="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6 pb-[env(safe-area-inset-bottom)]">
+        {isOffline && (
+          <div className="bg-amber-900/40 border border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-100 flex items-center gap-2" role="status" aria-live="polite">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" aria-hidden="true"></span>
+            Reconnecting… check your connection; your progress is saved locally.
+          </div>
+        )}
         <div className="sr-only" aria-live="polite" aria-atomic="true">
           Voice status: {voiceStatusData.message}
           {voiceStatusData.detail ? `, ${voiceStatusData.detail}` : ""}
