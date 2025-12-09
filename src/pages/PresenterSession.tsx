@@ -130,6 +130,28 @@ export default function PresenterSession() {
     return params.get("mockSession");
   }, []);
 
+  // Test hook: allow Playwright/local to mock voice status in presenter view.
+  const mockVoiceState = useMemo(() => {
+    const hash = typeof window !== "undefined" ? window.location.hash : "";
+    const hashQueryIndex = hash.indexOf("?");
+    const params =
+      hashQueryIndex !== -1
+        ? new URLSearchParams(hash.substring(hashQueryIndex))
+        : new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    const fromQs = params.get("mockVoice");
+    if (fromQs) return fromQs;
+    try {
+      const stored = localStorage.getItem("cq_voice_mock_state");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed?.status ?? parsed;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    return null;
+  }, []);
+
   const mockSessionStored = useMemo(() => {
     try {
       const stored = localStorage.getItem("cq_mock_session");
@@ -1530,6 +1552,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
 
   if (mockSessionParam) {
     const mockJoinUrl = `${window.location.origin}/#/join/${(mockSessionParam || "MOCK").toUpperCase()}`;
+    const mockVoiceBadge = mockVoiceState === "unavailable" ? "Voice: disabled" : "Voice: ready";
     const mockStateLabel = mockShowResults ? "Showing results" : mockQuestionOpen ? "Accepting answers" : "Closed";
     const mockStateTone = mockShowResults
       ? "bg-sky-500/15 border-sky-500/50 text-sky-100"
@@ -1570,6 +1593,9 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
             </div>
             <div className="text-[11px] px-2.5 py-1 rounded-full border border-slate-700 bg-slate-900/60 text-slate-200">
               Responses: 0
+            </div>
+            <div className="text-[11px] px-2.5 py-1 rounded-full border border-slate-700 bg-slate-900/60 text-slate-200">
+              {mockVoiceBadge}
             </div>
           </div>
         </div>
@@ -1640,6 +1666,8 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
     : isShowingResults
     ? "bg-sky-500/15 border-sky-500/50 text-sky-100"
     : "bg-slate-800 border-slate-700 text-slate-300";
+  const mockVoiceEnabled = mockVoiceState === "ready";
+  const mockVoiceUnavailable = mockVoiceState === "unavailable";
 
   const presenterHeader = (
     <div
@@ -1651,9 +1679,9 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
         <div className="text-[11px] text-slate-400">Session: {session.joinCode}</div>
       </div>
       <div className="flex items-center gap-2 flex-wrap justify-end">
-        <div className="flex items-center gap-1 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1">
-          <span className="text-[11px] text-slate-400 uppercase tracking-[0.14em]">Join</span>
-          <span className="font-mono text-xs text-sky-200">{session.joinCode}</span>
+            <div className="flex items-center gap-1 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1">
+              <span className="text-[11px] text-slate-400 uppercase tracking-[0.14em]">Join</span>
+              <span className="font-mono text-xs text-sky-200">{session.joinCode}</span>
           <button
             type="button"
             onClick={async () => {
@@ -1684,6 +1712,9 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
         <div className="text-[11px] px-2.5 py-1 rounded-full border border-slate-700 bg-slate-900/60 text-slate-200">
           Responses: {responseTotal}
         </div>
+        <div className="text-[11px] px-2.5 py-1 rounded-full border border-slate-700 bg-slate-900/60 text-slate-200">
+          Voice: {mockVoiceUnavailable ? "disabled" : mockVoiceEnabled || gatewayStatus.state === "ready" ? "ready" : "disconnected"}
+        </div>
       </div>
     </div>
   );
@@ -1695,9 +1726,9 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
     questionsAnsweredCount > 0 ? totalResponses / questionsAnsweredCount : 0;
   const fallbackActive = Boolean(simState?.fallback || simState?.budget?.fallback);
   const overlayMode: "idle" | "resident-speaking" | "ai-speaking" | "disabled" | "disconnected" =
-    !voice.enabled
+    mockVoiceUnavailable || (!mockVoiceEnabled && !voice.enabled)
       ? "disabled"
-      : gatewayStatus.state !== "ready"
+      : gatewayStatus.state !== "ready" && !mockVoiceEnabled
       ? "disconnected"
       : patientState === "speaking"
       ? "ai-speaking"
