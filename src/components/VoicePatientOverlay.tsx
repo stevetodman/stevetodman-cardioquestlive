@@ -127,7 +127,9 @@ export function VoicePatientOverlay({
               <audio ref={audioRef} src={patientAudioUrl} controls className="w-full" />
               <button
                 type="button"
-                onClick={() => audioRef.current?.play().catch(() => {})}
+                onClick={() =>
+                  audioRef.current?.play().catch((err) => console.error("Failed to replay patient audio", err))
+                }
                 className="px-2 py-1 rounded-lg border border-slate-700 bg-slate-900 text-[11px] font-semibold text-slate-100 hover:border-slate-600"
               >
                 Replay

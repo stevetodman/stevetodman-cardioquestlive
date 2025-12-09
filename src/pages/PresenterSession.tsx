@@ -39,6 +39,7 @@ import { DebriefPanel } from "../components/DebriefPanel";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
 import { Select } from "../components/Select";
 import { QRCodeOverlay } from "../components/QRCodeOverlay";
+import { FLOOR_AUTO_RELEASE_MS } from "../constants";
 
 type SnapshotProps = {
   chiefComplaint: string;
@@ -446,7 +447,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
 
     const canEmit = messages.filter((msg) => {
       const last = npcCooldowns[msg] ?? 0;
-      return now - last > 60000;
+      return now - last > FLOOR_AUTO_RELEASE_MS;
     });
     if (canEmit.length === 0) return;
 

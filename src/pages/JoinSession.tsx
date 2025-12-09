@@ -31,6 +31,7 @@ import { FloatingMicButton } from "../components/FloatingMicButton";
 import { SessionSkeleton } from "../components/SessionSkeleton";
 import { TextQuestionInput } from "../components/TextQuestionInput";
 import { VoiceStatusBadge } from "../components/VoiceStatusBadge";
+import { FLOOR_AUTO_RELEASE_MS, FLOOR_RELEASE_DELAY_MS, DEFAULT_TIMEOUT_MS } from "../constants";
 
 function getLocalUserId(): string {
   const key = "cq_live_user_id";
@@ -47,11 +48,13 @@ async function emitCommand(
   payload?: Record<string, any>,
   character?: CharacterId
 ) {
-  sendVoiceCommand(sessionId, { type, payload, character }).catch(() => {});
+  sendVoiceCommand(sessionId, { type, payload, character }).catch((err: unknown) => {
+    console.error("Failed to queue voice command", err);
+  });
   try {
     voiceGatewayClient.sendVoiceCommand(type as any, payload, character);
-  } catch {
-    // ignore
+  } catch (err) {
+    console.error("Failed to send voice command to gateway", err);
   }
 }
 
@@ -224,11 +227,11 @@ export default function JoinSession() {
         : Date.parse(voice.since as any);
       if (!sinceTs || Number.isNaN(sinceTs)) return;
       const elapsed = Date.now() - sinceTs;
-      if (elapsed > 60_000) {
-        releaseFloor(sessionId).catch(() => {});
+      if (elapsed > FLOOR_AUTO_RELEASE_MS) {
+        releaseFloor(sessionId).catch((err: unknown) => console.error("Failed to auto-release floor", err));
         setToast({ message: "Floor released after inactivity (60s)", ts: Date.now() });
       }
-    }, 5_000);
+    }, DEFAULT_TIMEOUT_MS);
     return () => clearInterval(interval);
   }, [sessionId, userId, voice.floorHolderId, voice.since]);
 
@@ -370,7 +373,7 @@ export default function JoinSession() {
 
   useEffect(() => {
     const unsub = voicePatientService.onPermissionChange((status) => setMicStatus(status));
-    voicePatientService.recheckPermission().catch(() => {});
+    voicePatientService.recheckPermission().catch((err: unknown) => console.error("Mic permission check failed", err));
     return () => unsub();
   }, []);
 
@@ -1071,9 +1074,9 @@ export default function JoinSession() {
     if (sessionId) {
       setTimeout(() => {
         if (voice.floorHolderId === userId) {
-          releaseFloor(sessionId).catch(() => {});
+          releaseFloor(sessionId).catch((err: unknown) => console.error("Failed to release floor", err));
         }
-      }, 2000);
+      }, FLOOR_RELEASE_DELAY_MS);
     }
   };
   const stopExamAudio = () => {
@@ -1124,8 +1127,8 @@ export default function JoinSession() {
   const handleRecheckMic = async () => {
     try {
       await voicePatientService.recheckPermission();
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error("Mic recheck failed", err);
     }
   };
 
@@ -1261,7 +1264,9 @@ export default function JoinSession() {
               onClick={() => {
                 const ts = Date.now();
                 setAssessmentRequest(null);
-                voiceGatewayClient.sendVoiceCommand("assessment_ack" as any, { ts }).catch(() => {});
+                voiceGatewayClient.sendVoiceCommand("assessment_ack" as any, { ts }).catch((err: unknown) => {
+                  console.error("Failed to ack assessment", err);
+                });
                 setToast({ message: "Assessment acknowledged", ts });
               }}
               className="px-2 py-1 rounded border border-amber-500/60 text-[11px] text-amber-100 hover:border-amber-400"

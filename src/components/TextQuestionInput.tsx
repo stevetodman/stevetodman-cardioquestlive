@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { TEXT_INPUT_MAX_LENGTH } from "../constants";
 
 type Props = {
   onSubmit: (text: string) => Promise<void> | void;
@@ -8,7 +9,7 @@ type Props = {
 export function TextQuestionInput({ onSubmit, disabled = false }: Props) {
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
-  const limit = 200;
+  const limit = TEXT_INPUT_MAX_LENGTH;
   const remaining = limit - text.length;
 
   const handleSubmit = async (e?: React.FormEvent) => {
