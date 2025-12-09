@@ -30,6 +30,7 @@ import { useSimplifiedVoiceState } from "../hooks/useSimplifiedVoiceState";
 import { CollapsibleVoicePanel } from "../components/CollapsibleVoicePanel";
 import { FloatingMicButton } from "../components/FloatingMicButton";
 import { SessionSkeleton } from "../components/SessionSkeleton";
+import { TextQuestionInput } from "../components/TextQuestionInput";
 
 function getLocalUserId(): string {
   const key = "cq_live_user_id";
@@ -114,6 +115,10 @@ export default function JoinSession() {
   const [lastFloorHolder, setLastFloorHolder] = useState<string | null>(null);
   const [lastFallback, setLastFallback] = useState<boolean | null>(null);
   const [assessmentRequest, setAssessmentRequest] = useState<{ ts: number; stage?: string } | null>(null);
+  const [preferTextInput, setPreferTextInput] = useState<boolean>(() => {
+    const stored = localStorage.getItem("cq_prefer_text_input");
+    return stored === "true";
+  });
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingClipId, setPlayingClipId] = useState<string | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
@@ -441,6 +446,7 @@ export default function JoinSession() {
     userId,
     queueCount: waitingCount,
   });
+  const showTextInput = fallbackActive || preferTextInput;
   const holdDisabled =
     voiceStatusData.status === "unavailable" ||
     voiceStatusData.status === "waiting" ||
@@ -589,6 +595,11 @@ export default function JoinSession() {
           locked={voice.locked}
           onRetryVoice={handleRetryVoice}
           onRecheckMic={handleRecheckMic}
+          onUseTextInstead={() => {
+            setPreferTextInput(true);
+            localStorage.setItem("cq_prefer_text_input", "true");
+            setToast({ message: "Switched to text questions", ts: Date.now() });
+          }}
         />
         <div className="mt-1 text-[11px] text-slate-500">
           {waitingCount > 1 ? `${waitingCount} residents waiting to speak` : waitingCount === 1 ? "1 resident waiting to speak" : "Queue is clear"}
@@ -647,6 +658,35 @@ export default function JoinSession() {
         </div>
       )}
       {voiceError && isMobile && <div className="text-[11px] text-rose-300">{voiceError}</div>}
+
+      {showTextInput && (
+        <div className="mt-3 bg-slate-900/70 border border-slate-800 rounded-lg p-3 space-y-2">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+            Text fallback
+          </div>
+          <TextQuestionInput
+            disabled={submitting}
+            onSubmit={async (text) => {
+              if (!sessionId) return;
+              setToast({ message: "Text question sent", ts: Date.now() });
+              await sendVoiceCommand(sessionId, { type: "order" as any, payload: { text, mode: "text_fallback" } });
+            }}
+          />
+          {preferTextInput && (
+            <button
+              type="button"
+              onClick={() => {
+                setPreferTextInput(false);
+                localStorage.setItem("cq_prefer_text_input", "false");
+                setToast({ message: "Back to voice mode", ts: Date.now() });
+              }}
+              className="text-[11px] text-sky-300 underline"
+            >
+              Return to voice
+            </button>
+          )}
+        </div>
+      )}
 
       {showExam && simState?.exam && (
         <div className="mt-2 bg-slate-900/60 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-1">

@@ -193,10 +193,10 @@ export function SessionSkeleton() {
 **Current state:** Shows error text with "Re-check mic" or "Retry voice" buttons.
 
 **Changes:**
-- [ ] Expand blocked mic state to include step-by-step instructions
-- [ ] Add browser-specific hints (Chrome vs Safari vs Firefox)
-- [ ] Add "Use text instead" option that shows text input field
-- [ ] Persist text fallback preference in localStorage
+- [x] Expand blocked mic state to include step-by-step instructions
+- [x] Add browser-specific hints (Chrome vs Safari vs Firefox)
+- [x] Add "Use text instead" option that shows text input field
+- [x] Persist text fallback preference in localStorage
 
 **Design:**
 ```
@@ -223,10 +223,10 @@ export function SessionSkeleton() {
 **Modified:** `src/pages/JoinSession.tsx`
 
 **Changes:**
-- [ ] Create text input component for voice fallback
-- [ ] Show when: fallback mode active OR user chose text mode
-- [ ] Submit sends typed question to `voiceGatewayClient.sendDoctorText()`
-- [ ] Clear input on submit, show "Sent" confirmation
+- [x] Create text input component for voice fallback
+- [x] Show when: fallback mode active OR user chose text mode
+- [x] Submit sends typed question to Firestore voiceCommands (order payload) and shows confirmation
+- [x] Clear input on submit, show "Sent" confirmation
 
 **Acceptance criteria:**
 - Input has 200 char limit with counter
