@@ -16,6 +16,7 @@ export default {
         "shimmer": "shimmer 1.5s linear infinite",
         "correct-pulse": "correct-pulse 0.3s ease-out 1",
         "select-pop": "select-pop 0.2s ease-out 1",
+        "vital-highlight": "vital-highlight 2s ease-out",
       },
       keyframes: {
         shake: {
@@ -37,6 +38,24 @@ export default {
         "select-pop": {
           "0%": { transform: "scale(0.98)" },
           "100%": { transform: "scale(1)" },
+        },
+        "vital-highlight": {
+          "0%": {
+            boxShadow: "0 0 0 0 rgba(251, 191, 36, 0.6)",
+            borderColor: "rgba(251, 191, 36, 0.8)",
+          },
+          "25%": {
+            boxShadow: "0 0 12px 4px rgba(251, 191, 36, 0.4)",
+            borderColor: "rgba(251, 191, 36, 0.9)",
+          },
+          "50%": {
+            boxShadow: "0 0 8px 2px rgba(251, 191, 36, 0.3)",
+            borderColor: "rgba(251, 191, 36, 0.7)",
+          },
+          "100%": {
+            boxShadow: "0 0 0 0 rgba(251, 191, 36, 0)",
+            borderColor: "transparent",
+          },
         },
       },
     },

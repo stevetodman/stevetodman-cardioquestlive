@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useVitalsChange } from "../hooks/useVitalsChange";
 
 type Vitals = { hr?: number; bp?: string; rr?: number; spo2?: number; temp?: number };
 
@@ -14,6 +15,7 @@ const clampSpo2 = (v?: number) => (typeof v === "number" ? Math.min(100, v) : un
 export function VitalsMonitor({ vitals, telemetryWaveform, telemetryOn }: Props) {
   const [display, setDisplay] = useState<Vitals>({});
   const lastTarget = useRef<Vitals>({});
+  const highlightedVitals = useVitalsChange(vitals);
 
   useEffect(() => {
     lastTarget.current = vitals;
@@ -58,11 +60,11 @@ export function VitalsMonitor({ vitals, telemetryWaveform, telemetryOn }: Props)
         </span>
       </div>
       <div className="grid grid-cols-3 gap-2 text-center">
-        <VitalTile label="HR" value={display.hr ?? "—"} unit="bpm" highlight />
-        <VitalTile label="BP" value={display.bp ?? "—"} unit="" />
-        <VitalTile label="SpO₂" value={display.spo2 ?? "—"} unit="%" />
-        <VitalTile label="RR" value={display.rr ?? "—"} unit="" />
-        <VitalTile label="Temp" value={display.temp ? display.temp.toFixed(1) : "—"} unit="°C" />
+        <VitalTile label="HR" value={display.hr ?? "—"} unit="bpm" highlight isChanging={highlightedVitals.has("hr")} />
+        <VitalTile label="BP" value={display.bp ?? "—"} unit="" isChanging={highlightedVitals.has("bp")} />
+        <VitalTile label="SpO₂" value={display.spo2 ?? "—"} unit="%" isChanging={highlightedVitals.has("spo2")} />
+        <VitalTile label="RR" value={display.rr ?? "—"} unit="" isChanging={highlightedVitals.has("rr")} />
+        <VitalTile label="Temp" value={display.temp ? display.temp.toFixed(1) : "—"} unit="°C" isChanging={highlightedVitals.has("temp")} />
       </div>
       {waveformPath && (
         <div className="bg-slate-900 rounded-lg border border-emerald-800/50 p-2">
@@ -75,11 +77,29 @@ export function VitalsMonitor({ vitals, telemetryWaveform, telemetryOn }: Props)
   );
 }
 
-function VitalTile({ label, value, unit, highlight }: { label: string; value: string | number; unit: string; highlight?: boolean }) {
+function VitalTile({
+  label,
+  value,
+  unit,
+  highlight,
+  isChanging,
+}: {
+  label: string;
+  value: string | number;
+  unit: string;
+  highlight?: boolean;
+  isChanging?: boolean;
+}) {
+  const baseClass = highlight ? "border-emerald-500/60 bg-emerald-500/10" : "border-slate-700 bg-slate-900";
+  const animationClass = isChanging ? "animate-vital-highlight" : "";
+
   return (
-    <div className={`rounded-lg border px-2 py-1 ${highlight ? "border-emerald-500/60 bg-emerald-500/10" : "border-slate-700 bg-slate-900"}`}>
+    <div className={`rounded-lg border px-2 py-1 ${baseClass} ${animationClass}`}>
       <div className="text-[10px] uppercase tracking-[0.14em] text-emerald-300">{label}</div>
-      <div className="text-xl font-semibold text-emerald-100">{value}{unit && <span className="text-sm ml-1 text-emerald-300">{unit}</span>}</div>
+      <div className="text-xl font-semibold text-emerald-100">
+        {value}
+        {unit && <span className="text-sm ml-1 text-emerald-300">{unit}</span>}
+      </div>
     </div>
   );
 }
