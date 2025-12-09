@@ -561,6 +561,77 @@ export default function JoinSession() {
     voiceStatusData.status === "unavailable" ||
     voiceStatusData.status === "waiting" ||
     voice.mode === "ai-speaking";
+
+  // Handlers must be defined before voicePanel JSX uses them
+  const handlePressStart = async () => {
+    if (!sessionId || !userId) return;
+    if (voiceStatusData.status === "unavailable") {
+      setVoiceError(voiceStatusData.detail ?? voiceStatusData.message);
+      return;
+    }
+    if (voiceStatusData.status === "waiting") {
+      setVoiceError(voiceStatusData.message);
+      return;
+    }
+    if (voice.mode === "ai-speaking") {
+      setVoiceError("Patient is speaking. Wait to ask your question.");
+      return;
+    }
+    if (voice.locked) {
+      setVoiceError("Voice is locked by the presenter right now.");
+      return;
+    }
+    if (micStatus !== "blocked" && micLevel < 0.05) {
+      setVoiceError("No mic input detected. Check your input device or unmute in system settings.");
+      return;
+    }
+    try {
+      setVoiceError(null);
+      if (!hasFloor) {
+        await takeFloorTx(sessionId, { uid: userId, displayName: userDisplayName }, true);
+      }
+      await voicePatientService.startCapture();
+      voiceGatewayClient.startSpeaking(targetCharacter);
+      setToast({ message: "Recording… speak now", ts: Date.now() });
+    } catch (err: any) {
+      console.error("Failed to start capture", err);
+      if (err?.message?.toLowerCase()?.includes("blocked")) {
+        setMicStatus("blocked");
+        setVoiceError("Microphone is blocked. Allow mic access in the browser, then tap Re-check mic.");
+      } else if (voice.floorHolderId && voice.floorHolderId !== userId) {
+        setVoiceError(`${voice.floorHolderName ?? "Another resident"} is speaking right now.`);
+      } else {
+        setVoiceError("Could not start microphone. Check input device permissions or refresh, then try again.");
+      }
+    }
+  };
+
+  const handlePressEnd = async () => {
+    voicePatientService.stopCapture();
+    voiceGatewayClient.stopSpeaking(targetCharacter);
+    if (sessionId) {
+      setTimeout(() => {
+        if (voice.floorHolderId === userId) {
+          releaseFloor(sessionId).catch((err: unknown) => console.error("Failed to release floor", err));
+        }
+      }, FLOOR_RELEASE_DELAY_MS);
+    }
+  };
+
+  const handleRetryVoice = () => {
+    if (!sessionId || !userId) return;
+    voiceGatewayClient.disconnect();
+    voiceGatewayClient.connect(sessionId, userId, userDisplayName, "participant");
+  };
+
+  const handleRecheckMic = async () => {
+    try {
+      await voicePatientService.recheckPermission();
+    } catch (err) {
+      console.error("Mic recheck failed", err);
+    }
+  };
+
   const voiceStatusBar = (
     <div className="w-full flex items-center gap-3">
       <div className="flex-1 min-w-0">
@@ -1044,60 +1115,6 @@ export default function JoinSession() {
     );
   }
 
-  const handlePressStart = async () => {
-    if (!sessionId || !userId) return;
-    if (voiceStatusData.status === "unavailable") {
-      setVoiceError(voiceStatusData.detail ?? voiceStatusData.message);
-      return;
-    }
-    if (voiceStatusData.status === "waiting") {
-      setVoiceError(voiceStatusData.message);
-      return;
-    }
-    if (voice.mode === "ai-speaking") {
-      setVoiceError("Patient is speaking. Wait to ask your question.");
-      return;
-    }
-    if (voice.locked) {
-      setVoiceError("Voice is locked by the presenter right now.");
-      return;
-    }
-    if (micStatus !== "blocked" && micLevel < 0.05) {
-      setVoiceError("No mic input detected. Check your input device or unmute in system settings.");
-      return;
-    }
-    try {
-      setVoiceError(null);
-      if (!hasFloor) {
-        await takeFloorTx(sessionId, { uid: userId, displayName: userDisplayName }, true);
-      }
-      await voicePatientService.startCapture();
-      voiceGatewayClient.startSpeaking(targetCharacter);
-      setToast({ message: "Recording… speak now", ts: Date.now() });
-    } catch (err: any) {
-      console.error("Failed to start capture", err);
-      if (err?.message?.toLowerCase()?.includes("blocked")) {
-        setMicStatus("blocked");
-        setVoiceError("Microphone is blocked. Allow mic access in the browser, then tap Re-check mic.");
-      } else if (voice.floorHolderId && voice.floorHolderId !== userId) {
-        setVoiceError(`${voice.floorHolderName ?? "Another resident"} is speaking right now.`);
-      } else {
-        setVoiceError("Could not start microphone. Check input device permissions or refresh, then try again.");
-      }
-    }
-  };
-
-  const handlePressEnd = async () => {
-    voicePatientService.stopCapture();
-    voiceGatewayClient.stopSpeaking(targetCharacter);
-    if (sessionId) {
-      setTimeout(() => {
-        if (voice.floorHolderId === userId) {
-          releaseFloor(sessionId).catch((err: unknown) => console.error("Failed to release floor", err));
-        }
-      }, FLOOR_RELEASE_DELAY_MS);
-    }
-  };
   const stopExamAudio = () => {
     if (audioRef.current) {
       audioRef.current.pause();
@@ -1128,12 +1145,6 @@ export default function JoinSession() {
     });
   };
 
-  const handleRetryVoice = () => {
-    if (!sessionId || !userId) return;
-    voiceGatewayClient.disconnect();
-    voiceGatewayClient.connect(sessionId, userId, userDisplayName, "participant");
-  };
-
   const handleLeaveSession = () => {
     const shouldLeave = window.confirm("Leave this session?");
     if (!shouldLeave) return;
@@ -1143,14 +1154,6 @@ export default function JoinSession() {
       // best effort
     }
     window.location.assign("/#/");
-  };
-
-  const handleRecheckMic = async () => {
-    try {
-      await voicePatientService.recheckPermission();
-    } catch (err) {
-      console.error("Mic recheck failed", err);
-    }
   };
 
   const handleChoice = async (choiceIndex: number) => {
@@ -1285,9 +1288,11 @@ export default function JoinSession() {
               onClick={() => {
                 const ts = Date.now();
                 setAssessmentRequest(null);
-                voiceGatewayClient.sendVoiceCommand("assessment_ack" as any, { ts }).catch((err: unknown) => {
+                try {
+                  voiceGatewayClient.sendVoiceCommand("assessment_ack" as any, { ts });
+                } catch (err: unknown) {
                   console.error("Failed to ack assessment", err);
-                });
+                }
                 setToast({ message: "Assessment acknowledged", ts });
               }}
               className="px-2 py-1 rounded border border-amber-500/60 text-[11px] text-amber-100 hover:border-amber-400"

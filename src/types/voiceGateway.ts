@@ -7,7 +7,10 @@ export type PatientScenarioId =
   | "myocarditis"
   | "exertional_syncope_hcm"
   | "ductal_shock"
-  | "cyanotic_spell";
+  | "cyanotic_spell"
+  | "kawasaki"
+  | "coarctation_shock"
+  | "arrhythmogenic_syncope";
 
 export type CharacterId = "patient" | "parent" | "nurse" | "tech" | "consultant" | "imaging";
 

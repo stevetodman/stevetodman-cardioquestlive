@@ -15,6 +15,7 @@ interface State {
  * Logs to console for now; can be wired to Sentry or another service later.
  */
 export class ErrorBoundary extends Component<Props, State> {
+  declare readonly props: Readonly<Props>;
   state: State = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: Error): State {

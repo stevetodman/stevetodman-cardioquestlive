@@ -38,7 +38,6 @@ import { SessionTranscriptPanel, TranscriptLogTurn } from "../components/Session
 import { sendVoiceCommand } from "../services/voiceCommands";
 import { DebriefPanel } from "../components/DebriefPanel";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
-import { Select } from "../components/Select";
 import { QRCodeOverlay } from "../components/QRCodeOverlay";
 import { FLOOR_AUTO_RELEASE_MS } from "../constants";
 import { PresenterModeTabs } from "../components/PresenterModeTabs";
@@ -304,11 +303,15 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
     const container = summaryRef.current;
     if (!container) return;
     previousFocusRef.current = document.activeElement as HTMLElement | null;
-    const focusable = Array.from(
-      container.querySelectorAll<HTMLElement>(
-        'a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])'
-      )
-    ).filter((el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true");
+    const allFocusable = container.querySelectorAll<HTMLElement>(
+      'a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])'
+    );
+    const focusable: HTMLElement[] = [];
+    allFocusable.forEach((el) => {
+      if (!el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true") {
+        focusable.push(el);
+      }
+    });
     const first = focusable[0] || container;
     first.focus();
 
@@ -1256,11 +1259,6 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
         setTranscriptLog((prev) => [...prev, ...entries]);
       }
     });
-    const unsubVoiceState = voiceGatewayClient.onVoiceState?.((voiceState) => {
-      if (voiceState && typeof voiceState.locked === "boolean") {
-        setVoiceLocked(voiceState.locked);
-      }
-    });
     const unsubPatient = voiceGatewayClient.onPatientState((state, character?: string) => {
       setPatientState(state);
       if (character) {
@@ -1379,7 +1377,6 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
     return () => {
       unsubStatus();
       unsubSim();
-      unsubVoiceState?.();
       unsubPatient();
       unsubTranscript();
       unsubDoctor();

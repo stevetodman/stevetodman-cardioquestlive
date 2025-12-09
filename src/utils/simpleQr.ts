@@ -55,15 +55,14 @@ for (let i = 0; i < 255; i++) LOG_TABLE[EXP_TABLE[i]] = i;
 
 const QRRSBlocks = {
   getRSBlocks: function (typeNumber: number, errorCorrectLevel: number) {
-    const rsBlock = RS_BLOCK_TABLE[(typeNumber - 1) * 4 + errorCorrectLevel];
-    const length = rsBlock.length / 3;
-    const list = [];
-    for (let i = 0; i < length; i++) {
-      const count = rsBlock[i * 3 + 0];
-      const totalCount = rsBlock[i * 3 + 1];
-      const dataCount = rsBlock[i * 3 + 2];
-      for (let j = 0; j < count; j++) list.push([totalCount, dataCount]);
-    }
+    // RS_BLOCK_TABLE stores triplets (count, totalCount, dataCount) sequentially
+    // Each version has 4 entries (L/M/Q/H), each entry has 3 values
+    const baseIndex = ((typeNumber - 1) * 4 + errorCorrectLevel) * 3;
+    const count = RS_BLOCK_TABLE[baseIndex];
+    const totalCount = RS_BLOCK_TABLE[baseIndex + 1];
+    const dataCount = RS_BLOCK_TABLE[baseIndex + 2];
+    const list: number[][] = [];
+    for (let j = 0; j < count; j++) list.push([totalCount, dataCount]);
     return list;
   },
 };
@@ -137,7 +136,7 @@ QRCodeModel.prototype = {
     this.setupTimingPattern();
     this.setupTypeInfo(test, maskPattern);
     if (this.typeNumber >= 7) this.setupTypeNumber(test);
-    if (this.dataCache == null) this.dataCache = QRCodeModel.createData(this.typeNumber, this.errorCorrectLevel, this.dataList);
+    if (this.dataCache == null) this.dataCache = (QRCodeModel as any).createData(this.typeNumber, this.errorCorrectLevel, this.dataList);
     this.mapData(this.dataCache, maskPattern);
   },
   setupPositionProbePattern: function (row: number, col: number) {
