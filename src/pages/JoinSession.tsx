@@ -139,6 +139,11 @@ export default function JoinSession() {
   const [isVoiceExpanded, setIsVoiceExpanded] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isOffline, setIsOffline] = useState<boolean>(false);
+  const handleInlineCodeChange = useCallback((value: string) => {
+    const trimmed = value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    if (!trimmed) return;
+    window.location.hash = `#/join/${trimmed}`;
+  }, []);
   const voice = useVoiceState(sessionId);
   const userDisplayName = auth?.currentUser?.displayName ?? "Resident";
   useEffect(() => {
@@ -1065,7 +1070,6 @@ export default function JoinSession() {
       }, 2000);
     }
   };
-
   const stopExamAudio = () => {
     if (audioRef.current) {
       audioRef.current.pause();
@@ -1073,12 +1077,6 @@ export default function JoinSession() {
     }
     setPlayingClipId(null);
   };
-
-  const handleInlineCodeChange = useCallback((value: string) => {
-    const trimmed = value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
-    if (!trimmed) return;
-    window.location.hash = `#/join/${trimmed}`;
-  }, []);
 
   const handlePlayExamClip = (clip: { url: string; label: string }) => {
     setAudioError(null);
