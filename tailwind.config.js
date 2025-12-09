@@ -14,6 +14,8 @@ export default {
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         shake: "shake 0.3s ease-in-out",
         "shimmer": "shimmer 1.5s linear infinite",
+        "correct-pulse": "correct-pulse 0.3s ease-out 1",
+        "select-pop": "select-pop 0.2s ease-out 1",
       },
       keyframes: {
         shake: {
@@ -26,6 +28,15 @@ export default {
         shimmer: {
           "0%": { backgroundPosition: "-400px 0" },
           "100%": { backgroundPosition: "400px 0" },
+        },
+        "correct-pulse": {
+          "0%": { transform: "scale(0.98)" },
+          "50%": { transform: "scale(1.02)" },
+          "100%": { transform: "scale(1)" },
+        },
+        "select-pop": {
+          "0%": { transform: "scale(0.98)" },
+          "100%": { transform: "scale(1)" },
         },
       },
     },

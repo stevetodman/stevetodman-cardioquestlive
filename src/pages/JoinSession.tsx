@@ -1138,8 +1138,9 @@ export default function JoinSession() {
                     
                     // Determine button style state
                     let btnClass = "border-slate-700 bg-slate-900/80 hover:bg-slate-800/80"; // default
-                    if (isSelected) btnClass = "border-sky-500 bg-sky-500/15 text-sky-100 ring-1 ring-sky-500/50";
-                    if (isCorrect) btnClass = "border-emerald-500 bg-emerald-500/20 text-emerald-100 ring-1 ring-emerald-500/50";
+                    const motionAware = "transform-gpu transition-transform";
+                    if (isSelected) btnClass = `border-sky-500 bg-sky-500/15 text-sky-100 ring-1 ring-sky-500/50 motion-safe:animate-select-pop ${motionAware}`;
+                    if (isCorrect) btnClass = `border-emerald-500 bg-emerald-500/20 text-emerald-100 ring-1 ring-emerald-500/50 motion-safe:animate-correct-pulse ${motionAware}`;
                     if (!isQuestionActive && !session.showResults) btnClass = "opacity-70 cursor-not-allowed border-slate-800 bg-slate-900/70";
 
                     return (

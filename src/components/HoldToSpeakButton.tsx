@@ -27,6 +27,22 @@ export function HoldToSpeakButton({
   const [state, setState] = useState<HoldState>(disabled ? "disabled" : "idle");
   const pressActive = useRef(false);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const prefersReducedMotion =
+    typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      : false;
+
+  const vibrate = useCallback(
+    (pattern: number | number[]) => {
+      if (prefersReducedMotion) return;
+      try {
+        navigator.vibrate?.(pattern);
+      } catch {
+        // no-op
+      }
+    },
+    [prefersReducedMotion]
+  );
 
   const startPress = useCallback(async () => {
     if (disabled || state === "recording") return;
@@ -36,6 +52,7 @@ export function HoldToSpeakButton({
       await onPressStart?.();
       if (pressActive.current) {
         setState("recording");
+        vibrate(30);
       } else {
         setState(disabled ? "disabled" : "idle");
       }
@@ -50,6 +67,7 @@ export function HoldToSpeakButton({
     if (!pressActive.current) return;
     pressActive.current = false;
     setState(disabled ? "disabled" : "idle");
+    vibrate(50);
     try {
       await onPressEnd?.();
     } catch (err) {

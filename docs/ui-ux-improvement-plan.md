@@ -291,10 +291,10 @@ export function SessionSkeleton() {
 **File:** `src/components/HoldToSpeakButton.tsx`, `src/pages/JoinSession.tsx`
 
 **Changes:**
-- [ ] Add haptic on recording start: `navigator.vibrate?.(30)`
-- [ ] Add haptic on recording stop: `navigator.vibrate?.(50)`
-- [ ] Respect `prefers-reduced-motion` media query
-- [ ] No-op gracefully on iOS Safari (vibrate not supported)
+- [x] Add haptic on recording start: `navigator.vibrate?.(30)`
+- [x] Add haptic on recording stop: `navigator.vibrate?.(50)`
+- [x] Respect `prefers-reduced-motion` media query
+- [x] No-op gracefully on iOS Safari (vibrate not supported)
 
 **Acceptance criteria:**
 - Android Chrome: vibrates on start/stop
@@ -305,9 +305,9 @@ export function SessionSkeleton() {
 **File:** `src/pages/JoinSession.tsx` (answer buttons, lines 1056-1087)
 
 **Changes:**
-- [ ] On correct answer reveal: brief green pulse on correct option
-- [ ] On selection: subtle scale animation (0.98 → 1.0)
-- [ ] Respect `prefers-reduced-motion`
+- [x] On correct answer reveal: brief green pulse on correct option
+- [x] On selection: subtle scale animation (0.98 → 1.0)
+- [x] Respect `prefers-reduced-motion`
 
 **Acceptance criteria:**
 - Animations complete in <300ms
