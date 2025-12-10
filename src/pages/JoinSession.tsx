@@ -31,7 +31,6 @@ import { FloatingMicButton } from "../components/FloatingMicButton";
 import { SessionSkeleton } from "../components/SessionSkeleton";
 import { TextQuestionInput } from "../components/TextQuestionInput";
 import { VoiceStatusBadge } from "../components/VoiceStatusBadge";
-import { CompactVitalsChip } from "../components/CompactVitalsChip";
 import { CaseTimeline } from "../components/CaseTimeline";
 import { TeamChat } from "../components/TeamChat";
 import { useTeamChat } from "../hooks/useTeamChat";
@@ -39,8 +38,8 @@ import { useTeamLead } from "../hooks/useTeamLead";
 import { TeamRoleBadge } from "../components/TeamRoleBadge";
 import { EkgViewer } from "../components/EkgViewer";
 import { CxrViewer } from "../components/CxrViewer";
-import { QuickActionsBar, CharacterSelector, ExamFindingsPanel, ParticipantOrdersPanel } from "../components/participant";
-import { VitalsGrid, CardPanel, SectionLabel } from "../components/ui";
+import { QuickActionsBar, CharacterSelector, ExamFindingsPanel, ParticipantOrdersPanel, ParticipantHeader } from "../components/participant";
+import { CardPanel, SectionLabel } from "../components/ui";
 import { FLOOR_AUTO_RELEASE_MS, FLOOR_RELEASE_DELAY_MS, DEFAULT_TIMEOUT_MS } from "../constants";
 import { getDifficultyMultiplier, getStreakMultiplier } from "../utils/scoringUtils";
 import { useNotifications } from "../hooks/useNotifications";
@@ -1160,71 +1159,22 @@ export default function JoinSession() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col" id="main-content">
-      <header className="p-3 border-b border-slate-900 bg-slate-950 sticky top-0 z-20 shadow-lg shadow-black/20">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className="font-bold text-slate-200 tracking-tight text-sm">CardioQuest</div>
-            <div className="text-[11px] font-mono bg-slate-900 px-2 py-0.5 rounded text-sky-400 border border-slate-800">
-              {session.joinCode}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Vitals chip - shown when telemetry/vitals ordered */}
-            {simState?.vitals && (simState.telemetry || simState.orders?.some(o => o.type === "vitals" && o.status === "complete")) && (
-              <CompactVitalsChip
-                vitals={{
-                  hr: simState.vitals.hr as number | undefined,
-                  spo2: simState.vitals.spo2 as number | undefined,
-                  bp: simState.vitals.bp as string | undefined,
-                  rr: simState.vitals.rr as number | undefined,
-                }}
-                rhythmSummary={simState.rhythmSummary}
-                onClick={() => setShowVitalsPanel(v => !v)}
-              />
-            )}
-            <div
-              className={`text-[9px] uppercase tracking-[0.14em] px-1.5 py-0.5 rounded-full border ${
-                connectionStatus.state === "ready"
-                  ? "border-emerald-500/60 text-emerald-200"
-                  : connectionStatus.state === "connecting"
-                  ? "border-sky-500/60 text-sky-200"
-                  : "border-slate-700 text-slate-400"
-              }`}
-            >
-              {connectionStatus.state === "ready" ? "Live" : connectionStatus.state}
-            </div>
-            <button
-              type="button"
-              onClick={handleLeaveSession}
-              className="text-[11px] px-2 py-1 rounded-lg border border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-600 transition-colors"
-            >
-              Leave
-            </button>
-          </div>
-        </div>
-        {/* Expanded vitals panel */}
-        {showVitalsPanel && simState?.vitals && (
-          <div className="mt-2 bg-slate-900/80 border border-slate-800 rounded-lg p-3 space-y-2 animate-slide-down">
-            <div className="flex items-center justify-between">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">Vitals Monitor</div>
-              <button
-                type="button"
-                onClick={() => setShowVitalsPanel(false)}
-                className="text-slate-500 hover:text-slate-300 text-xs"
-              >
-                ✕
-              </button>
-            </div>
-            <VitalsGrid
-              hr={simState.vitals.hr}
-              bp={simState.vitals.bp}
-              spo2={simState.vitals.spo2}
-              rr={simState.vitals.rr}
-              rhythmSummary={simState.rhythmSummary}
-            />
-          </div>
-        )}
-      </header>
+      <ParticipantHeader
+        joinCode={session.joinCode}
+        connectionState={connectionStatus.state}
+        vitals={simState?.vitals ? {
+          hr: simState.vitals.hr as number | undefined,
+          spo2: simState.vitals.spo2 as number | undefined,
+          bp: simState.vitals.bp as string | undefined,
+          rr: simState.vitals.rr as number | undefined,
+        } : undefined}
+        rhythmSummary={simState?.rhythmSummary}
+        showVitals={Boolean(simState?.vitals && (simState.telemetry || simState.orders?.some(o => o.type === "vitals" && o.status === "complete")))}
+        showVitalsPanel={showVitalsPanel}
+        onToggleVitalsPanel={() => setShowVitalsPanel(v => !v)}
+        onCloseVitalsPanel={() => setShowVitalsPanel(false)}
+        onLeave={handleLeaveSession}
+      />
 
       <main className={`flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6 ${isMobile && voice.enabled ? "pb-36" : "pb-[env(safe-area-inset-bottom)]"}`}>
         {isOffline && (
