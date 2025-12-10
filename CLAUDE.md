@@ -70,6 +70,23 @@ Two mutually exclusive modes (`presenterMode.ts`):
 - **Presenter**: Full state (vitals, rhythm, all orders)
 - **Participant**: Only ordered data (exam, EKG after request)
 
+### Gamification & Scoring
+- **Scoring formula**: `100 × streak_bonus × time_bonus`
+  - Time bonus: ≤5s = 1.3×, ≤10s = 1.15×, >10s = 1.0×
+  - Streak bonus: 2 correct = 1.1×, 3 = 1.2×, 4+ = 1.5×
+  - Max per question: 195 points
+- **Team scores**: Sum of all team member points
+- **Individual scores**: Per-participant with streak tracking
+- **Empty teams**: Hidden from UI until they have members
+- **Inactive status**: Participants marked "away" when tab hidden/closed
+- **Random names**: Anonymous users get medical-themed names (e.g., "Swift Atrium")
+
+### Session Wrap-Up
+- `SessionWrapUp` component shows at end of slides deck
+- Answer recap with correct options and rationale
+- Score snapshot: top team, top player, overall accuracy
+- Toggle via "Session summary" button in presenter view
+
 ## File Quick Reference
 
 | File | Purpose |
@@ -77,6 +94,11 @@ Two mutually exclusive modes (`presenterMode.ts`):
 | `src/pages/JoinSession.tsx` | Participant view |
 | `src/pages/PresenterSession.tsx` | Presenter view |
 | `src/services/VoiceGatewayClient.ts` | WebSocket client |
+| `src/utils/scoringUtils.ts` | Scoring formula (streak, time bonus) |
+| `src/utils/names.ts` | Random name generator for anonymous users |
+| `src/components/SessionWrapUp.tsx` | End-of-session answer recap + scores |
+| `src/hooks/useTeamScores.ts` | Team scores (filters empty teams) |
+| `src/hooks/useIndividualScores.ts` | Individual leaderboard with inactive status |
 | `voice-gateway/src/index.ts` | WebSocket server |
 | `voice-gateway/src/sim/scenarioEngine.ts` | Scenario state machine |
 | `voice-gateway/src/orders.ts` | Order timers, duplicate detection |

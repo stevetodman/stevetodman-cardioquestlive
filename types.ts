@@ -61,6 +61,7 @@ export interface ParticipantDoc {
   createdAt: string;
   role?: ParticipantRole; // "lead" = team lead, "member" = regular (default)
   displayName?: string; // Optional display name for team chat/leaderboard
+  inactive?: boolean; // true when participant disconnects/leaves
 }
 
 // Shared tile data for interactive clue grids / phenotype slides

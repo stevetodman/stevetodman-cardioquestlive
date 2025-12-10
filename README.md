@@ -62,7 +62,7 @@ Interactive pediatric cardiology teaching with presenter + student modes, Gemini
 
 - `sessions/{sessionId}`: `title`, `joinCode`, `slides[]`, `questions[]`, `currentSlideIndex`, `currentQuestionId`, `showResults`, `createdAt`, `createdBy`.
 - `sessions/{sessionId}/responses/{userId}_{questionId}`: one answer per user/question (`userId`, `questionId`, `choiceIndex`, `createdAt`, `sessionId`).
-- `sessions/{sessionId}/participants/{userId}`: `teamId`, `teamName`, `points`, `streak`, `correctCount`, `incorrectCount`, `createdAt`, `role?` (`"member"` | `"lead"`), `displayName?`.
+- `sessions/{sessionId}/participants/{userId}`: `teamId`, `teamName`, `points`, `streak`, `correctCount`, `incorrectCount`, `createdAt`, `role?` (`"member"` | `"lead"`), `displayName?`, `inactive?` (true when participant tab hidden/closed).
 - `sessions/{sessionId}/teamMessages/{messageId}`: Team chat messages (`userId`, `teamId`, `text`, `createdAt`, `senderName?`). Only visible to same-team members.
 - `configs/deck`: deck configuration loaded by `deckService`.
 
@@ -70,20 +70,30 @@ Deeper dive: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Gamification Details
 
-- **Individual scoring**
+- **Individual scoring** (`src/utils/scoringUtils.ts`)
   - Base 100 points for correct answers.
-  - Difficulty multiplier: `easy 1.0`, `medium 1.3`, `hard 1.6` (default 1.0 if unset).
-  - Streak multiplier: grows with correct streak, capped at `1.5`.
+  - **Time bonus**: ≤5s = 1.3×, ≤10s = 1.15×, >10s = 1.0× (rewards fast responses)
+  - **Streak bonus**: 2 correct = 1.1×, 3 = 1.2×, 4+ = 1.5× (capped)
+  - Max per question: 195 points (100 × 1.5 × 1.3)
   - Incorrect: `0` points, streak resets, `incorrectCount++`.
   - **First-answer-only**: only the first submission per user/question affects points/streak; later edits update the response doc without changing score.
 - **Teams**
   - Automatic least-loaded assignment on join (Team Ductus, Team Cyanosis, Team QpQs).
   - Team score = sum of member points.
+  - **Empty teams hidden**: Teams with 0 members don't appear in scoreboard until someone joins.
   - **Team chat**: Private messaging within teams; teammates coordinate without other teams seeing.
   - **Team lead role**: One member per team can claim the "lead" role with visual indicator (star badge).
+- **Participant status**
+  - **Random names**: Anonymous users get medical-themed names (e.g., "Swift Atrium", "Keen Pulse").
+  - **Inactive tracking**: Participants marked "away" when tab hidden/closed; re-marked active on return.
+  - Individual leaderboard shows "(away)" tag for inactive participants.
 - **Presenter overlays**
   - Team scoreboard (rank + points) and individual scoreboard (top N players).
   - Toggles in presenter controls to show/hide each overlay; overlays sit over the slide without blocking interactions.
+- **Session wrap-up** (`src/components/SessionWrapUp.tsx`)
+  - Answer recap with correct options and one-line rationale.
+  - Score snapshot: top team, top player, overall accuracy.
+  - Toggle via "Session summary" button in slides mode.
 
 ## Local Development & Emulators
 

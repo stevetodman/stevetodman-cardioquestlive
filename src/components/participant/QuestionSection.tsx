@@ -55,7 +55,6 @@ export function QuestionSection({
         <p className="text-sm font-semibold mb-4 leading-relaxed">
           {question.stem}
         </p>
-        <ScoringInfo difficulty={question.difficulty} />
         <div className="grid grid-cols-1 gap-3 relative z-10">
           {question.options.map((opt, i) => (
             <AnswerButton
@@ -90,18 +89,6 @@ export function QuestionSection({
         )}
       </div>
     </section>
-  );
-}
-
-function ScoringInfo({ difficulty }: { difficulty?: string }) {
-  const multiplier =
-    difficulty === "hard" ? "1.6x" : difficulty === "medium" ? "1.3x" : "1.0x";
-
-  return (
-    <div className="mb-3 text-[11px] text-slate-400 bg-slate-800/40 border border-slate-800 rounded-lg px-3 py-2">
-      Scoring: first answer counts. Base 100 × difficulty {multiplier} with
-      streak bonus for consecutive correct answers (x1.1, x1.2, x1.5).
-    </div>
   );
 }
 

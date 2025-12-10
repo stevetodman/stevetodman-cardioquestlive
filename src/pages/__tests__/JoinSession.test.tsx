@@ -6,8 +6,10 @@ import JoinSession from "../JoinSession";
 import { ParticipantDoc } from "../../../types";
 
 const mockOnAuthStateChanged = jest.fn();
+const mockUpdateProfile = jest.fn().mockResolvedValue(undefined);
 jest.mock("firebase/auth", () => ({
   onAuthStateChanged: (...args: any[]) => mockOnAuthStateChanged(...args),
+  updateProfile: (...args: any[]) => mockUpdateProfile(...args),
 }));
 
 jest.mock("../../components/SlidePreview", () => ({
@@ -21,6 +23,7 @@ jest.mock("../../services/VoiceGatewayClient", () => ({
     startSpeaking: jest.fn(),
     stopSpeaking: jest.fn(),
     sendVoiceCommand: jest.fn(),
+    setTokenRefresher: jest.fn(),
     onPatientState: () => () => {},
     onPatientTranscriptDelta: () => () => {},
     onParticipantState: () => () => {},
@@ -34,6 +37,7 @@ jest.mock("../../services/VoiceGatewayClient", () => ({
 const mockGetDocs = jest.fn();
 const mockOnSnapshot = jest.fn();
 const mockSetDoc = jest.fn();
+const mockUpdateDoc = jest.fn().mockResolvedValue(undefined);
 const mockDoc = jest.fn((...args) => ({ path: args.join("/") }));
 const mockCollection = jest.fn();
 const mockGetDoc = jest.fn();
@@ -52,6 +56,7 @@ jest.mock("../../utils/firestore", () => ({
   onSnapshot: (...args: any[]) => mockOnSnapshot(...args),
   query: (...args: any[]) => mockQuery(...args),
   setDoc: (...args: any[]) => mockSetDoc(...args),
+  updateDoc: (...args: any[]) => mockUpdateDoc(...args),
   runTransaction: (...args: any[]) => mockRunTransaction(...args),
   where: (...args: any[]) => mockWhere(...args),
   db: {},

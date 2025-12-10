@@ -55,6 +55,7 @@ jest.mock("../../services/VoiceGatewayClient", () => ({
     sendDoctorAudio: jest.fn(),
     sendSetScenario: jest.fn(),
     sendAnalyzeTranscript: jest.fn(),
+    setTokenRefresher: jest.fn(),
     onPatientState: () => () => {},
     onPatientTranscriptDelta: () => () => {},
     onParticipantState: () => () => {},
@@ -118,6 +119,6 @@ describe("PresenterSession summary toggle", () => {
     // Switch to slides mode first (Session summary button is only visible there)
     await user.click(screen.getByTestId("presenter-mode-slides"));
     await user.click(screen.getByRole("button", { name: /Session summary/i }));
-    expect(screen.getByText(/Results & Standings/i)).toBeInTheDocument();
+    expect(screen.getByText(/Session Complete!/i)).toBeInTheDocument();
   });
 });

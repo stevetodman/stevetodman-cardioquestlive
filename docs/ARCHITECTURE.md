@@ -17,9 +17,16 @@ This guide is a quick map for developers joining the project. It highlights wher
   - Gemini-styled slides + questions. Sessions pull from these to seed data.
 
 - **Gamification**:
-  - Participants tracked in `sessions/{sessionId}/participants/{userId}` with team, points, streak, correctness counts.
+  - Participants tracked in `sessions/{sessionId}/participants/{userId}` with team, points, streak, correctness counts, `inactive` status.
   - Presenter overlays (team + individual scoreboards) subscribe to participants.
   - Scoring is session-only and first-answer-only per question.
+  - **Scoring formula** (`src/utils/scoringUtils.ts`): `100 × streak_bonus × time_bonus`
+    - Time bonus: ≤5s = 1.3×, ≤10s = 1.15×, >10s = 1.0×
+    - Streak bonus: 2 correct = 1.1×, 3 = 1.2×, 4+ = 1.5× (max)
+  - **Empty teams hidden**: `useTeamScores` filters teams with 0 members.
+  - **Inactive tracking**: Participants marked inactive on tab close/hide; shown as "(away)" in leaderboards.
+  - **Random names**: Anonymous users assigned medical-themed names (`src/utils/names.ts`).
+  - **Session wrap-up**: `SessionWrapUp` component shows answer recap, top team/player, accuracy.
 
 - **Shared helpers**:
   - `src/utils/interactiveTiles.ts`: presenter-only interactive clue tiles; participant tiles remain static.
@@ -39,7 +46,7 @@ This guide is a quick map for developers joining the project. It highlights wher
   - Fields: `userId`, `questionId`, `choiceIndex`, `createdAt`, `sessionId`.
   - Security: user can create/update their own deterministic doc; reads require auth.
 - `sessions/{sessionId}/participants/{userId}`: participant state for gamification
-  - Fields: `userId`, `sessionId`, `teamId`, `teamName`, `points`, `streak`, `correctCount`, `incorrectCount`, `createdAt`, `role?` (`"member"` | `"lead"`), `displayName?`.
+  - Fields: `userId`, `sessionId`, `teamId`, `teamName`, `points`, `streak`, `correctCount`, `incorrectCount`, `createdAt`, `role?` (`"member"` | `"lead"`), `displayName?`, `inactive?` (true when tab hidden/closed).
   - Security: any authenticated user can read; only the user can write their own doc with validated shape.
 - `sessions/{sessionId}/teamMessages/{messageId}`: team chat messages
   - Fields: `userId`, `teamId`, `text`, `createdAt`, `senderName?`.

@@ -14,7 +14,7 @@ import { useTeamScores } from "../hooks/useTeamScores";
 import { useIndividualScores } from "../hooks/useIndividualScores";
 import { TeamScoreboard } from "../components/TeamScoreboard";
 import { IndividualScoreboard } from "../components/IndividualScoreboard";
-import { SessionSummary } from "../components/SessionSummary";
+import { SessionWrapUp } from "../components/SessionWrapUp";
 import { Question } from "../types";
 import { useVoiceState, releaseFloor, setVoiceEnabled } from "../hooks/useVoiceState";
 import { auth } from "../firebase";
@@ -2210,17 +2210,12 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                   tabIndex={-1}
                   aria-label="Session summary"
                 >
-                  <SessionSummary
+                  <SessionWrapUp
+                    questions={session?.questions ?? []}
                     teams={teams}
                     players={players}
-                    participantCount={participantCount}
                     overallAccuracy={overallAccuracy}
-                    totalQuestions={totalQuestions}
-                    questionsAnsweredCount={questionsAnsweredCount}
-                    questionsAnsweredPct={questionsAnsweredPct}
-                    totalResponses={totalResponses}
-                    avgResponsesPerQuestion={avgResponsesPerQuestion}
-                    questionStats={questionStats}
+                    participantCount={participantCount}
                   />
                 </div>
               ) : (

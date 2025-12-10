@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, updateProfile } from "firebase/auth";
 import {
   collection,
   doc,
@@ -11,6 +11,7 @@ import {
   query,
   where,
   setDoc,
+  updateDoc,
   db,
   runTransaction
 } from "../utils/firestore"; // Updated import
@@ -41,8 +42,9 @@ import { CxrViewer } from "../components/CxrViewer";
 import { QuickActionsBar, CharacterSelector, ExamFindingsPanel, ParticipantOrdersPanel, ParticipantHeader, QuestionSection, QuestionPlaceholder } from "../components/participant";
 import { CardPanel, SectionLabel } from "../components/ui";
 import { FLOOR_AUTO_RELEASE_MS, FLOOR_RELEASE_DELAY_MS, DEFAULT_TIMEOUT_MS } from "../constants";
-import { getDifficultyMultiplier, getStreakMultiplier } from "../utils/scoringUtils";
+import { getStreakMultiplier, calculatePoints } from "../utils/scoringUtils";
 import { useNotifications } from "../hooks/useNotifications";
+import { getOrCreateRandomName } from "../utils/names";
 
 function getLocalUserId(): string {
   const key = "cq_live_user_id";
@@ -105,6 +107,9 @@ export default function JoinSession() {
   const [userId, setUserId] = useState<string | null>(
     isConfigured ? auth?.currentUser?.uid ?? null : getLocalUserId()
   );
+  const [displayName, setDisplayName] = useState<string>(
+    auth?.currentUser?.displayName ?? getOrCreateRandomName()
+  );
   const [micLevel, setMicLevel] = useState(0);
   const [transcribing, setTranscribing] = useState(false);
   const [targetCharacter, setTargetCharacter] = useState<CharacterId>("patient");
@@ -136,6 +141,7 @@ export default function JoinSession() {
   const [showEkg, setShowEkg] = useState(false);
   const [toast, setToast] = useState<{ message: string; ts: number } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [questionStartTime, setQuestionStartTime] = useState<number | null>(null);
   const [lastFloorHolder, setLastFloorHolder] = useState<string | null>(null);
   const [lastFallback, setLastFallback] = useState<boolean | null>(null);
   const [assessmentRequest, setAssessmentRequest] = useState<{ ts: number; stage?: string } | null>(null);
@@ -181,7 +187,7 @@ export default function JoinSession() {
     window.location.hash = `#/join/${trimmed}`;
   }, []);
   const voice = useVoiceState(sessionId);
-  const userDisplayName = auth?.currentUser?.displayName ?? "Resident";
+  const userDisplayName = displayName;
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 3000);
@@ -286,8 +292,23 @@ export default function JoinSession() {
 
   useEffect(() => {
     if (!isConfigured || !auth) return;
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUserId(user?.uid ?? null);
+      if (user) {
+        // If user has no displayName, assign a random one
+        if (!user.displayName) {
+          const randomName = getOrCreateRandomName();
+          try {
+            await updateProfile(user, { displayName: randomName });
+            setDisplayName(randomName);
+          } catch (err) {
+            console.error("Failed to set random display name", err);
+            setDisplayName(randomName); // Still use it locally
+          }
+        } else {
+          setDisplayName(user.displayName);
+        }
+      }
     });
     ensureSignedIn().catch((error) =>
       console.error("Anonymous auth failed", error)
@@ -503,9 +524,12 @@ export default function JoinSession() {
     };
   }, [sessionId, userId, userDisplayName]);
 
-  // Reset local selection when question changes
+  // Reset local selection and track question start time when question changes
   useEffect(() => {
     setSelectedChoice(null);
+    if (session?.currentQuestionId) {
+      setQuestionStartTime(Date.now());
+    }
   }, [session?.currentQuestionId]);
 
   // Ensure participant doc exists and assign a team (use transaction for creation; team counts from a snapshot)
@@ -554,6 +578,8 @@ export default function JoinSession() {
             correctCount: 0,
             incorrectCount: 0,
             createdAt: new Date().toISOString(),
+            displayName,
+            inactive: false,
           };
           tx.set(participantRef, participantDoc);
         });
@@ -562,7 +588,7 @@ export default function JoinSession() {
       }
     }
     ensureParticipantDoc();
-  }, [sessionId, userId]);
+  }, [sessionId, userId, displayName]);
 
   // Listen to participant doc for team info
   useEffect(() => {
@@ -575,6 +601,55 @@ export default function JoinSession() {
       }
     });
     return () => unsub();
+  }, [sessionId, userId]);
+
+  // Track active/inactive status for participant
+  useEffect(() => {
+    if (!sessionId || !userId) return;
+    const participantRef = doc(db, "sessions", sessionId, "participants", userId);
+
+    // Mark as active on mount/reconnect
+    const markActive = () => {
+      updateDoc(participantRef, { inactive: false }).catch(() => {
+        // Ignore errors (doc might not exist yet)
+      });
+    };
+
+    // Mark as inactive when leaving
+    const markInactive = () => {
+      updateDoc(participantRef, { inactive: true }).catch(() => {
+        // Ignore errors
+      });
+    };
+
+    // Mark active on mount
+    markActive();
+
+    // Mark inactive on page unload
+    const handleBeforeUnload = () => {
+      // Use sendBeacon for reliable delivery during unload
+      markInactive();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        markInactive();
+      } else if (document.visibilityState === "visible") {
+        markActive();
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      // Mark inactive on cleanup (component unmount)
+      markInactive();
+    };
   }, [sessionId, userId]);
 
   // Team chat hook
@@ -1106,12 +1181,15 @@ export default function JoinSession() {
     setSubmitError(null);
     setSelectedChoice(choiceIndex); // optimistic selection
     setSubmitting(true);
+
+    // Calculate response time for time bonus
+    const responseTimeMs = questionStartTime ? Date.now() - questionStartTime : undefined;
+
     try {
       const responseId = `${userId}_${currentQuestion.id}`;
       const responseRef = doc(db, "sessions", sessionId, "responses", responseId);
       const participantRef = doc(db, "sessions", sessionId, "participants", userId);
       const isCorrect = choiceIndex === currentQuestion.correctIndex;
-      const difficultyMultiplier = getDifficultyMultiplier(currentQuestion.difficulty);
 
       const existingResponse = await getDoc(responseRef);
       const isFirstResponse =
@@ -1138,8 +1216,8 @@ export default function JoinSession() {
           const existing: Partial<ParticipantDoc> = snapHasData ? data ?? {} : {};
 
           const currentStreak = existing.streak ?? 0;
-          const streakMultiplier = getStreakMultiplier(currentStreak);
-          const questionScore = isCorrect ? Math.round(100 * difficultyMultiplier * streakMultiplier) : 0;
+          // New scoring: base 100 × streak × time bonus (no difficulty)
+          const questionScore = isCorrect ? calculatePoints(currentStreak, responseTimeMs) : 0;
           const nextStreak = isCorrect ? currentStreak + 1 : 0;
 
           const payload: ParticipantDoc = {
@@ -1152,6 +1230,7 @@ export default function JoinSession() {
             correctCount: (existing.correctCount ?? 0) + (isCorrect ? 1 : 0),
             incorrectCount: (existing.incorrectCount ?? 0) + (isCorrect ? 0 : 1),
             createdAt: existing.createdAt ?? new Date().toISOString(),
+            displayName: existing.displayName ?? displayName,
           };
 
           if (snapHasData) {

@@ -7,6 +7,8 @@ export interface IndividualScore {
   points: number;
   teamId: string;
   teamName: string;
+  displayName?: string;
+  inactive?: boolean;
 }
 
 const DEFAULT_LIMIT = 5;
@@ -27,6 +29,8 @@ export function useIndividualScores(sessionId?: string | null, limit: number = D
           points: data?.points ?? 0,
           teamId: data?.teamId ?? "unknown",
           teamName: data?.teamName ?? "Team",
+          displayName: data?.displayName,
+          inactive: data?.inactive,
         });
       });
       const sorted = scores.sort((a, b) => b.points - a.points).slice(0, limit);

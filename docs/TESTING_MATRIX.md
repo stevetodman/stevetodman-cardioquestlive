@@ -9,6 +9,9 @@ Use this to choose the smallest reliable test set for your change. Prefer the sm
 - **Presenter/participant UI (pages/components)**
   - `npm test -- --runInBand src/pages/__tests__/JoinSession.test.tsx src/pages/__tests__/PresenterSessionSummary.test.tsx`
   - `npm run build` (catches TypeScript/asset issues)
+- **Scoring/gamification changes**
+  - `npm test -- --runInBand src/hooks/__tests__/useScores.test.tsx`
+  - Page tests above (scoring integrates with JoinSession)
 - **Voice gateway (transport/orchestration/domain)**
   - `npm run test:gateway`
   - Optionally sanity-check: `npm run sim:harness` (ScenarioEngine/ToolGate) and `GW_URL=ws://localhost:8081/ws/voice npm run ws:harness` against a running gateway.

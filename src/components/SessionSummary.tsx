@@ -141,7 +141,7 @@ export function SessionSummary({
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className={`text-sm truncate ${idx === 0 ? "text-white font-semibold" : "text-slate-100"}`}>
-                      Player {idx + 1}
+                      {player.displayName || `Player ${idx + 1}`}
                     </div>
                     <div className="text-[11px] text-slate-500 truncate">{player.teamName}</div>
                   </div>

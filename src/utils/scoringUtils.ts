@@ -1,16 +1,10 @@
 /**
  * Scoring utilities for gamification.
- * Extracted to reduce token consumption and ensure consistency.
+ * Formula: BASE_POINTS × streak_multiplier × time_bonus
+ * - No difficulty multiplier (all questions equal base value)
+ * - Streak bonus rewards consecutive correct answers
+ * - Time bonus rewards faster responses
  */
-
-import type { Question } from "../types";
-
-// Constants for scoring multipliers
-export const DIFFICULTY_MULTIPLIERS = {
-  easy: 1.0,
-  medium: 1.3,
-  hard: 1.6,
-} as const;
 
 export const STREAK_THRESHOLDS = {
   2: 1.1,
@@ -20,15 +14,13 @@ export const STREAK_THRESHOLDS = {
 
 export const BASE_POINTS = 100;
 
-/**
- * Get the difficulty multiplier for a question.
- * Defaults to 1.0 (easy) if difficulty is not specified.
- */
-export function getDifficultyMultiplier(difficulty?: Question["difficulty"]): number {
-  if (difficulty === "medium") return DIFFICULTY_MULTIPLIERS.medium;
-  if (difficulty === "hard") return DIFFICULTY_MULTIPLIERS.hard;
-  return DIFFICULTY_MULTIPLIERS.easy;
-}
+// Time bonus: answer within X seconds for bonus multiplier
+export const TIME_BONUS = {
+  FAST_THRESHOLD_MS: 5000,    // Under 5 seconds = fast bonus
+  MEDIUM_THRESHOLD_MS: 10000, // Under 10 seconds = medium bonus
+  FAST_MULTIPLIER: 1.3,       // 30% bonus for very fast
+  MEDIUM_MULTIPLIER: 1.15,    // 15% bonus for moderately fast
+} as const;
 
 /**
  * Get the streak multiplier based on current streak.
@@ -42,13 +34,29 @@ export function getStreakMultiplier(currentStreak: number): number {
 }
 
 /**
+ * Get time bonus multiplier based on response time.
+ * @param responseTimeMs - Time taken to answer in milliseconds
+ */
+export function getTimeBonus(responseTimeMs: number): number {
+  if (responseTimeMs <= TIME_BONUS.FAST_THRESHOLD_MS) {
+    return TIME_BONUS.FAST_MULTIPLIER;
+  }
+  if (responseTimeMs <= TIME_BONUS.MEDIUM_THRESHOLD_MS) {
+    return TIME_BONUS.MEDIUM_MULTIPLIER;
+  }
+  return 1.0;
+}
+
+/**
  * Calculate points for a correct answer.
+ * @param currentStreak - Number of consecutive correct answers
+ * @param responseTimeMs - Time taken to answer (optional, defaults to no bonus)
  */
 export function calculatePoints(
-  difficulty?: Question["difficulty"],
-  currentStreak = 0
+  currentStreak = 0,
+  responseTimeMs?: number
 ): number {
-  const diffMult = getDifficultyMultiplier(difficulty);
   const streakMult = getStreakMultiplier(currentStreak);
-  return Math.round(BASE_POINTS * diffMult * streakMult);
+  const timeMult = responseTimeMs != null ? getTimeBonus(responseTimeMs) : 1.0;
+  return Math.round(BASE_POINTS * streakMult * timeMult);
 }

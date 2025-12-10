@@ -43,8 +43,11 @@ export function IndividualScoreboard({ players }: Props) {
                 #{idx + 1}
               </span>
               <div className="flex-1 min-w-0">
-                <div className={`text-sm truncate ${idx === 0 ? "text-white font-semibold" : "text-slate-100"}`}>
-                  Player {idx + 1}
+                <div className={`text-sm truncate flex items-center gap-1 ${idx === 0 ? "text-white font-semibold" : "text-slate-100"} ${player.inactive ? "opacity-60" : ""}`}>
+                  {player.displayName || `Player ${idx + 1}`}
+                  {player.inactive && (
+                    <span className="text-[9px] text-slate-500 font-normal">(away)</span>
+                  )}
                 </div>
                 <div className="text-[11px] text-slate-400 truncate">{player.teamName}</div>
               </div>
