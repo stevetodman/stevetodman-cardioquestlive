@@ -40,6 +40,8 @@ import { TeamRoleBadge } from "../components/TeamRoleBadge";
 import { EkgViewer } from "../components/EkgViewer";
 import { CxrViewer } from "../components/CxrViewer";
 import { FLOOR_AUTO_RELEASE_MS, FLOOR_RELEASE_DELAY_MS, DEFAULT_TIMEOUT_MS } from "../constants";
+import { getDifficultyMultiplier, getStreakMultiplier } from "../utils/scoringUtils";
+import { useNotifications } from "../hooks/useNotifications";
 
 function getLocalUserId(): string {
   const key = "cq_live_user_id";
@@ -80,19 +82,6 @@ const TEAM_OPTIONS = [
   { id: "team_cyanosis", name: "Team Cyanosis" },
   { id: "team_qpqs", name: "Team QpQs" },
 ];
-
-function getDifficultyMultiplier(difficulty?: Question["difficulty"]) {
-  if (difficulty === "medium") return 1.3;
-  if (difficulty === "hard") return 1.6;
-  return 1.0;
-}
-
-function getStreakMultiplier(currentStreak: number) {
-  if (currentStreak >= 4) return 1.5;
-  if (currentStreak === 3) return 1.2;
-  if (currentStreak === 2) return 1.1;
-  return 1.0;
-}
 
 export default function JoinSession() {
   const { joinCode } = useParams();

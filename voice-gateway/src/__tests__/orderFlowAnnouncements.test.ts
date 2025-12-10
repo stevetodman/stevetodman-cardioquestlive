@@ -17,7 +17,7 @@ function makeDeps(options: { runImmediately?: boolean } = {}) {
   const sm = {
     broadcastToSession: jest.fn(),
     broadcastToPresenters: jest.fn(),
-  } as any as SessionManager;
+  } as unknown as jest.Mocked<SessionManager>;
   const runtimeMap = new Map<string, Runtime>();
   const broadcastState = jest.fn();
   const scheduledCallbacks: (() => void)[] = [];
