@@ -77,6 +77,31 @@ Presenter can trigger scenario events:
 - `rhythm_change` (vtach, svt, afib)
 - `code_blue` (cardiac arrest)
 
+### Code Blue / Resuscitation Features (Dec 2024)
+
+**Code Blue Panel** (`src/components/CodeBluePanel.tsx`)
+- Auto-activates when critical rhythms detected (VFib, VTach, Asystole, PEA)
+- Code duration timer (time since arrest)
+- 2-minute pulse check countdown per PALS
+- Interactive PALS checklist
+- Shockable vs non-shockable pathway guidance
+- Integrated CPR metronome
+
+**CPR Metronome** (`src/components/CPRMetronome.tsx`)
+- Audio beep via Web Audio API at 110 BPM (PALS: 100-120/min)
+- Visual pulse indicator with beat animation
+- Tap-to-track mode for compression rate feedback
+- Volume control
+- Compact version (`CPRMetronomeMini`) for embedding
+
+**Dynamic ECG Waveform** (`src/components/RhythmWaveform.tsx`)
+- Real-time Canvas-based animated ECG
+- Rhythm-type detection from summary text
+- Patterns: sinus, SVT, VTach, VFib, AFib, asystole, PEA, heart_block
+- HR-dependent wave timing
+- Color-coded severity (emerald/amber/red)
+- Flash animation on rhythm changes
+
 ## Scenarios
 
 | ID | Age | Weight | Description |

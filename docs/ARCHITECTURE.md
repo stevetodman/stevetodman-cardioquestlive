@@ -74,3 +74,36 @@ This guide is a quick map for developers joining the project. It highlights wher
   - State/persistence: `sim/scenarioEngine.ts`, `persistence.ts`, `messageTypes.ts`, `validators.ts`.
   - OpenAI integrations: `sttClient.ts`, `ttsClient.ts`, `debriefAnalyzer.ts`, `openaiClient.ts`.
 - **Tests**: `npm run test:gateway` runs gateway/unit behavior; page tests cover basic presenter flows; rules tests via `npm run test:rules` (or `test:rules:ports` with env overrides if ports are blocked).
+
+## Simulation visualization components
+
+### RhythmWaveform (`src/components/RhythmWaveform.tsx`)
+Real-time animated ECG waveform using Canvas API:
+- **Rhythm detection**: Parses rhythm summary to identify type (sinus, SVT, VTach, VFib, AFib, asystole, PEA, heart_block)
+- **Dynamic patterns**: Generates rhythm-specific waveform shapes
+- **HR-based timing**: Adjusts wave speed based on current heart rate
+- **Color coding**: Emerald (normal), amber (concerning), red (critical)
+- **Flash animation**: Visual highlight on rhythm changes
+
+### CodeBluePanel (`src/components/CodeBluePanel.tsx`)
+Resuscitation management interface:
+- **Auto-detection**: Activates on VFib, VTach, Asystole, or PEA rhythms
+- **Timers**: Code duration and 2-minute pulse check countdown
+- **PALS checklist**: Interactive protocol steps
+- **Pathway guidance**: Shockable vs non-shockable algorithms
+- **CPR metronome integration**: Embedded compact metronome
+
+### CPRMetronome (`src/components/CPRMetronome.tsx`)
+Audio-visual CPR timing assistance:
+- **Web Audio API**: Generates beep sounds at target rate
+- **Target rate**: 110 BPM (PALS standard: 100-120/min)
+- **Visual pulse**: Animated beat indicator
+- **Tap-to-track**: Manual compression rate feedback
+- **Volume control**: Adjustable audio level
+- **Compact mode**: `CPRMetronomeMini` for embedding
+
+### VitalsMonitor (`src/components/VitalsMonitor.tsx`)
+Enhanced with rhythm visualization:
+- **Animated waveform**: Integrates RhythmWaveform component
+- **Event-driven highlighting**: Amber glow on significant vitals changes
+- **Telemetry toggle**: Switch between animated and static waveform

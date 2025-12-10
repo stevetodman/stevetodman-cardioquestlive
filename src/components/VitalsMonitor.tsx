@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useVitalsChange } from "../hooks/useVitalsChange";
+import { RhythmWaveform } from "./RhythmWaveform";
 
 type Vitals = { hr?: number; bp?: string; rr?: number; spo2?: number; temp?: number };
 
@@ -7,12 +8,14 @@ type Props = {
   vitals: Vitals;
   telemetryWaveform?: number[];
   telemetryOn?: boolean;
+  rhythmSummary?: string;
+  useAnimatedWaveform?: boolean;
 };
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 const clampSpo2 = (v?: number) => (typeof v === "number" ? Math.min(100, v) : undefined);
 
-export function VitalsMonitor({ vitals, telemetryWaveform, telemetryOn }: Props) {
+export function VitalsMonitor({ vitals, telemetryWaveform, telemetryOn, rhythmSummary, useAnimatedWaveform = true }: Props) {
   const [display, setDisplay] = useState<Vitals>({});
   const lastTarget = useRef<Vitals>({});
   const highlightedVitals = useVitalsChange(vitals);
@@ -66,13 +69,20 @@ export function VitalsMonitor({ vitals, telemetryWaveform, telemetryOn }: Props)
         <VitalTile label="RR" value={display.rr ?? "—"} unit="" isChanging={highlightedVitals.has("rr")} />
         <VitalTile label="Temp" value={display.temp ? display.temp.toFixed(1) : "—"} unit="°C" isChanging={highlightedVitals.has("temp")} />
       </div>
-      {waveformPath && (
+      {telemetryOn && useAnimatedWaveform ? (
+        <RhythmWaveform
+          rhythmSummary={rhythmSummary}
+          hr={vitals.hr}
+          height={64}
+          showLabel={true}
+        />
+      ) : waveformPath ? (
         <div className="bg-slate-900 rounded-lg border border-emerald-800/50 p-2">
           <svg viewBox={`0 0 ${waveformPath.width} ${waveformPath.height}`} className="w-full h-16">
             <polyline fill="none" stroke="#22d3ee" strokeWidth="2" points={waveformPath.pts} />
           </svg>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

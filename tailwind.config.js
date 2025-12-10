@@ -17,6 +17,7 @@ export default {
         "correct-pulse": "correct-pulse 0.3s ease-out 1",
         "select-pop": "select-pop 0.2s ease-out 1",
         "vital-highlight": "vital-highlight 2s ease-out",
+        "rhythm-flash": "rhythm-flash 1.5s ease-out",
       },
       keyframes: {
         shake: {
@@ -55,6 +56,24 @@ export default {
           "100%": {
             boxShadow: "0 0 0 0 rgba(251, 191, 36, 0)",
             borderColor: "transparent",
+          },
+        },
+        "rhythm-flash": {
+          "0%": {
+            boxShadow: "0 0 0 0 rgba(251, 191, 36, 0.8)",
+            transform: "scale(1)",
+          },
+          "15%": {
+            boxShadow: "0 0 20px 8px rgba(251, 191, 36, 0.6)",
+            transform: "scale(1.02)",
+          },
+          "30%": {
+            boxShadow: "0 0 15px 5px rgba(251, 191, 36, 0.4)",
+            transform: "scale(1.01)",
+          },
+          "100%": {
+            boxShadow: "0 0 0 0 rgba(251, 191, 36, 0)",
+            transform: "scale(1)",
           },
         },
       },

@@ -122,6 +122,14 @@ Toggle via the mode switch in presenter header. Mode persists in localStorage.
   - Quick commands grouped by category (AI Control, Clinical, Orders, Treatments)
   - Custom focus-visible states for keyboard accessibility
   - Spring animation on collapsible panels
+- **Resuscitation simulation** (Dec 2024):
+  - RhythmWaveform: Canvas-based animated ECG with rhythm-type detection
+  - CodeBluePanel: Auto-detects VFib/VTach/Asystole/PEA, PALS timers, checklist
+  - CPRMetronome: Web Audio API beep at 110 BPM, tap-to-track feedback
+  - VitalsMonitor integration with animated waveforms
+- **Facilitator documentation** (Dec 2024):
+  - FACILITATOR_GUIDE.md: Complete scenario guide with clinical details
+  - All 10 scenarios documented with stages, vitals, exam findings, teaching points
 
 ## Team Mode Features
 

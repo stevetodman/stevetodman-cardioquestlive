@@ -10,6 +10,7 @@ Interactive pediatric cardiology teaching with presenter + student modes, Gemini
 
 - Start here: `docs/START_HERE.md`
 - Architecture: `docs/ARCHITECTURE.md`
+- **Facilitator guide**: `docs/FACILITATOR_GUIDE.md` - Complete scenario documentation with clinical details
 - Admin deck editing: `docs/ADMIN_SLIDE_EDITING.md`
 - Ops/deploy: `DEPLOY.md`, `RUNBOOK.md`
 - Voice/virtual patient: `docs/virtual-patient-status.md`, `docs/voice-sim-state-and-harnesses.md`
@@ -26,6 +27,10 @@ Interactive pediatric cardiology teaching with presenter + student modes, Gemini
 - **Presenter view** with two mutually exclusive modes:
   - **Slides mode**: Full-screen presentation with slides, questions, scores, gamification overlays
   - **Sim mode**: Patient simulation with voice controls, vitals monitoring, telemetry, interventions
+- **Resuscitation simulation** (Dec 2024):
+  - **Code Blue Panel**: Auto-detects critical rhythms (VFib, VTach, Asystole, PEA), PALS protocol timer
+  - **CPR Metronome**: Audio/visual guide at 110 BPM with tap-to-track rate feedback
+  - **Dynamic ECG Waveform**: Real-time animated rhythm display using Canvas API
 - **Student mode**: join by code or QR, answer MCQs, view static interactive tiles, and quickly rejoin the last session.
 - **Gamification (session-only)**:
   - Per-participant points/streaks; first answer per question counts for scoring.

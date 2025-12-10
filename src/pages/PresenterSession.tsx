@@ -23,6 +23,7 @@ import { PresenterVoiceControls } from "../components/PresenterVoiceControls";
 import { AutonomousSimPanel } from "../components/AutonomousSimPanel";
 import { VoiceCharacterTile } from "../components/VoiceCharacterTile";
 import { VitalsMonitor } from "../components/VitalsMonitor";
+import { CodeBluePanel } from "../components/CodeBluePanel";
 import { PatientStatusOutline, Interventions } from "../components/PatientStatusOutline";
 import { InjectsPalette, Inject } from "../components/InjectsPalette";
 import { voiceGatewayClient } from "../services/VoiceGatewayClient";
@@ -2006,11 +2007,13 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                 vitals={simState.vitals as any}
                 telemetryWaveform={simState.telemetryWaveform as any}
                 telemetryOn={simState.telemetry}
+                rhythmSummary={simState.rhythmSummary}
               />
               <PatientStatusOutline
                 interventions={simState.interventions ?? {}}
                 compact
               />
+              <CodeBluePanel rhythmSummary={simState.rhythmSummary} />
               <InjectsPalette
                 onInject={(inject) => {
                   voiceGatewayClient.sendVoiceCommand("scenario_event", {
