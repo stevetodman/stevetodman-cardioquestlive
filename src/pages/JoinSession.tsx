@@ -39,6 +39,9 @@ import { useTeamLead } from "../hooks/useTeamLead";
 import { TeamRoleBadge } from "../components/TeamRoleBadge";
 import { EkgViewer } from "../components/EkgViewer";
 import { CxrViewer } from "../components/CxrViewer";
+import { QuickActionsBar } from "../components/participant/QuickActionsBar";
+import { CharacterSelector } from "../components/participant/CharacterSelector";
+import { VitalsGrid, CardPanel, SectionLabel } from "../components/ui";
 import { FLOOR_AUTO_RELEASE_MS, FLOOR_RELEASE_DELAY_MS, DEFAULT_TIMEOUT_MS } from "../constants";
 import { getDifficultyMultiplier, getStreakMultiplier } from "../utils/scoringUtils";
 import { useNotifications } from "../hooks/useNotifications";
@@ -785,84 +788,37 @@ export default function JoinSession() {
       {voiceError && isMobile && <div className="text-[11px] text-rose-300">{voiceError}</div>}
 
       {/* Quick Actions */}
-      {(!fallbackActive && (!showExam || !simState?.telemetry || (latestEkg && !showEkg))) && (
-        <div className="mt-3 pt-3 border-t border-slate-800/60">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold mb-2">Quick actions</div>
-          <div className="flex flex-wrap gap-2">
-            {!showExam && (
-              <button
-                type="button"
-                onClick={() =>
-                  emitCommand(sessionId!, "exam", {}, "nurse", logAndToast).then(() => {
-                    setShowExam(true);
-                    showToast("Exam requested");
-                  })
-                }
-                className="px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-200 text-xs hover:border-slate-500 hover:bg-slate-800 transition-colors flex items-center gap-1.5"
-              >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.48 0 2.88.36 4.11 1" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Exam
-              </button>
-            )}
-            {!simState?.telemetry && (
-              <button
-                type="button"
-                onClick={() =>
-                  emitCommand(sessionId!, "toggle_telemetry", { enabled: true }, "tech", logAndToast).then(() => {
-                    showToast("Telemetry requested");
-                  })
-                }
-                className="px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-200 text-xs hover:border-slate-500 hover:bg-slate-800 transition-colors flex items-center gap-1.5"
-              >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Telemetry
-              </button>
-            )}
-            {latestEkg && !showEkg && (
-              <button
-                type="button"
-                onClick={() => {
-                  emitCommand(sessionId!, "show_ekg", {}, "tech", logAndToast);
-                  setShowEkg(true);
-                  showToast("EKG opened");
-                }}
-                className="px-3 py-1.5 rounded-lg border text-amber-200 bg-amber-600/10 border-amber-500/50 hover:border-amber-400 hover:bg-amber-600/20 transition-colors flex items-center gap-1.5 text-xs animate-pulse-slow"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                View EKG
-              </button>
-            )}
-          </div>
-        </div>
+      {!fallbackActive && (
+        <QuickActionsBar
+          sessionId={sessionId!}
+          showExam={showExam}
+          hasTelemetry={!!simState?.telemetry}
+          hasEkg={!!latestEkg}
+          showEkg={showEkg}
+          onRequestExam={() =>
+            emitCommand(sessionId!, "exam", {}, "nurse", logAndToast).then(() => {
+              setShowExam(true);
+              showToast("Exam requested");
+            })
+          }
+          onRequestTelemetry={() =>
+            emitCommand(sessionId!, "toggle_telemetry", { enabled: true }, "tech", logAndToast).then(() => {
+              showToast("Telemetry requested");
+            })
+          }
+          onViewEkg={() => {
+            emitCommand(sessionId!, "show_ekg", {}, "tech", logAndToast);
+            setShowEkg(true);
+            showToast("EKG opened");
+          }}
+        />
       )}
 
       {/* Character Selector - Always visible */}
-      <div className="mt-3 flex items-center gap-2 text-xs">
-        <span className="text-slate-400">Talk to:</span>
-        <div className="flex gap-1 flex-wrap">
-          {(["patient", "nurse", "tech", "consultant"] as const).map((char) => (
-            <button
-              key={char}
-              type="button"
-              onClick={() => setTargetCharacter(char)}
-              className={`px-2.5 py-1 rounded-full capitalize transition-colors ${
-                targetCharacter === char
-                  ? "bg-sky-600 text-white"
-                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-              }`}
-            >
-              {char}
-            </button>
-          ))}
-        </div>
-      </div>
+      <CharacterSelector
+        selectedCharacter={targetCharacter}
+        onSelect={setTargetCharacter}
+      />
 
       {/* Advanced Options Toggle */}
       <div className="mt-3 pt-2 border-t border-slate-800/60">
@@ -920,9 +876,7 @@ export default function JoinSession() {
               Voice is unavailable right now—type your question below.
             </div>
           )}
-          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
-            Text fallback
-          </div>
+          <SectionLabel>Text fallback</SectionLabel>
           <TextQuestionInput
             disabled={submitting}
             onSubmit={async (text) => {
@@ -954,9 +908,7 @@ export default function JoinSession() {
 
       {showExam && simState?.exam && (
         <div className="mt-2 bg-slate-900/60 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-1">
-          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
-            Exam
-          </div>
+          <SectionLabel>Exam</SectionLabel>
           {simState.exam.general && <div><span className="text-slate-500 text-[11px] mr-1">General:</span>{simState.exam.general}</div>}
           {simState.exam.cardio && <div><span className="text-slate-500 text-[11px] mr-1">CV:</span>{simState.exam.cardio}</div>}
           {simState.exam.lungs && <div><span className="text-slate-500 text-[11px] mr-1">Lungs:</span>{simState.exam.lungs}</div>}
@@ -1150,7 +1102,7 @@ export default function JoinSession() {
       {showEkg && latestEkg && (
         <div className="mt-2 bg-slate-950/70 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-2">
           <div className="flex items-center justify-between">
-            <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">EKG</div>
+            <SectionLabel>EKG</SectionLabel>
             <button
               type="button"
               onClick={() => setShowEkg(false)}
@@ -1216,7 +1168,7 @@ export default function JoinSession() {
         </div>
       )}
       <div className="mt-2 text-[12px] text-slate-400 bg-slate-900/60 border border-slate-800 rounded-lg p-3 space-y-1">
-        <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">Scoring</div>
+        <SectionLabel>Scoring</SectionLabel>
         <div>Base: 100 points per correct answer.</div>
         <div>Difficulty: easy x1.0 · medium x1.3 · hard x1.6.</div>
         <div>Streak bonus: +10% for 2 in a row, +20% for 3, +50% for 4+.</div>
@@ -1225,9 +1177,7 @@ export default function JoinSession() {
   ) : (
     <section className="bg-slate-900/50 rounded-xl p-4 border border-slate-800/50">
       <div className="text-center">
-        <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold mb-2">
-          Voice Interaction
-        </div>
+        <SectionLabel className="mb-2">Voice Interaction</SectionLabel>
         <p className="text-sm text-slate-400">Voice will be available when the presenter enables it</p>
       </div>
     </section>
@@ -1483,29 +1433,13 @@ export default function JoinSession() {
                 ✕
               </button>
             </div>
-            <div className="grid grid-cols-4 gap-2 text-center">
-              <div>
-                <div className="text-lg font-bold text-slate-100">{simState.vitals.hr ?? "—"}</div>
-                <div className="text-[9px] text-slate-500 uppercase">HR</div>
-              </div>
-              <div>
-                <div className="text-lg font-bold text-slate-100">{simState.vitals.bp ?? "—"}</div>
-                <div className="text-[9px] text-slate-500 uppercase">BP</div>
-              </div>
-              <div>
-                <div className="text-lg font-bold text-slate-100">{simState.vitals.spo2 ?? "—"}%</div>
-                <div className="text-[9px] text-slate-500 uppercase">SpO₂</div>
-              </div>
-              <div>
-                <div className="text-lg font-bold text-slate-100">{simState.vitals.rr ?? "—"}</div>
-                <div className="text-[9px] text-slate-500 uppercase">RR</div>
-              </div>
-            </div>
-            {simState.rhythmSummary && (
-              <div className="text-xs text-slate-300 border-t border-slate-800 pt-2 mt-2">
-                <span className="text-slate-500">Rhythm:</span> {simState.rhythmSummary}
-              </div>
-            )}
+            <VitalsGrid
+              hr={simState.vitals.hr}
+              bp={simState.vitals.bp}
+              spo2={simState.vitals.spo2}
+              rr={simState.vitals.rr}
+              rhythmSummary={simState.rhythmSummary}
+            />
           </div>
         )}
       </header>

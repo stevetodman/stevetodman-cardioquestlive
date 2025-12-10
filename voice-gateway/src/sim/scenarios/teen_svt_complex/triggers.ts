@@ -6,46 +6,22 @@
  */
 
 import type { SVTExtendedState } from "../../types";
+import type {
+  TriggerPriority,
+  TriggerHistory,
+  NurseTrigger as GenericNurseTrigger,
+  ParentTrigger as GenericParentTrigger,
+  PatientTrigger as GenericPatientTrigger,
+  FiredTrigger,
+} from "../../triggers/types";
 
-// ============================================================================
-// Types
-// ============================================================================
+// Re-export shared types for convenience
+export type { TriggerPriority, TriggerHistory, FiredTrigger };
 
-export type TriggerPriority = "critical" | "high" | "normal";
-
-export type NurseTrigger = {
-  id: string;
-  condition: (state: SVTExtendedState, elapsedMs: number) => boolean;
-  line: string;
-  priority: TriggerPriority;
-  cooldownMs: number;
-  maxFires?: number;
-};
-
-export type ParentTrigger = {
-  id: string;
-  condition: (state: SVTExtendedState, elapsedMs: number) => boolean;
-  line: string;
-  cooldownMs: number;
-  maxFires?: number;
-};
-
-export type PatientTrigger = {
-  id: string;
-  condition: (state: SVTExtendedState, elapsedMs: number) => boolean;
-  line: string;
-  cooldownMs: number;
-  maxFires?: number;
-};
-
-export type TriggerHistory = Record<string, { lastFired: number; fireCount: number }>;
-
-export type FiredTrigger = {
-  triggerId: string;
-  character: "nurse" | "parent" | "patient";
-  line: string;
-  priority: TriggerPriority;
-};
+// Scenario-specific type aliases
+export type NurseTrigger = GenericNurseTrigger<SVTExtendedState>;
+export type ParentTrigger = GenericParentTrigger<SVTExtendedState>;
+export type PatientTrigger = GenericPatientTrigger<SVTExtendedState>;
 
 // ============================================================================
 // Nurse Triggers (Safety-Critical)

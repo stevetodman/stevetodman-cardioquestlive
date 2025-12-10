@@ -47,6 +47,8 @@ import { CxrViewer } from "../components/CxrViewer";
 import { FLOOR_AUTO_RELEASE_MS } from "../constants";
 import { PresenterModeTabs } from "../components/PresenterModeTabs";
 import { usePresenterMode } from "../hooks/usePresenterMode";
+import { GamificationControls } from "../components/presenter";
+import { SectionLabel } from "../components/ui";
 
 type SnapshotProps = {
   chiefComplaint: string;
@@ -1838,46 +1840,14 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
         </div>
         <div className="flex items-center gap-3 flex-wrap justify-end">
           {presenterMode === "slides" && (
-            <div className="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-2.5 py-1.5 shadow-sm shadow-black/20">
-              <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
-                Gamification
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setShowSummary((v) => !v)}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
-                    showSummary
-                      ? "bg-indigo-600/20 border-indigo-500/60 text-indigo-100 shadow-sm shadow-indigo-900/30"
-                      : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
-                  }`}
-                >
-                  Session summary
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowTeamScores((v) => !v)}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
-                    showTeamScores
-                      ? "bg-sky-600/20 border-sky-500/60 text-sky-100 shadow-sm shadow-sky-900/30"
-                      : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
-                  }`}
-                >
-                  Team scores
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowIndividualScores((v) => !v)}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
-                    showIndividualScores
-                      ? "bg-emerald-600/15 border-emerald-500/60 text-emerald-100 shadow-sm shadow-emerald-900/30"
-                      : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
-                  }`}
-                >
-                  Top players
-                </button>
-              </div>
-            </div>
+            <GamificationControls
+              showSummary={showSummary}
+              showTeamScores={showTeamScores}
+              showIndividualScores={showIndividualScores}
+              onToggleSummary={() => setShowSummary((v) => !v)}
+              onToggleTeamScores={() => setShowTeamScores((v) => !v)}
+              onToggleIndividualScores={() => setShowIndividualScores((v) => !v)}
+            />
           )}
           {/* Autonomous Simulation Panel - replaces complex voice controls */}
           {sessionId && presenterMode === "sim" && (

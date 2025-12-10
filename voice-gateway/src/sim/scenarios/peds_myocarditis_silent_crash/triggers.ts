@@ -8,29 +8,18 @@
 
 import type { MyocarditisExtendedState } from "../../types";
 import type { ShockStage, MyocarditisPhase } from "../../scenarioTypes";
+import type {
+  TriggerPriority,
+  NurseTrigger as GenericNurseTrigger,
+  ParentTrigger as GenericParentTrigger,
+} from "../../triggers/types";
 
-// ============================================================================
-// Trigger Types
-// ============================================================================
+// Re-export shared types for convenience
+export type { TriggerPriority };
 
-export type TriggerPriority = "critical" | "high" | "normal";
-
-export type NurseTrigger = {
-  id: string;
-  condition: (state: MyocarditisExtendedState, elapsedMs: number) => boolean;
-  line: string;
-  priority: TriggerPriority;
-  cooldownMs: number;
-  maxFires?: number;
-};
-
-export type ParentTrigger = {
-  id: string;
-  condition: (state: MyocarditisExtendedState, elapsedMs: number) => boolean;
-  line: string;
-  cooldownMs: number;
-  maxFires?: number;
-};
+// Scenario-specific type aliases
+export type NurseTrigger = GenericNurseTrigger<MyocarditisExtendedState>;
+export type ParentTrigger = GenericParentTrigger<MyocarditisExtendedState>;
 
 // ============================================================================
 // Nurse Taylor - Critical Safety Lines
