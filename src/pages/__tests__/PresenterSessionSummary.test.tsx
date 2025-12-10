@@ -4,6 +4,11 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import PresenterSession from "../PresenterSession";
 
+// Mock VoicePatientOverlay to avoid import.meta.env issues in Jest
+jest.mock("../../components/VoicePatientOverlay", () => ({
+  VoicePatientOverlay: () => <div data-testid="voice-patient-overlay" />,
+}));
+
 const mockOnSnapshot = jest.fn();
 const mockCollection = jest.fn((...args) => ({ path: args.join("/") }));
 const mockDoc = jest.fn((...args) => ({ path: args.join("/") }));

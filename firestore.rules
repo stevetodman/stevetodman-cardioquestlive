@@ -190,8 +190,10 @@ service cloud.firestore {
         }
 
         function isSameTeam(teamId) {
+          let participantPath = /databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid);
           return isAuthenticated() &&
-            get(/databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid)).data.teamId == teamId;
+            exists(participantPath) &&
+            get(participantPath).data.teamId == teamId;
         }
 
         // Read: only if user is on the same team

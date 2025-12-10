@@ -474,3 +474,141 @@ describeIfEmulator("firestore.rules participants", () => {
     );
   });
 });
+
+describe("firestore.rules teamMessages", () => {
+  const sessionId = "test-session-teamchat";
+  const teamId = "team_ductus";
+
+  // Helper to set up session and participants before each test
+  async function setupTeamChatData() {
+    await getEnv().withSecurityRulesDisabled(async (context) => {
+      // Create session
+      await setDoc(doc(context.firestore(), `sessions/${sessionId}`), {
+        createdBy: "presenter",
+        joinCode: "TEAM",
+        slides: [],
+        questions: [],
+        currentSlideIndex: 0,
+        currentQuestionId: null,
+        showResults: false,
+      });
+      // Create participant u1 on team_ductus
+      await setDoc(doc(context.firestore(), `sessions/${sessionId}/participants/u1`), {
+        userId: "u1",
+        sessionId,
+        teamId,
+        teamName: "Team Ductus",
+        points: 0,
+        streak: 0,
+        correctCount: 0,
+        incorrectCount: 0,
+        createdAt: new Date(),
+      });
+      // Create participant u2 on different team
+      await setDoc(doc(context.firestore(), `sessions/${sessionId}/participants/u2`), {
+        userId: "u2",
+        sessionId,
+        teamId: "team_cyanosis",
+        teamName: "Team Cyanosis",
+        points: 0,
+        streak: 0,
+        correctCount: 0,
+        incorrectCount: 0,
+        createdAt: new Date(),
+      });
+    });
+  }
+
+  test("allows team member to create message for their own team", async () => {
+    if (!isEnvReady()) return;
+    await setupTeamChatData();
+    const u1Db = getEnv().authenticatedContext("u1").firestore();
+    await assertSucceeds(
+      setDoc(doc(u1Db, `sessions/${sessionId}/teamMessages/msg1`), {
+        userId: "u1",
+        teamId,
+        text: "Hello team!",
+        createdAt: new Date(),
+      })
+    );
+  });
+
+  test("allows team member to read their own team messages", async () => {
+    if (!isEnvReady()) return;
+    await setupTeamChatData();
+    // First create a message
+    await getEnv().withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `sessions/${sessionId}/teamMessages/msg2`), {
+        userId: "u1",
+        teamId,
+        text: "Test message",
+        createdAt: new Date(),
+      });
+    });
+
+    const u1Db = getEnv().authenticatedContext("u1").firestore();
+    await assertSucceeds(getDoc(doc(u1Db, `sessions/${sessionId}/teamMessages/msg2`)));
+  });
+
+  test("blocks user from reading other team messages", async () => {
+    if (!isEnvReady()) return;
+    await setupTeamChatData();
+    // Create message for team_ductus
+    await getEnv().withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `sessions/${sessionId}/teamMessages/msg3`), {
+        userId: "u1",
+        teamId,
+        text: "Secret team message",
+        createdAt: new Date(),
+      });
+    });
+
+    // u2 is on team_cyanosis, should not be able to read team_ductus messages
+    const u2Db = getEnv().authenticatedContext("u2").firestore();
+    await assertFails(getDoc(doc(u2Db, `sessions/${sessionId}/teamMessages/msg3`)));
+  });
+
+  test("blocks user from creating message for other team", async () => {
+    if (!isEnvReady()) return;
+    await setupTeamChatData();
+    // u2 tries to post to team_ductus
+    const u2Db = getEnv().authenticatedContext("u2").firestore();
+    await assertFails(
+      setDoc(doc(u2Db, `sessions/${sessionId}/teamMessages/msg4`), {
+        userId: "u2",
+        teamId, // team_ductus, but u2 is on team_cyanosis
+        text: "Sneaky message",
+        createdAt: new Date(),
+      })
+    );
+  });
+
+  test("blocks message longer than 500 characters", async () => {
+    if (!isEnvReady()) return;
+    await setupTeamChatData();
+    const u1Db = getEnv().authenticatedContext("u1").firestore();
+    const longText = "x".repeat(501);
+    await assertFails(
+      setDoc(doc(u1Db, `sessions/${sessionId}/teamMessages/msg5`), {
+        userId: "u1",
+        teamId,
+        text: longText,
+        createdAt: new Date(),
+      })
+    );
+  });
+
+  test("blocks spoofed userId in message", async () => {
+    if (!isEnvReady()) return;
+    await setupTeamChatData();
+    const u1Db = getEnv().authenticatedContext("u1").firestore();
+    await assertFails(
+      setDoc(doc(u1Db, `sessions/${sessionId}/teamMessages/msg6`), {
+        userId: "someone-else", // spoofed
+        teamId,
+        text: "Pretending to be someone else",
+        createdAt: new Date(),
+      })
+    );
+  });
+});
