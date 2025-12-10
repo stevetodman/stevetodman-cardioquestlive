@@ -39,8 +39,7 @@ import { useTeamLead } from "../hooks/useTeamLead";
 import { TeamRoleBadge } from "../components/TeamRoleBadge";
 import { EkgViewer } from "../components/EkgViewer";
 import { CxrViewer } from "../components/CxrViewer";
-import { QuickActionsBar } from "../components/participant/QuickActionsBar";
-import { CharacterSelector } from "../components/participant/CharacterSelector";
+import { QuickActionsBar, CharacterSelector, ExamFindingsPanel, ParticipantOrdersPanel } from "../components/participant";
 import { VitalsGrid, CardPanel, SectionLabel } from "../components/ui";
 import { FLOOR_AUTO_RELEASE_MS, FLOOR_RELEASE_DELAY_MS, DEFAULT_TIMEOUT_MS } from "../constants";
 import { getDifficultyMultiplier, getStreakMultiplier } from "../utils/scoringUtils";
@@ -145,11 +144,7 @@ export default function JoinSession() {
     const stored = localStorage.getItem("cq_prefer_text_input");
     return stored === "true";
   });
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const characterAudioRef = useRef<HTMLAudioElement | null>(null);
-  const [playingClipId, setPlayingClipId] = useState<string | null>(null);
-  const [loadingClipId, setLoadingClipId] = useState<string | null>(null);
-  const [audioError, setAudioError] = useState<string | null>(null);
   const [participantCount, setParticipantCount] = useState<number>(0);
   const [showVoiceGuide, setShowVoiceGuide] = useState<boolean>(false);
   const [showAdvancedVoice, setShowAdvancedVoice] = useState(false);
@@ -245,14 +240,6 @@ export default function JoinSession() {
     }
   }, [simState?.fallback, lastFallback]);
 
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
-  }, []);
 
   // Subscribe to patient/character audio from voice gateway and play it
   useEffect(() => {
@@ -907,197 +894,28 @@ export default function JoinSession() {
       )}
 
       {showExam && simState?.exam && (
-        <div className="mt-2 bg-slate-900/60 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-1">
-          <SectionLabel>Exam</SectionLabel>
-          {simState.exam.general && <div><span className="text-slate-500 text-[11px] mr-1">General:</span>{simState.exam.general}</div>}
-          {simState.exam.cardio && <div><span className="text-slate-500 text-[11px] mr-1">CV:</span>{simState.exam.cardio}</div>}
-          {simState.exam.lungs && <div><span className="text-slate-500 text-[11px] mr-1">Lungs:</span>{simState.exam.lungs}</div>}
-          {simState.exam.perfusion && <div><span className="text-slate-500 text-[11px] mr-1">Perfusion:</span>{simState.exam.perfusion}</div>}
-          {simState.exam.neuro && <div><span className="text-slate-500 text-[11px] mr-1">Neuro:</span>{simState.exam.neuro}</div>}
-          {simState.examAudio && simState.examAudio.length > 0 && (
-            <div className="mt-3 space-y-2">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold flex items-center gap-2">
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 18v-6a9 9 0 0 1 18 0v6" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Auscultation (headphones recommended)
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {simState.examAudio.map((clip) => {
-                  const isPlaying = playingClipId === clip.url;
-                  const isLoading = loadingClipId === clip.url;
-                  const isActive = isPlaying || isLoading;
-                  return (
-                    <button
-                      key={`${clip.type}-${clip.url}`}
-                      type="button"
-                      onClick={() => handlePlayExamClip(clip)}
-                      disabled={isLoading}
-                      className={`px-3 py-2.5 rounded-lg border text-left text-sm transition-all ${
-                        isPlaying
-                          ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-100"
-                          : isLoading
-                          ? "border-amber-500/60 bg-amber-500/10 text-amber-100"
-                          : "border-slate-700 bg-slate-900/70 text-slate-100 hover:border-slate-500 active:scale-[0.98]"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                            {clip.type === "heart" ? "Heart" : "Lungs"}
-                          </div>
-                          <div className="font-semibold truncate">{clip.label}</div>
-                        </div>
-                        <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                          isPlaying ? "bg-emerald-500/20" : isLoading ? "bg-amber-500/20" : "bg-slate-800"
-                        }`}>
-                          {isLoading ? (
-                            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                              <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
-                            </svg>
-                          ) : isPlaying ? (
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                              <rect x="6" y="4" width="4" height="16" rx="1" />
-                              <rect x="14" y="4" width="4" height="16" rx="1" />
-                            </svg>
-                          ) : (
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
-                          )}
-                        </div>
-                      </div>
-                      <div className={`text-[11px] mt-1 ${isActive ? "opacity-90" : "text-slate-400"}`}>
-                        {isLoading ? "Loading…" : isPlaying ? "Tap to pause" : "Tap to play"}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-              {audioError && (
-                <div className="flex items-center gap-2 text-[11px] text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg px-2.5 py-1.5">
-                  <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  {audioError}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <ExamFindingsPanel
+          exam={simState.exam}
+          examAudio={simState.examAudio}
+        />
       )}
       {simState?.orders && simState.orders.length > 0 && (
-        <div className="mt-2 bg-slate-900/70 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-2">
-          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold flex items-center justify-between">
-            <span>Orders</span>
-            <span className="text-[10px] text-slate-400">Student view</span>
-          </div>
-          <div className="space-y-1">
-            {simState.orders.slice(-6).map((order) => {
-              const isDone = order.status === "complete";
-              const header =
-                order.type === "vitals"
-                  ? "Vitals"
-                  : order.type === "ekg"
-                  ? "EKG"
-                  : order.type === "labs"
-                  ? "Labs"
-                  : order.type === "imaging"
-                  ? "Imaging"
-                  : order.type;
-              const eta =
-                order.status === "pending"
-                  ? `${order.type === "vitals" ? "≈10s" : order.type === "ekg" ? "≈20s" : "≈15s"}`
-                  : null;
-              const detail = order.result?.summary;
-              const highlight =
-                order.result?.summary &&
-                /elevated|abnormal|shock|effusion|edema|ectasia|rvh|low|high|thickened/i.test(order.result.summary);
-              const keyAbnormal = order.result?.abnormal;
-              const nextAction = order.result?.nextAction;
-              return (
-                <div
-                  key={order.id}
-                  className={`rounded-lg border px-3 py-2 text-[12px] ${
-                    isDone ? "border-emerald-500/50 bg-emerald-500/5 text-emerald-100" : "border-slate-700 bg-slate-900/80 text-slate-200"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="font-semibold">{header}</div>
-                    <div className="text-[10px] uppercase tracking-[0.14em]">
-                      {isDone ? "Complete" : "Pending"}
-                    </div>
-                  </div>
-                  {!isDone && eta && <div className="text-[11px] text-slate-400">Result in {eta}</div>}
-                  {isDone && order.completedAt && (
-                    <div className="text-[10px] text-slate-400">
-                      {new Date(order.completedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                    </div>
-                  )}
-                  {isDone && detail && (
-                    <div
-                      className={`text-[12px] mt-1 whitespace-pre-wrap ${
-                        highlight ? "text-amber-200" : "text-slate-300"
-                      }`}
-                    >
-                      {detail}
-                      {keyAbnormal && (
-                        <div className="text-[11px] text-amber-200 mt-1">Key abnormal: {keyAbnormal}</div>
-                      )}
-                      {nextAction && (
-                        <div className="text-[11px] text-slate-300 mt-1">Next: {nextAction}</div>
-                      )}
-                      {order.result?.rationale && (
-                        <div className="text-[11px] text-slate-400 mt-1">{order.result.rationale}</div>
-                      )}
-                    </div>
-                  )}
-                  {/* View buttons for EKG and Imaging */}
-                  {isDone && order.type === "ekg" && (
-                    <button
-                      type="button"
-                      onClick={() => setViewingEkgOrder({
-                        imageUrl: order.result?.imageUrl,
-                        summary: order.result?.summary,
-                        timestamp: order.completedAt,
-                        orderedBy: (order as any).orderedBy,
-                      })}
-                      className="mt-2 w-full px-3 py-1.5 rounded-lg bg-sky-600/20 border border-sky-500/50 text-sky-100 text-xs font-medium hover:bg-sky-600/30 hover:border-sky-400 transition-colors flex items-center justify-center gap-1.5"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                      </svg>
-                      View EKG
-                    </button>
-                  )}
-                  {isDone && order.type === "imaging" && (
-                    <button
-                      type="button"
-                      onClick={() => setViewingCxrOrder({
-                        imageUrl: order.result?.imageUrl,
-                        summary: order.result?.summary,
-                        timestamp: order.completedAt,
-                        orderedBy: (order as any).orderedBy,
-                        viewType: "PA",
-                      })}
-                      className="mt-2 w-full px-3 py-1.5 rounded-lg bg-sky-600/20 border border-sky-500/50 text-sky-100 text-xs font-medium hover:bg-sky-600/30 hover:border-sky-400 transition-colors flex items-center justify-center gap-1.5"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      View X-Ray
-                    </button>
-                  )}
-                  {!isDone && <div className="text-[12px] text-slate-400">Result on the way…</div>}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <ParticipantOrdersPanel
+          orders={simState.orders as any}
+          onViewEkg={(order) => setViewingEkgOrder({
+            imageUrl: order.result?.imageUrl,
+            summary: order.result?.summary,
+            timestamp: order.completedAt,
+            orderedBy: order.orderedBy,
+          })}
+          onViewCxr={(order) => setViewingCxrOrder({
+            imageUrl: order.result?.imageUrl,
+            summary: order.result?.summary,
+            timestamp: order.completedAt,
+            orderedBy: order.orderedBy,
+            viewType: "PA",
+          })}
+        />
       )}
       {showEkg && latestEkg && (
         <div className="mt-2 bg-slate-950/70 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 space-y-2">
@@ -1258,42 +1076,6 @@ export default function JoinSession() {
       </div>
     );
   }
-
-  const stopExamAudio = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-    setPlayingClipId(null);
-    setLoadingClipId(null);
-  };
-
-  const handlePlayExamClip = (clip: { url: string; label: string }) => {
-    setAudioError(null);
-    const isSame = playingClipId === clip.url || loadingClipId === clip.url;
-    if (isSame) {
-      stopExamAudio();
-      return;
-    }
-    stopExamAudio();
-    const el = new Audio(clip.url);
-    audioRef.current = el;
-    setLoadingClipId(clip.url);
-
-    el.oncanplaythrough = () => {
-      setLoadingClipId(null);
-      setPlayingClipId(clip.url);
-    };
-    el.onended = () => stopExamAudio();
-    el.onerror = () => {
-      setAudioError("Audio unavailable. Please try again or check assets.");
-      stopExamAudio();
-    };
-    el.play().catch(() => {
-      setAudioError("Could not play audio. Check browser permissions.");
-      stopExamAudio();
-    });
-  };
 
   const handleLeaveSession = () => {
     const shouldLeave = window.confirm("Leave this session?");
