@@ -11,3 +11,9 @@ export type { PresenterSlidesOverlaysProps, TeamScore, IndividualScore } from ".
 
 export { GamificationControls } from "./GamificationControls";
 export type { GamificationControlsProps } from "./GamificationControls";
+
+export { ScenarioSnapshotCard } from "./ScenarioSnapshotCard";
+export type { ScenarioSnapshotCardProps, ScenarioSnapshot } from "./ScenarioSnapshotCard";
+
+export { PresenterHeader } from "./PresenterHeader";
+export type { PresenterHeaderProps } from "./PresenterHeader";
