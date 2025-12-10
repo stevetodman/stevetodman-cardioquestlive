@@ -36,6 +36,7 @@ type AudioListener = (audioUrl: string) => void;
 type DoctorUtteranceListener = (text: string, userId: string, character?: CharacterId) => void;
 type ScenarioListener = (scenarioId: PatientScenarioId) => void;
 type AnalysisResultListener = (result: AnalysisResult) => void;
+type TokenRefresher = () => Promise<string | undefined>;
 
 const DEFAULT_URL =
   // Highest priority: explicit override injected for testing
@@ -54,13 +55,25 @@ const WebSocketCtor: typeof WebSocket | undefined =
     ? (globalThis as any).WebSocket
     : undefined;
 
+// ============================================================================
+// Configuration
+// ============================================================================
+
+const HEARTBEAT_INTERVAL_MS = 30_000; // Send ping every 30s
+const HEARTBEAT_TIMEOUT_MS = 5_000;   // Expect pong within 5s
+const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000]; // Exponential backoff
+const MAX_RECONNECT_ATTEMPTS = 10;
+
 class VoiceGatewayClient {
   private ws: WebSocket | null = null;
   private sessionId: string | null = null;
   private userId: string | null = null;
   private displayName: string | null = null;
   private role: ClientRole | null = null;
+  private authToken: string | undefined = undefined;
   private connectionStatus: VoiceConnectionStatus = { state: "disconnected", lastChangedAt: Date.now() };
+
+  // Listeners
   private patientListeners = new Set<PatientStateListener>();
   private transcriptListeners = new Set<TranscriptListener>();
   private participantListeners = new Set<ParticipantStateListener>();
@@ -71,6 +84,25 @@ class VoiceGatewayClient {
   private scenarioListeners = new Set<ScenarioListener>();
   private analysisListeners = new Set<AnalysisResultListener>();
   private lastAudioUrl: string | null = null;
+
+  // Heartbeat
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private heartbeatTimeout: ReturnType<typeof setTimeout> | null = null;
+  private lastPongAt: number = 0;
+
+  // Reconnection
+  private reconnectAttempts: number = 0;
+  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  private intentionalDisconnect: boolean = false;
+  private tokenRefresher: TokenRefresher | null = null;
+
+  /**
+   * Set a function to refresh the auth token before reconnecting.
+   * This should call Firebase auth.currentUser.getIdToken(true) or similar.
+   */
+  setTokenRefresher(refresher: TokenRefresher) {
+    this.tokenRefresher = refresher;
+  }
 
   private setStatus(next: VoiceConnectionStatus) {
     this.connectionStatus = { ...next, lastChangedAt: Date.now() };
@@ -90,13 +122,19 @@ class VoiceGatewayClient {
       return;
     }
 
-    this.disconnect();
+    this.intentionalDisconnect = false;
+    this.cleanupConnection();
+
     this.sessionId = sessionId;
     this.userId = userId;
     this.displayName = displayName;
     this.role = role;
-    const token = authToken;
+    this.authToken = authToken;
 
+    this.createConnection();
+  }
+
+  private createConnection() {
     const url = DEFAULT_URL;
     if (typeof import.meta !== "undefined" && (import.meta as any).env?.DEV) {
       console.debug("[voice] Connecting to voice gateway:", url);
@@ -112,6 +150,7 @@ class VoiceGatewayClient {
     } catch (err) {
       console.error("Failed to create WebSocket", err);
       this.setStatus({ state: "error", reason: "socket_error" });
+      this.scheduleReconnect();
       return;
     }
 
@@ -119,18 +158,20 @@ class VoiceGatewayClient {
 
     this.ws.onopen = () => {
       this.setStatus({ state: "ready" });
+      this.reconnectAttempts = 0; // Reset on successful connection
       console.debug("[voice-gateway] socket open");
       this.send(
         {
           type: "join",
-          sessionId,
-          userId,
-          displayName,
-          role,
-          authToken: token,
+          sessionId: this.sessionId!,
+          userId: this.userId!,
+          displayName: this.displayName!,
+          role: this.role!,
+          authToken: this.authToken,
         },
         true
       );
+      this.startHeartbeat();
     };
 
     this.ws.onmessage = (evt) => {
@@ -144,12 +185,35 @@ class VoiceGatewayClient {
 
     this.ws.onclose = (event) => {
       console.debug("[voice-gateway] socket close", { code: event.code, reason: event.reason });
-      this.setStatus({ state: "disconnected", reason: "closed" });
+      this.stopHeartbeat();
       this.ws = null;
+
+      if (this.intentionalDisconnect) {
+        this.setStatus({ state: "disconnected", reason: "closed" });
+      } else {
+        // Unexpected disconnect - try to reconnect
+        this.setStatus({ state: "disconnected", reason: "connection_lost" });
+        this.scheduleReconnect();
+      }
     };
   }
 
   disconnect() {
+    this.intentionalDisconnect = true;
+    this.cleanupConnection();
+    this.sessionId = null;
+    this.userId = null;
+    this.displayName = null;
+    this.role = null;
+    this.authToken = undefined;
+    this.reconnectAttempts = 0;
+    this.setStatus({ state: "disconnected" });
+  }
+
+  private cleanupConnection() {
+    this.stopHeartbeat();
+    this.cancelReconnect();
+
     if (this.ws) {
       this.ws.onopen = null;
       this.ws.onclose = null;
@@ -166,12 +230,111 @@ class VoiceGatewayClient {
       this.lastAudioUrl = null;
     }
     this.ws = null;
-    this.sessionId = null;
-    this.userId = null;
-    this.displayName = null;
-    this.role = null;
-    this.setStatus({ state: "disconnected" });
   }
+
+  // ============================================================================
+  // Heartbeat
+  // ============================================================================
+
+  private startHeartbeat() {
+    this.stopHeartbeat();
+    this.lastPongAt = Date.now();
+
+    this.heartbeatInterval = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.send({ type: "ping" } as any);
+
+        // Set timeout for pong response
+        this.heartbeatTimeout = setTimeout(() => {
+          const elapsed = Date.now() - this.lastPongAt;
+          if (elapsed > HEARTBEAT_INTERVAL_MS + HEARTBEAT_TIMEOUT_MS) {
+            console.warn("[voice-gateway] Heartbeat timeout - connection stale, reconnecting");
+            this.ws?.close();
+          }
+        }, HEARTBEAT_TIMEOUT_MS);
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    if (this.heartbeatTimeout) {
+      clearTimeout(this.heartbeatTimeout);
+      this.heartbeatTimeout = null;
+    }
+  }
+
+  private handlePong() {
+    this.lastPongAt = Date.now();
+    if (this.heartbeatTimeout) {
+      clearTimeout(this.heartbeatTimeout);
+      this.heartbeatTimeout = null;
+    }
+  }
+
+  // ============================================================================
+  // Reconnection
+  // ============================================================================
+
+  private scheduleReconnect() {
+    if (this.intentionalDisconnect) return;
+    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.warn("[voice-gateway] Max reconnect attempts reached");
+      this.setStatus({ state: "error", reason: "max_retries" });
+      return;
+    }
+
+    const delay = RECONNECT_DELAYS_MS[Math.min(this.reconnectAttempts, RECONNECT_DELAYS_MS.length - 1)];
+    this.reconnectAttempts++;
+
+    console.debug(`[voice-gateway] Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
+    this.setStatus({ state: "disconnected", reason: "reconnecting" });
+
+    this.reconnectTimeout = setTimeout(async () => {
+      if (this.intentionalDisconnect) return;
+
+      // Try to refresh token before reconnecting
+      if (this.tokenRefresher) {
+        try {
+          const newToken = await this.tokenRefresher();
+          if (newToken) {
+            this.authToken = newToken;
+            console.debug("[voice-gateway] Token refreshed before reconnect");
+          }
+        } catch (err) {
+          console.warn("[voice-gateway] Token refresh failed, using existing token", err);
+        }
+      }
+
+      this.createConnection();
+    }, delay);
+  }
+
+  private cancelReconnect() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+  }
+
+  /**
+   * Manually trigger a reconnect (e.g., after user action)
+   */
+  reconnect() {
+    if (this.sessionId && this.userId && this.role) {
+      this.intentionalDisconnect = false;
+      this.reconnectAttempts = 0;
+      this.cleanupConnection();
+      this.scheduleReconnect();
+    }
+  }
+
+  // ============================================================================
+  // Messaging
+  // ============================================================================
 
   private send(msg: ClientToServerMessage, force = false) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -241,6 +404,10 @@ class VoiceGatewayClient {
     }
   }
 
+  // ============================================================================
+  // Listeners
+  // ============================================================================
+
   onPatientState(cb: PatientStateListener) {
     this.patientListeners.add(cb);
     return () => this.patientListeners.delete(cb);
@@ -296,6 +463,10 @@ class VoiceGatewayClient {
     this.analysisListeners.add(cb);
     return () => this.analysisListeners.delete(cb);
   }
+
+  // ============================================================================
+  // Message Handling
+  // ============================================================================
 
   private handleMessage(raw: any) {
     let msg: ServerToClientMessage;
@@ -371,14 +542,26 @@ class VoiceGatewayClient {
       }
       case "error": {
         console.warn("Voice gateway error", msg.message);
+        // Check for auth errors - they may need token refresh
+        if (msg.message === "unauthorized") {
+          console.debug("[voice-gateway] Auth error, will refresh token on reconnect");
+        }
         break;
       }
       case "joined":
+        // Successful join - connection fully established
+        break;
       case "pong":
+        this.handlePong();
+        break;
       default:
         break;
     }
   }
+
+  // ============================================================================
+  // Utilities
+  // ============================================================================
 
   private decodeAudio(audioBase64: string): string | null {
     try {
@@ -429,6 +612,20 @@ class VoiceGatewayClient {
       reader.onerror = reject;
       reader.readAsArrayBuffer(blob);
     });
+  }
+
+  /**
+   * Get current connection status
+   */
+  getStatus(): VoiceConnectionStatus {
+    return this.connectionStatus;
+  }
+
+  /**
+   * Check if currently connected and ready
+   */
+  isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN && this.connectionStatus.state === "ready";
   }
 }
 

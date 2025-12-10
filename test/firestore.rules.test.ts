@@ -612,3 +612,97 @@ describe("firestore.rules teamMessages", () => {
     );
   });
 });
+
+describeIfEmulator("firestore.rules voiceCommands - participant safe commands", () => {
+  const sessionId = "session-participant-commands";
+
+  beforeEach(async () => {
+    if (!isEnvReady()) return;
+    await getEnv().withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `sessions/${sessionId}`), baseSession);
+      // Create participant
+      await setDoc(doc(context.firestore(), `sessions/${sessionId}/participants/participant1`), {
+        userId: "participant1",
+        sessionId,
+        teamId: "team_ductus",
+        teamName: "Team Ductus",
+        points: 0,
+        streak: 0,
+        correctCount: 0,
+        incorrectCount: 0,
+        createdAt: new Date(),
+      });
+    });
+  });
+
+  test("participant can create safe commands (exam, ekg, cxr, order, toggle_telemetry, show_ekg)", async () => {
+    if (!isEnvReady()) return;
+    const participantDb = getEnv().authenticatedContext("participant1").firestore();
+
+    // Test each safe command type
+    const safeCommands = ["exam", "ekg", "cxr", "order", "toggle_telemetry", "show_ekg"];
+    for (let i = 0; i < safeCommands.length; i++) {
+      const cmdRef = doc(participantDb, `sessions/${sessionId}/voiceCommands/cmd${i}`);
+      await assertSucceeds(
+        setDoc(cmdRef, {
+          type: safeCommands[i],
+          createdAt: new Date(),
+          createdBy: "participant1",
+          role: "participant",
+        })
+      );
+    }
+  });
+
+  test("participant cannot create presenter-only commands (pause_ai, resume_ai, force_reply, mute_user, freeze)", async () => {
+    if (!isEnvReady()) return;
+    const participantDb = getEnv().authenticatedContext("participant1").firestore();
+
+    // Test presenter-only commands that participants should NOT be able to create
+    const presenterOnlyCommands = ["pause_ai", "resume_ai", "force_reply", "mute_user", "freeze", "unfreeze", "end_turn", "skip_stage"];
+    for (let i = 0; i < presenterOnlyCommands.length; i++) {
+      const cmdRef = doc(participantDb, `sessions/${sessionId}/voiceCommands/presenter-cmd${i}`);
+      await assertFails(
+        setDoc(cmdRef, {
+          type: presenterOnlyCommands[i],
+          createdAt: new Date(),
+          createdBy: "participant1",
+          role: "participant",
+        })
+      );
+    }
+  });
+
+  test("presenter can create any command type", async () => {
+    if (!isEnvReady()) return;
+    const presenterDb = getEnv().authenticatedContext(baseSession.createdBy).firestore();
+
+    // Presenter should be able to create both safe and presenter-only commands
+    const allCommands = ["exam", "ekg", "pause_ai", "resume_ai", "force_reply", "freeze"];
+    for (let i = 0; i < allCommands.length; i++) {
+      const cmdRef = doc(presenterDb, `sessions/${sessionId}/voiceCommands/presenter-all${i}`);
+      await assertSucceeds(
+        setDoc(cmdRef, {
+          type: allCommands[i],
+          createdAt: new Date(),
+          createdBy: baseSession.createdBy,
+          role: "presenter",
+        })
+      );
+    }
+  });
+
+  test("non-participant cannot create any voice commands", async () => {
+    if (!isEnvReady()) return;
+    const outsiderDb = getEnv().authenticatedContext("outsider").firestore();
+
+    const cmdRef = doc(outsiderDb, `sessions/${sessionId}/voiceCommands/outsider-cmd`);
+    await assertFails(
+      setDoc(cmdRef, {
+        type: "exam", // even safe commands blocked for non-participants
+        createdAt: new Date(),
+        createdBy: "outsider",
+      })
+    );
+  });
+});

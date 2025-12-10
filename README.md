@@ -27,6 +27,12 @@ Interactive pediatric cardiology teaching with presenter + student modes, Gemini
 - **Presenter view** with two mutually exclusive modes:
   - **Slides mode**: Full-screen presentation with slides, questions, scores, gamification overlays
   - **Sim mode**: Patient simulation with voice controls, vitals monitoring, telemetry, interventions
+- **Shared orders with realistic timing**:
+  - **EKG orders**: 90-120s delay, tech acknowledgment, Muse-like 12-lead viewer
+  - **CXR orders**: 180-240s delay, PACS-like radiology viewer with L/R markers
+  - **Duplicate detection**: "Still working on the current EKG" prevents re-ordering
+  - **Mobile-friendly viewers**: Zoom toggle, large tap targets, dark radiology backgrounds
+- **WebSocket resilience**: Heartbeat/ping every 30s, auto-reconnect with exponential backoff
 - **Resuscitation simulation** (Dec 2024):
   - **Code Blue Panel**: Auto-detects critical rhythms (VFib, VTach, Asystole, PEA), PALS protocol timer
   - **CPR Metronome**: Audio/visual guide at 110 BPM with tap-to-track rate feedback
@@ -97,10 +103,36 @@ npm run dev:stack:local
 # Then in the browser: http://127.0.0.1:5173/#/create-demo → create session → join code.
 
 # Cloudflare tunnel (app.cardioquestlive.com / voice.cardioquestlive.com)
-npm run dev:tunnel
+npm run dev:tunnel:clean   # Recommended: auto-cleans ports before starting
+npm run dev:tunnel         # Raw: assumes ports are free
 # Opens app at https://app.cardioquestlive.com (via tunnel) and voice WS at wss://voice.cardioquestlive.com/ws/voice
 # Requires: cloudflared tunnel run virtual-patient (see config) and ALLOW_INSECURE_VOICE_WS=true for local dev.
 ```
+
+## Manual Testing (Quick Start)
+
+**Option 1: Local only (desktop browser)**
+```bash
+npm run dev:stack:local
+# Open http://127.0.0.1:5173/#/create-demo
+# Click "Create Demo Session" → note the 4-letter join code
+# Open presenter view, switch to "Sim" mode
+# In a new tab: http://127.0.0.1:5173/#/join/CODE → participant view
+```
+
+**Option 2: iPhone/mobile testing (requires tunnel)**
+```bash
+npm run dev:tunnel:clean
+# On iPhone: https://app.cardioquestlive.com/#/join/CODE
+# Allow microphone access for voice interaction
+```
+
+**Testing the Orders System**
+1. In participant or presenter view, speak or type: "Order an EKG" or "Get a chest X-ray"
+2. Watch for nurse acknowledgment: "Yes, Doctor. I'll have that EKG for you shortly."
+3. Wait 90-120s (EKG) or 180-240s (CXR) for completion
+4. Click "View EKG" or "View X-Ray" button to open full-screen viewer
+5. Try ordering again while pending → should see "Still working on the current EKG"
 
 **Voice gateway / AI patient**
 

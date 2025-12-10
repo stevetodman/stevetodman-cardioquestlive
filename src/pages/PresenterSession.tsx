@@ -42,6 +42,8 @@ import { sendVoiceCommand } from "../services/voiceCommands";
 import { DebriefPanel } from "../components/DebriefPanel";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
 import { QRCodeOverlay } from "../components/QRCodeOverlay";
+import { EkgViewer } from "../components/EkgViewer";
+import { CxrViewer } from "../components/CxrViewer";
 import { FLOOR_AUTO_RELEASE_MS } from "../constants";
 import { PresenterModeTabs } from "../components/PresenterModeTabs";
 import { usePresenterMode } from "../hooks/usePresenterMode";
@@ -244,6 +246,19 @@ const [voiceGuideOpen, setVoiceGuideOpen] = useState<boolean>(false);
   const [freezeStatus, setFreezeStatus] = useState<"live" | "frozen">("live");
   const [showInterventions, setShowInterventions] = useState(false);
   const [showEkg, setShowEkg] = useState(false);
+  const [viewingEkgOrder, setViewingEkgOrder] = useState<{
+    imageUrl?: string;
+    summary?: string;
+    timestamp?: number;
+    orderedBy?: { name: string };
+  } | null>(null);
+  const [viewingCxrOrder, setViewingCxrOrder] = useState<{
+    imageUrl?: string;
+    summary?: string;
+    timestamp?: number;
+    orderedBy?: { name: string };
+    viewType?: "PA" | "AP" | "Lateral";
+  } | null>(null);
   const [availableStages, setAvailableStages] = useState<string[]>([]);
   const [selectedStage, setSelectedStage] = useState<string>("");
   const [doctorQuestionText, setDoctorQuestionText] = useState<string>("");
@@ -288,6 +303,10 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
   const latestEkg = useMemo(() => {
     const ekgs = (simState?.orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
     return ekgs.length ? ekgs[ekgs.length - 1] : null;
+  }, [simState?.orders]);
+  const latestImaging = useMemo(() => {
+    const imgs = (simState?.orders ?? []).filter((o) => o.type === "imaging" && o.status === "complete");
+    return imgs.length ? imgs[imgs.length - 1] : null;
   }, [simState?.orders]);
   const latestEkgMeta = useMemo(() => latestEkg?.result?.meta, [latestEkg]);
   const examAudio = useMemo(() => {
@@ -2075,6 +2094,21 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                             {order.result.summary ?? "EKG ready"}
                             {order.result.abnormal && <div className="text-amber-200 text-[11px]">Key abnormal: {order.result.abnormal}</div>}
                             {order.result.nextAction && <div className="text-slate-300 text-[11px]">Next: {order.result.nextAction}</div>}
+                            <button
+                              type="button"
+                              onClick={() => setViewingEkgOrder({
+                                imageUrl: order.result?.imageUrl,
+                                summary: order.result?.summary,
+                                timestamp: order.completedAt,
+                                orderedBy: (order as any).orderedBy,
+                              })}
+                              className="mt-1.5 px-2.5 py-1 rounded-lg bg-sky-600/20 border border-sky-500/50 text-sky-100 text-[11px] font-medium hover:bg-sky-600/30 hover:border-sky-400 transition-colors flex items-center gap-1"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                              </svg>
+                              View EKG
+                            </button>
                           </div>
                         )}
                         {isDone && order.result?.type === "labs" && (
@@ -2089,6 +2123,22 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                             {order.result.summary ?? "Imaging ready"}
                             {order.result.abnormal && <div className="text-amber-200 text-[11px]">Key abnormal: {order.result.abnormal}</div>}
                             {order.result.nextAction && <div className="text-slate-300 text-[11px]">Next: {order.result.nextAction}</div>}
+                            <button
+                              type="button"
+                              onClick={() => setViewingCxrOrder({
+                                imageUrl: order.result?.imageUrl,
+                                summary: order.result?.summary,
+                                timestamp: order.completedAt,
+                                orderedBy: (order as any).orderedBy,
+                                viewType: "PA",
+                              })}
+                              className="mt-1.5 px-2.5 py-1 rounded-lg bg-sky-600/20 border border-sky-500/50 text-sky-100 text-[11px] font-medium hover:bg-sky-600/30 hover:border-sky-400 transition-colors flex items-center gap-1"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              View X-Ray
+                            </button>
                           </div>
                         )}
                       </div>
@@ -2630,6 +2680,31 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
           onClose={() => setShowQr(false)}
           code={session.joinCode}
           joinUrl={joinUrl}
+        />
+      )}
+
+      {/* Full-screen EKG Viewer Modal */}
+      {viewingEkgOrder && (
+        <EkgViewer
+          imageUrl={viewingEkgOrder.imageUrl}
+          summary={viewingEkgOrder.summary}
+          timestamp={viewingEkgOrder.timestamp}
+          orderedBy={viewingEkgOrder.orderedBy}
+          patientName={simState?.scenarioId ? simState.scenarioId.replace(/_/g, " ") : "Patient"}
+          onClose={() => setViewingEkgOrder(null)}
+        />
+      )}
+
+      {/* Full-screen CXR Viewer Modal */}
+      {viewingCxrOrder && (
+        <CxrViewer
+          imageUrl={viewingCxrOrder.imageUrl}
+          summary={viewingCxrOrder.summary}
+          timestamp={viewingCxrOrder.timestamp}
+          orderedBy={viewingCxrOrder.orderedBy}
+          patientName={simState?.scenarioId ? simState.scenarioId.replace(/_/g, " ") : "Patient"}
+          viewType={viewingCxrOrder.viewType}
+          onClose={() => setViewingCxrOrder(null)}
         />
       )}
     </div>

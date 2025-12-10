@@ -213,7 +213,12 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
         }
         case "order": {
           const orderType = typeof parsed.payload?.orderType === "string" ? parsed.payload.orderType : "vitals";
-          handleOrder(simId, orderType as any);
+          const displayName = typeof parsed.payload?.displayName === "string" ? parsed.payload.displayName : "Unknown";
+          handleOrder(simId, orderType as any, {
+            id: parsed.userId,
+            name: displayName,
+            role: ctx.role as "presenter" | "participant",
+          });
           break;
         }
         case "exam": {
@@ -978,7 +983,12 @@ function maybeAutoForceReply(sessionId: string, text: string, explicitCharacter?
         : undefined;
       handleExamRequest(sessionId, examType);
     } else {
-      handleOrder(sessionId, orderRequest.type);
+      // For voice-ordered requests, we only have userId (no displayName available)
+      handleOrder(sessionId, orderRequest.type, userId ? {
+        id: userId,
+        name: "Voice Order",
+        role: "participant",
+      } : undefined);
     }
     return;
   }

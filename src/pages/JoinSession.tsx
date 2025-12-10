@@ -37,6 +37,8 @@ import { TeamChat } from "../components/TeamChat";
 import { useTeamChat } from "../hooks/useTeamChat";
 import { useTeamLead } from "../hooks/useTeamLead";
 import { TeamRoleBadge } from "../components/TeamRoleBadge";
+import { EkgViewer } from "../components/EkgViewer";
+import { CxrViewer } from "../components/CxrViewer";
 import { FLOOR_AUTO_RELEASE_MS, FLOOR_RELEASE_DELAY_MS, DEFAULT_TIMEOUT_MS } from "../constants";
 
 function getLocalUserId(): string {
@@ -164,6 +166,19 @@ export default function JoinSession() {
   const [isOffline, setIsOffline] = useState<boolean>(false);
   const [showVitalsPanel, setShowVitalsPanel] = useState(false);
   const [myTeam, setMyTeam] = useState<{ teamId: string; teamName: string } | null>(null);
+  const [viewingEkgOrder, setViewingEkgOrder] = useState<{
+    imageUrl?: string;
+    summary?: string;
+    timestamp?: number;
+    orderedBy?: { name: string };
+  } | null>(null);
+  const [viewingCxrOrder, setViewingCxrOrder] = useState<{
+    imageUrl?: string;
+    summary?: string;
+    timestamp?: number;
+    orderedBy?: { name: string };
+    viewType?: "PA" | "AP" | "Lateral";
+  } | null>(null);
   const showToast = useCallback((message: string) => {
     setToast({ message, ts: Date.now() });
   }, []);
@@ -611,6 +626,10 @@ export default function JoinSession() {
   const latestEkg = useMemo(() => {
     const ekgs = (simState?.orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
     return ekgs.length ? ekgs[ekgs.length - 1] : null;
+  }, [simState?.orders]);
+  const latestImaging = useMemo(() => {
+    const imgs = (simState?.orders ?? []).filter((o) => o.type === "imaging" && o.status === "complete");
+    return imgs.length ? imgs[imgs.length - 1] : null;
   }, [simState?.orders]);
   const voiceStatusData = useSimplifiedVoiceState({
     voice,
@@ -1095,6 +1114,42 @@ export default function JoinSession() {
                         <div className="text-[11px] text-slate-400 mt-1">{order.result.rationale}</div>
                       )}
                     </div>
+                  )}
+                  {/* View buttons for EKG and Imaging */}
+                  {isDone && order.type === "ekg" && (
+                    <button
+                      type="button"
+                      onClick={() => setViewingEkgOrder({
+                        imageUrl: order.result?.imageUrl,
+                        summary: order.result?.summary,
+                        timestamp: order.completedAt,
+                        orderedBy: (order as any).orderedBy,
+                      })}
+                      className="mt-2 w-full px-3 py-1.5 rounded-lg bg-sky-600/20 border border-sky-500/50 text-sky-100 text-xs font-medium hover:bg-sky-600/30 hover:border-sky-400 transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                      </svg>
+                      View EKG
+                    </button>
+                  )}
+                  {isDone && order.type === "imaging" && (
+                    <button
+                      type="button"
+                      onClick={() => setViewingCxrOrder({
+                        imageUrl: order.result?.imageUrl,
+                        summary: order.result?.summary,
+                        timestamp: order.completedAt,
+                        orderedBy: (order as any).orderedBy,
+                        viewType: "PA",
+                      })}
+                      className="mt-2 w-full px-3 py-1.5 rounded-lg bg-sky-600/20 border border-sky-500/50 text-sky-100 text-xs font-medium hover:bg-sky-600/30 hover:border-sky-400 transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      View X-Ray
+                    </button>
                   )}
                   {!isDone && <div className="text-[12px] text-slate-400">Result on the way…</div>}
                 </div>
@@ -1662,6 +1717,31 @@ export default function JoinSession() {
             />
           </div>
         </div>
+      )}
+
+      {/* Full-screen EKG Viewer Modal */}
+      {viewingEkgOrder && (
+        <EkgViewer
+          imageUrl={viewingEkgOrder.imageUrl}
+          summary={viewingEkgOrder.summary}
+          timestamp={viewingEkgOrder.timestamp}
+          orderedBy={viewingEkgOrder.orderedBy}
+          patientName={simState?.scenarioId ? simState.scenarioId.replace(/_/g, " ") : "Patient"}
+          onClose={() => setViewingEkgOrder(null)}
+        />
+      )}
+
+      {/* Full-screen CXR Viewer Modal */}
+      {viewingCxrOrder && (
+        <CxrViewer
+          imageUrl={viewingCxrOrder.imageUrl}
+          summary={viewingCxrOrder.summary}
+          timestamp={viewingCxrOrder.timestamp}
+          orderedBy={viewingCxrOrder.orderedBy}
+          patientName={simState?.scenarioId ? simState.scenarioId.replace(/_/g, " ") : "Patient"}
+          viewType={viewingCxrOrder.viewType}
+          onClose={() => setViewingCxrOrder(null)}
+        />
       )}
     </div>
   );

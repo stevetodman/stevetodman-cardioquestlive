@@ -88,12 +88,16 @@ PORT                          # Default 8081
 ## Key Files to Know
 - `voice-gateway/src/index.ts` - Main WebSocket handler
 - `voice-gateway/src/sim/scenarioEngine.ts` - Scenario state machine
+- `voice-gateway/src/orders.ts` - Order system with timers, duplicate detection
 - `src/pages/JoinSession.tsx` - Participant view
 - `src/pages/PresenterSession.tsx` - Presenter view
-- `src/services/VoiceGatewayClient.ts` - WebSocket client
+- `src/services/VoiceGatewayClient.ts` - WebSocket client with heartbeat/reconnect
+- `src/components/EkgViewer.tsx` - Muse-like 12-lead EKG viewer
+- `src/components/CxrViewer.tsx` - PACS-like chest X-ray viewer
 
 ## Testing
-- 165+ gateway tests (rhythm generation, myocarditis scenario, SVT scenario, order parsing)
+- 172+ gateway tests (rhythm generation, myocarditis scenario, SVT scenario, order parsing, order timers)
+- Firestore rules tests (sessions, responses, participants, team chat, voice commands)
 - Playwright E2E with mock sessions
 - Jest unit tests for gateway logic
 
@@ -151,6 +155,26 @@ Toggle via the mode switch in presenter header. Mode persists in localStorage.
   - Cardioversion with sedation tracking
   - NPC triggers: nurse safety prompts, parent history (WPW), patient responses
   - 73 new tests for SVT physiology, scoring, triggers
+- **Shared Orders with Realistic Timing** (Dec 2024):
+  - Orders system with realistic hospital-like delays: EKG 90-120s, CXR 180-240s
+  - Duplicate detection: "Still working on the current EKG" when re-ordering
+  - `orderedBy` tracking shows who requested each order
+  - Tech/nurse acknowledgment messages on order placement
+  - Orders resume correctly after WebSocket reconnection
+- **Teaching-Friendly Viewers** (Dec 2024):
+  - `EkgViewer`: Muse-like 12-lead viewer with dark grid background, lead labels, zoom toggle
+  - `CxrViewer`: PACS-like radiology viewer with L/R markers, dark background
+  - Both viewers: mobile-optimized with large tap targets (44x44px), fit-to-width default
+  - "View EKG" / "View X-Ray" buttons appear on completed orders
+- **WebSocket Resilience** (Dec 2024):
+  - Heartbeat ping every 30s, auto-reconnect on pong timeout (5s)
+  - Exponential backoff reconnection: 1s → 2s → 4s → 8s → 16s → 30s (max 10 attempts)
+  - Automatic Firebase auth token refresh before reconnect
+  - Connection status events: "reconnecting", "connected", "failed"
+- **Participant Order Permissions** (Dec 2024):
+  - Participants can now send "safe" commands: exam, ekg, cxr, order, toggle_telemetry, show_ekg
+  - Presenter-only commands remain restricted: pause_ai, resume_ai, force_reply, freeze, etc.
+  - Firestore rules enforce command type based on participant vs presenter role
 
 ## Team Mode Features
 
