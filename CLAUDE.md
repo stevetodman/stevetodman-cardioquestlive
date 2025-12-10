@@ -31,9 +31,9 @@ public/               # Static assets (audio files, images)
 ## Core Concepts
 
 ### Scenarios
-10 pediatric cardiology cases with age-appropriate vitals, medications, and exam findings:
+11 pediatric cardiology cases with age-appropriate vitals, medications, and exam findings:
 - Teen: syncope, SVT, HCM, arrhythmogenic syncope, chest pain
-- Pediatric: myocarditis, kawasaki
+- Pediatric: myocarditis, kawasaki, **"The Silent Crash" (complex fulminant myocarditis)**
 - Infant: ductal shock, coarctation, cyanotic spell
 
 ### Weight-Based Dosing
@@ -88,7 +88,7 @@ PORT                          # Default 8081
 - `src/services/VoiceGatewayClient.ts` - WebSocket client
 
 ## Testing
-- 28 rhythm generation tests for age-dependent thresholds
+- 92 gateway tests (rhythm generation, myocarditis scenario, order parsing)
 - Playwright E2E with mock sessions
 - Jest unit tests for gateway logic
 
@@ -130,6 +130,14 @@ Toggle via the mode switch in presenter header. Mode persists in localStorage.
 - **Facilitator documentation** (Dec 2024):
   - FACILITATOR_GUIDE.md: Complete scenario guide with clinical details
   - All 10 scenarios documented with stages, vitals, exam findings, teaching points
+- **"The Silent Crash" complex myocarditis scenario** (Dec 2024):
+  - High-fidelity 30-min simulation: `peds_myocarditis_silent_crash_v1`
+  - Phase-based progression with 6 phases, shock staging (1-5)
+  - Deterministic physiology engine (fluid overload, inotrope response, intubation collapse)
+  - Free-text order parsing with nurse clarification prompts
+  - Pass/fail scoring (4/5 checklist items) + bonus/penalty points
+  - Enhanced debrief with timeline, scoring breakdown, teaching points
+  - 36 new tests for physiology, orders, results, scoring, triggers
 
 ## Team Mode Features
 

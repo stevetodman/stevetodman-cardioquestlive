@@ -1,3 +1,5 @@
+import type { MyocarditisPhase, ShockStage } from "./scenarioTypes";
+
 export type ToolIntentType =
   | "intent_updateVitals"
   | "intent_advanceStage"
@@ -81,7 +83,136 @@ export type Interventions = {
   foley?: { placed: boolean };
 };
 
-export type SimState = {
+// ============================================================================
+// Complex Scenario Extended State (Myocarditis)
+// ============================================================================
+
+/** Fluid administration record */
+export type FluidBolus = {
+  ts: number;
+  mlKg: number;
+  totalMl: number;
+  type: "NS" | "LR" | "albumin" | "blood";
+  rateMinutes?: number; // e.g., 20 for "over 20 minutes"
+};
+
+/** Inotrope/vasopressor infusion */
+export type InotropeInfusion = {
+  drug: "epi" | "milrinone" | "dobutamine" | "dopamine" | "norepi";
+  doseMcgKgMin: number;
+  startedAt: number;
+  stoppedAt?: number;
+};
+
+/** Airway intervention */
+export type AirwayIntervention = {
+  type: "hfnc" | "intubation";
+  ts: number;
+  details?: {
+    inductionAgent?: "ketamine" | "propofol" | "etomidate";
+    peep?: number;
+    fio2?: number;
+    pressorReady?: boolean;
+    pushDoseEpiDrawn?: boolean;
+  };
+};
+
+/** Diagnostic order for complex scenario */
+export type DiagnosticOrder = {
+  id: string;
+  type: "ecg" | "troponin" | "bnp" | "cbc" | "bmp" | "lactate" | "cxr" | "echo" | "abg";
+  orderedAt: number;
+  completedAt?: number;
+  result?: string;
+};
+
+/** Consult record */
+export type ConsultRecord = {
+  service: "picu" | "cardiology" | "ecmo" | "pharmacy" | "respiratory";
+  calledAt: number;
+  arrivedAt?: number;
+  recommendation?: string;
+};
+
+/** Rule trigger history for cooldowns */
+export type RuleTriggerRecord = {
+  ruleId: string;
+  triggeredAt: number;
+  triggerCount: number;
+};
+
+/** Extended state for myocarditis complex scenario */
+export type MyocarditisExtendedState = {
+  // Phase tracking
+  phase: MyocarditisPhase;
+  phaseEnteredAt: number;
+  shockStage: ShockStage;
+  shockStageEnteredAt: number;
+
+  // Scenario clock control
+  scenarioClockPaused: boolean;
+  scenarioClockPausedAt?: number;
+  totalPausedMs: number;
+  deteriorationRate: number; // 0.5, 1.0, or 2.0 (multiplier)
+
+  // Interventions tracking
+  fluids: FluidBolus[];
+  totalFluidsMlKg: number;
+  inotropes: InotropeInfusion[];
+  activeInotropes: InotropeInfusion[];
+  airway?: AirwayIntervention;
+  ivAccess: { count: number; locations: string[] };
+  monitorOn: boolean;
+  defibPadsOn: boolean;
+
+  // Diagnostic tracking
+  diagnostics: DiagnosticOrder[];
+  orderedDiagnostics: string[]; // quick lookup of ordered test types
+
+  // Consults
+  consults: ConsultRecord[];
+  consultsCalled: string[]; // quick lookup
+
+  // Physiology flags (set by rules)
+  flags: {
+    pulmonaryEdema: boolean;
+    intubationCollapse: boolean;
+    codeBlueActive: boolean;
+    stabilizing: boolean;
+  };
+
+  // Rule tracking
+  ruleTriggers: RuleTriggerRecord[];
+  pendingEffects: { ruleId: string; effect: unknown; executeAt: number }[];
+
+  // Scoring (accumulated during scenario)
+  checklistCompleted: string[]; // IDs of checklist items achieved
+  bonusesEarned: string[];
+  penaltiesIncurred: string[];
+  currentScore: number;
+
+  // Nurse pending clarification
+  pendingClarification?: {
+    orderType: string;
+    question: string;
+    askedAt: number;
+  };
+
+  // Timeline events for debrief
+  timelineEvents: {
+    ts: number;
+    type: "phase_change" | "intervention" | "diagnostic" | "consult" | "deterioration" | "critical";
+    description: string;
+    details?: Record<string, unknown>;
+  }[];
+};
+
+// ============================================================================
+// SimState (Base + Extended)
+// ============================================================================
+
+/** Base SimState for all scenarios */
+export type SimStateBase = {
   simId: string;
   scenarioId: string;
   stageId: string;
@@ -123,8 +254,25 @@ export type SimState = {
   };
 };
 
+/** SimState with optional extended state for complex scenarios */
+export type SimState = SimStateBase & {
+  /** Extended state for complex scenarios (e.g., myocarditis) */
+  extended?: MyocarditisExtendedState;
+};
+
 export type CostSnapshot = {
   inputTokens: number;
   outputTokens: number;
   usdEstimate: number;
 };
+
+/** Type guard to check if a SimState has extended myocarditis state */
+export function hasMyocarditisExtended(
+  state: SimState
+): state is SimState & { extended: MyocarditisExtendedState } {
+  return (
+    state.scenarioId === "peds_myocarditis_silent_crash_v1" &&
+    "extended" in state &&
+    state.extended !== undefined
+  );
+}

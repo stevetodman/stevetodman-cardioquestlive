@@ -48,8 +48,19 @@ const syncopeScenario: ScenarioDef = {
   ],
 };
 
+// Placeholder for complex scenario - will be handled separately by ComplexScenarioEngine
+const complexMyocarditisPlaceholder: ScenarioDef = {
+  id: "peds_myocarditis_silent_crash_v1",
+  version: "1.0.0",
+  persona: "Complex scenario - handled by ComplexScenarioEngine",
+  demographics: { ageYears: 10, weightKg: 32, sex: "male" },
+  initialStage: "scene_set",
+  stages: [{ id: "scene_set", vitals: { hr: 115, bp: "88/52", rr: 28, spo2: 94 } }],
+};
+
 const scenarioMap: Record<ScenarioId, ScenarioDef> = {
   syncope: syncopeScenario,
+  peds_myocarditis_silent_crash_v1: complexMyocarditisPlaceholder,
   exertional_chest_pain: {
     id: "exertional_chest_pain",
     version: "1.0.0",
@@ -491,6 +502,23 @@ const examTemplates: Record<
     heartAudioUrl: "/audio/heart/irregular-teen.mp3",
     lungAudioUrl: "/audio/lung/clear-teen.mp3",
   },
+  // Complex scenario - exam findings are phase-based and handled by ComplexScenarioEngine
+  peds_myocarditis_silent_crash_v1: {
+    baseline: {
+      general: "Tired-appearing 10-year-old, mildly tachypneic.",
+      cardio: "Tachycardic, gallop rhythm, possible friction rub.",
+      lungs: "Bibasilar crackles.",
+      perfusion: "Cool extremities, delayed cap refill 3-4s.",
+      neuro: "Sleepy but oriented, answers appropriately.",
+    },
+    decomp: {
+      general: "Ill-appearing, diaphoretic, increased work of breathing.",
+      cardio: "Tachycardic with S3 gallop, weak pulses.",
+      lungs: "Diffuse crackles, subcostal retractions.",
+      perfusion: "Mottled, cap refill 5s, thready pulses.",
+      neuro: "Lethargic, slow to respond.",
+    },
+  },
 };
 
 const rhythmTemplates: Record<
@@ -537,6 +565,11 @@ const rhythmTemplates: Record<
     baseline: "Sinus with occasional PVCs",
     decomp: "Sinus with runs of VT possible",
     episode: "Nonsustained VT",
+  },
+  // Complex scenario - rhythm is phase-dependent and handled by ComplexScenarioEngine
+  peds_myocarditis_silent_crash_v1: {
+    baseline: "Sinus tachycardia 115 bpm, low voltage QRS, diffuse ST-T wave abnormalities",
+    decomp: "Sinus tachycardia 140 bpm, low voltage, ST depressions V4-V6, frequent PVCs",
   },
 };
 

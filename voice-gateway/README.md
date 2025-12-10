@@ -58,3 +58,33 @@ WebSocket URL: `ws://localhost:8081/ws/voice`
 - Clients must send `join` before any other message.
 - Gateway tracks per-session sockets for presenters/participants and broadcasts within that session.
 - In-memory only; restart clears state.
+
+## Complex Scenarios
+
+The gateway supports complex high-fidelity scenarios with advanced features:
+
+### "The Silent Crash" (Pediatric Myocarditis)
+
+A 30-minute simulation of acute fulminant myocarditis with:
+
+**Key files:**
+- `src/sim/scenarios/peds_myocarditis_silent_crash/` - Scenario definition, results, triggers, scoring
+- `src/sim/physiologyEngine.ts` - Deterministic physiology rules
+- `src/orderParser.ts` - Free-text order parsing with nurse clarification
+- `src/debriefAnalyzer.ts` - Enhanced debrief with timeline and scoring
+
+**Features:**
+- Phase-based progression (6 phases over 30 min)
+- Shock staging (1-5)
+- Deterministic physiology rules (fluid overload, inotrope response, intubation collapse)
+- Free-text order parsing with nurse clarification prompts
+- Pass/fail scoring (need 4/5 checklist items)
+- Enhanced debrief with timeline and teaching points
+
+**Order parsing examples:**
+```
+"give 20 ml/kg saline" → { type: "fluids", params: { mlKg: 20 } }
+"start epi at 0.1" → { type: "epi_drip", params: { doseMcgKgMin: 0.1 } }
+"intubate with ketamine" → { type: "intubation", params: { inductionAgent: "ketamine" } }
+"give fluids" → { needsClarification: true, clarificationQuestion: "10 or 20 mL/kg?" }
+```

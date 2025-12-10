@@ -116,6 +116,53 @@ Presenter can trigger scenario events:
 | `kawasaki` | 4yo | 16kg | Kawasaki disease, coronary risk |
 | `coarctation_shock` | 2mo | 4.5kg | Coarctation with shock |
 | `arrhythmogenic_syncope` | 15yo | 58kg | ARVC/CPVT with VT |
+| `peds_myocarditis_silent_crash_v1` | 10yo | 32kg | **Complex scenario**: Fulminant myocarditis with cardiogenic shock |
+
+### Complex Scenario: "The Silent Crash" (Dec 2024)
+
+High-fidelity 30-minute simulation of acute fulminant myocarditis in a 10-year-old (Jordan, 32kg).
+
+**Key Learning Objectives:**
+- Recognize cardiac etiology early (troponin/BNP/ECG)
+- Avoid fluid overload in cardiogenic shock
+- Safe intubation with pressor backup (ketamine, not propofol)
+- Early PICU/cardiology involvement
+
+**Phase-Based Progression:**
+| Phase | Duration | Key Events |
+|-------|----------|------------|
+| `scene_set` | 0-1 min | Initial presentation, HR 115, BP 88/52 |
+| `recognition` | 1-6 min | Workup phase, vitals drift toward worse |
+| `decompensation` | 6-15 min | Shock worsens, require PICU/cardiology |
+| `intubation_trap` | 15-25 min | Safe airway decision (ketamine vs propofol) |
+| `confirmation_disposition` | 25-30 min | Echo, transfer planning, ECMO evaluation |
+| `end` | - | Freeze + debrief |
+
+**Shock Staging (1-5):**
+1. Compensated shock
+2. Decompensated shock
+3. Peri-arrest
+4. Arrest
+5. Stabilized (with proper treatment)
+
+**Deterministic Physiology Rules:**
+- Fluid overload: ≥20 mL/kg in 10min → pulmonary edema, SpO2 drops
+- Epi response: ≥0.05 mcg/kg/min → BP improves in 2-3min
+- Milrinone trap: milrinone without epi → BP drops
+- Intubation collapse: propofol/no pressor/high PEEP → severe hypotension
+
+**Scoring (Pass = 4/5 checklist items):**
+- [ ] Recognized cardiac etiology (ordered troponin/BNP/ECG)
+- [ ] Avoided fluid overload (≤40 mL/kg total)
+- [ ] Called PICU within 10min of decompensation
+- [ ] Safe intubation (ketamine + pressor ready)
+- [ ] Consulted cardiology
+
+**Free-Text Orders with Nurse Clarification:**
+Learners speak orders naturally; nurse asks for clarification when needed:
+- "Give epi" → "Epi drip or push dose? What concentration?"
+- "Fluids" → "10 or 20 mL/kg bolus? Want me to run it fast or over 20 minutes?"
+- "Intubate" → "What induction agent? Ketamine or propofol? Pressor at bedside?"
 
 ## Architecture
 

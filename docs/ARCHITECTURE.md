@@ -73,7 +73,36 @@ This guide is a quick map for developers joining the project. It highlights wher
   - Orders/telemetry: `orders.ts`, `telemetry.ts`, `assetUtils.ts`.
   - State/persistence: `sim/scenarioEngine.ts`, `persistence.ts`, `messageTypes.ts`, `validators.ts`.
   - OpenAI integrations: `sttClient.ts`, `ttsClient.ts`, `debriefAnalyzer.ts`, `openaiClient.ts`.
+  - **Order parsing**: `orderParser.ts` - Parses free-text orders from learner speech, returns nurse clarification prompts.
+  - **Physiology engine**: `sim/physiologyEngine.ts` - Deterministic rules for complex scenarios (fluid overload, inotrope response, intubation collapse).
 - **Tests**: `npm run test:gateway` runs gateway/unit behavior; page tests cover basic presenter flows; rules tests via `npm run test:rules` (or `test:rules:ports` with env overrides if ports are blocked).
+
+## Complex scenarios architecture
+
+The `peds_myocarditis_silent_crash` scenario introduces a new architecture pattern for high-fidelity simulations:
+
+### Scenario directory structure
+```
+voice-gateway/src/sim/scenarios/peds_myocarditis_silent_crash/
+  index.ts           # Main exports
+  definition.ts      # ScenarioDef with phases, vitals, exam
+  results.ts         # Lab/imaging results (troponin, BNP, ECG, echo)
+  triggers.ts        # Deterministic NPC lines (nurse/parent/patient)
+  scoring.ts         # Pass/fail checklist + point system
+```
+
+### Key components
+- **Physiology engine** (`physiologyEngine.ts`): Deterministic rules that modify vitals/state based on interventions
+- **Order parser** (`orderParser.ts`): Free-text order recognition with nurse clarification prompts
+- **Scoring system** (`scoring.ts`): 5-item checklist (need 4/5 to pass) + bonus/penalty points
+- **Debrief analyzer** (`debriefAnalyzer.ts`): Enhanced with timeline, scoring breakdown, scenario-specific feedback
+
+### State model
+Complex scenarios use `MyocarditisExtendedState` to track:
+- Current phase and shock stage (1-5)
+- Fluid totals, inotropes, airway status
+- Ordered diagnostics, consults called
+- Timeline events, bonuses/penalties earned
 
 ## Simulation visualization components
 

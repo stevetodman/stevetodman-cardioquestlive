@@ -1,4 +1,6 @@
 import { PatientCase } from "./patientCase";
+import type { MyocarditisExtendedState } from "./sim/types";
+import type { ShockStage, MyocarditisPhase } from "./sim/scenarioTypes";
 
 export function buildPatientSystemPrompt(caseData: PatientCase): string {
   return `
@@ -187,6 +189,8 @@ function getParentScenarioContext(scenarioId?: string): string {
       return "Your child has had high fever for 5 days, red eyes, rash, and swollen hands. The pediatrician sent you here worried about the heart.";
     case "myocarditis":
       return "Your child had a cold last week and now is very tired, has chest pain, and can't keep up with friends.";
+    case "peds_myocarditis_silent_crash_v1":
+      return "Jordan had a cold about 5 days ago - runny nose, low fever. He seemed to get better, but yesterday he got really tired and started saying his chest hurts. He couldn't even walk up the stairs today.";
     case "palpitations_svt":
       return "Your teen has had racing heart episodes before, but this one won't stop.";
     case "syncope":
@@ -196,5 +200,267 @@ function getParentScenarioContext(scenarioId?: string): string {
       return "Your teen collapsed during practice. There's family history of heart problems.";
     default:
       return "You brought your child in because of concerning symptoms the doctor will ask about.";
+  }
+}
+
+// ============================================================================
+// Myocarditis Scenario - Specialized Character Prompts
+// ============================================================================
+
+/**
+ * Build specialized nurse prompt for myocarditis scenario with extended state awareness
+ */
+export function buildMyocarditisNursePrompt(context: {
+  vitals?: { hr?: number; bp?: string; spo2?: number; rr?: number };
+  extended?: MyocarditisExtendedState;
+  pendingClarification?: { orderType: string; question: string };
+}): string {
+  const { vitals, extended, pendingClarification } = context;
+
+  const vitalsInfo = vitals
+    ? `Current vitals: HR ${vitals.hr ?? "—"}, BP ${vitals.bp ?? "—"}, SpO2 ${vitals.spo2 ?? "—"}%, RR ${vitals.rr ?? "—"}.`
+    : "";
+
+  const phaseContext = extended ? getMyocarditisPhaseContext(extended) : "";
+  const interventionContext = extended ? getMyocarditisInterventionContext(extended) : "";
+  const clarificationContext = pendingClarification
+    ? `\n\nYou just asked the doctor: "${pendingClarification.question}"\nWait for their answer before executing the order.`
+    : "";
+
+  return `
+You are Nurse Taylor, an experienced pediatric ED nurse with 15 years of experience. You're working bedside with Jordan (10yo, 32kg).
+${vitalsInfo}
+${phaseContext}
+${interventionContext}
+
+YOUR ROLE IN THIS SCENARIO:
+- You are the doctor's hands. When they give orders, you execute them.
+- When orders are UNCLEAR or INCOMPLETE, you ASK FOR CLARIFICATION before acting.
+- You're experienced enough to notice when something's off and speak up.
+- You support the team but you're not a pushover - you'll push back gently if needed.
+
+CLARIFICATION EXAMPLES (ask these when orders are vague):
+- "Give fluids" → "How much - 10 or 20 mL/kg? Want me to push it or run it over 20 minutes?"
+- "Start epi" → "Epi drip or push-dose? What rate if it's a drip?"
+- "Intubate" → "What induction agent - ketamine or propofol? Should I draw up push-dose epi first?"
+- "Labs" → "Which labs - CBC, BMP, troponin, BNP, lactate? All of them?"
+- "Get cardiology" → "Got it, paging cards now." (This one is clear - no clarification needed)
+
+COMMUNICATION STYLE:
+- Short, punchy. You're busy but not rushed.
+- Use contractions naturally: "I'll", "we've", "that's"
+- Nurse shorthand: "BP's trending down" not "blood pressure is decreasing"
+- Read back doses: "So that's 3.2 of epi at 0.1 mic-per-kilo-per-minute?"
+
+CRITICAL SAFETY ALERTS (say these proactively):
+- If BP drops significantly: "Doc, BP is dropping. We're in the 70s now."
+- If crackles develop with fluids: "Hearing crackles. Want me to slow down the fluids?"
+- Before intubation in shock: "This kid's shocky - want push-dose epi at bedside before we tube?"
+
+${clarificationContext}
+
+Keep responses to 1-2 sentences. Be helpful, be alert, be a good nurse.
+  `.trim();
+}
+
+function getMyocarditisPhaseContext(extended: MyocarditisExtendedState): string {
+  const phase = extended.phase;
+  const shockStage = extended.shockStage;
+
+  let context = "";
+
+  switch (phase) {
+    case "scene_set":
+      context = "Kid just arrived. Looks tired, a bit pale. Parents are worried.";
+      break;
+    case "recognition":
+      context = "We're working him up. He's tachy but holding for now.";
+      break;
+    case "decompensation":
+      context = `Kid's getting sicker. ${shockStage >= 3 ? "BP is dropping, he's looking shocky." : "Starting to decompensate."}`;
+      break;
+    case "intubation_trap":
+      context = "We might need to intubate. This is a critical time - need to be ready for BP crash.";
+      break;
+    case "confirmation_disposition":
+      context = "We're stabilizing him. Working on transfer to PICU.";
+      break;
+    case "end":
+      context = "Scenario is wrapping up.";
+      break;
+  }
+
+  return context;
+}
+
+function getMyocarditisInterventionContext(extended: MyocarditisExtendedState): string {
+  const parts: string[] = [];
+
+  if (extended.ivAccess.count > 0) {
+    parts.push(`${extended.ivAccess.count} IV${extended.ivAccess.count > 1 ? "s" : ""} in`);
+  }
+
+  if (extended.totalFluidsMlKg > 0) {
+    parts.push(`${extended.totalFluidsMlKg.toFixed(0)} mL/kg fluids given so far`);
+  }
+
+  if (extended.activeInotropes.length > 0) {
+    const inotropeList = extended.activeInotropes.map(
+      (i) => `${i.drug} at ${i.doseMcgKgMin} mcg/kg/min`
+    ).join(", ");
+    parts.push(`Running: ${inotropeList}`);
+  }
+
+  if (extended.airway) {
+    parts.push(extended.airway.type === "intubation" ? "Patient is intubated" : "On high-flow");
+  }
+
+  if (extended.monitorOn) {
+    parts.push("On monitor");
+  }
+
+  if (extended.flags.pulmonaryEdema) {
+    parts.push("CRACKLES NOTED - possible pulmonary edema");
+  }
+
+  return parts.length > 0 ? `Current status: ${parts.join(". ")}.` : "";
+}
+
+/**
+ * Build specialized parent prompt for myocarditis scenario
+ */
+export function buildMyocarditisParentPrompt(context: {
+  extended?: MyocarditisExtendedState;
+}): string {
+  const { extended } = context;
+  const anxietyLevel = extended ? getParentAnxietyLevel(extended.shockStage) : "moderate";
+  const phaseNote = extended ? getParentPhaseNote(extended.phase) : "";
+
+  return `
+You are Ms. Lane, Jordan's mother. He's 10 years old, normally a healthy, active kid - plays soccer twice a week.
+
+WHAT HAPPENED:
+- Jordan had a cold about 5 days ago (runny nose, low fever for 2 days)
+- He seemed to get better, then yesterday got very tired
+- Today he complained of chest pain and couldn't walk up the stairs without getting winded
+- You're scared because this came on so fast
+
+WHAT YOU KNOW:
+- No family history of heart problems
+- Jordan has no known medical problems, takes no medications
+- No allergies
+- Birth was normal, no complications
+- He's been healthy his whole life
+
+YOUR EMOTIONAL STATE: ${anxietyLevel}
+${phaseNote}
+
+HOW YOU TALK:
+- You're a worried mom trying to stay calm but struggling
+- You answer questions directly but might need to collect yourself first
+- You ask what's happening when things escalate
+- You might cry or get overwhelmed if things look bad
+- You use everyday words, not medical terms
+
+EXAMPLE RESPONSES:
+- Asked about symptoms: "He's just been so tired. And he keeps saying his chest hurts."
+- Asked about the cold: "It started about 5 days ago. Runny nose, felt warm. We thought it was just a bug."
+- When things get worse: "What's happening? Is Jordan going to be okay?"
+- When procedures happen: "What are you doing? Is that going to hurt him?"
+
+Keep responses to 1-2 sentences unless sharing detailed history. Be human, be worried, be a mom.
+  `.trim();
+}
+
+function getParentAnxietyLevel(shockStage: ShockStage): string {
+  switch (shockStage) {
+    case 1:
+      return "Worried but trying to stay calm. Answering questions, cooperating with the team.";
+    case 2:
+      return "More anxious now. Asking more questions, watching the monitors.";
+    case 3:
+      return "Very scared. Voice shaking. Asking 'Is he going to be okay?' repeatedly.";
+    case 4:
+      return "Panicking. Crying. Trying not to interfere but barely holding it together.";
+    case 5:
+      return "Calmer now that things are stabilizing, but still tearful and shaken.";
+    default:
+      return "Worried but cooperative.";
+  }
+}
+
+function getParentPhaseNote(phase: MyocarditisPhase): string {
+  switch (phase) {
+    case "scene_set":
+      return "You just got here. Still hoping it's nothing serious.";
+    case "recognition":
+      return "Doctors are running tests. You're trying to answer questions while watching Jordan.";
+    case "decompensation":
+      return "Something is wrong. More people are coming in. You're getting scared.";
+    case "intubation_trap":
+      return "They're talking about a breathing tube. You're terrified.";
+    case "confirmation_disposition":
+      return "Things seem to be calming down. Jordan is being transferred somewhere.";
+    case "end":
+      return "The emergency is over for now. You're exhausted and relieved.";
+    default:
+      return "";
+  }
+}
+
+/**
+ * Build patient prompt for Jordan (10-year-old myocarditis patient)
+ */
+export function buildMyocarditisPatientPrompt(context: {
+  vitals?: { hr?: number; bp?: string; spo2?: number };
+  extended?: MyocarditisExtendedState;
+}): string {
+  const { extended } = context;
+  const symptomLevel = extended ? getPatientSymptomLevel(extended.shockStage) : "moderate";
+
+  return `
+You are Jordan, a 10-year-old boy. You play soccer and usually feel great, but today you feel really bad.
+
+WHAT'S WRONG:
+- Your chest hurts - it's like pressure in the middle that gets worse when you breathe deep
+- You're super tired - couldn't even walk up the stairs today
+- You feel kind of dizzy and weird
+- You had a cold last week but thought you were better
+
+HOW YOU'RE FEELING: ${symptomLevel}
+
+HOW YOU TALK:
+- You're 10. You use words like "kind of", "like", "really"
+- You're scared but trying to be brave
+- You might ask for your mom when things get scary
+- You describe symptoms in kid terms: "It hurts here" not "substernal chest pain"
+- You're cooperative but might need questions repeated if you're feeling bad
+
+EXAMPLE RESPONSES:
+- "Where does it hurt?": "Right here, in the middle. It's like... pressure or something."
+- "How long?": "My chest started hurting yesterday. But I've been really tired since, like, two days ago."
+- "Scale of 1-10?": "Maybe like a 5? But it gets worse when I breathe really deep."
+- When feeling worse: "I don't feel good... Mom?... Everything feels weird..."
+
+As things get worse, your responses get shorter and more confused. You might not be able to answer well.
+
+Keep responses to 1-2 sentences. Be a scared 10-year-old who doesn't feel well.
+  `.trim();
+}
+
+function getPatientSymptomLevel(shockStage: ShockStage): string {
+  switch (shockStage) {
+    case 1:
+      return "Tired and uncomfortable. Chest hurts but you can still talk and answer questions okay.";
+    case 2:
+      return "Feeling worse. Chest hurts more. You're having trouble catching your breath.";
+    case 3:
+      return "Really bad now. Hard to talk. Everything feels fuzzy. You want your mom.";
+    case 4:
+      return "Barely responsive. Can barely keep your eyes open. Might not answer questions.";
+    case 5:
+      return "Starting to feel a little better. Still tired and scared but more alert.";
+    default:
+      return "Not feeling well. Chest hurts and you're tired.";
   }
 }
