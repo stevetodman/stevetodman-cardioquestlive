@@ -14,9 +14,13 @@ Real-time pediatric cardiology teaching platform with autonomous AI patient simu
 src/                    # React frontend
   pages/               # Main views (JoinSession, PresenterSession)
   components/          # Reusable UI components
+    presenter/         # Presenter-specific components (SimControls, Overlays)
+    participant/       # Participant-specific components (QuickActions, CharacterSelector)
   services/            # VoiceGatewayClient, Firebase services
   hooks/               # Custom React hooks
-  types/               # TypeScript types
+  types/               # TypeScript types (simulationState, voiceCommands)
+  styles/              # Tailwind style constants
+  utils/               # Utility functions (scoringUtils)
 
 voice-gateway/         # Node.js WebSocket server
   src/
@@ -27,6 +31,23 @@ voice-gateway/         # Node.js WebSocket server
 docs/                  # Documentation
 public/               # Static assets (audio files, images)
 ```
+
+## Component Organization (Token Efficiency)
+Components are organized by view to reduce file sizes and token consumption:
+
+**Presenter components** (`src/components/presenter/`):
+- `PresenterSimControls`: Sim mode right panel (case selector, interventions, orders, transcript)
+- `PresenterSlidesOverlays`: Slide mode overlays (scoreboards, poll results)
+- `GamificationControls`: Toggle buttons for scoreboards and summary
+
+**Participant components** (`src/components/participant/`):
+- `QuickActionsBar`: One-tap actions (Exam, Telemetry, View EKG)
+- `CharacterSelector`: NPC target selector (patient, nurse, tech, consultant)
+- `ParticipantOrdersPanel`: Orders display with viewer buttons
+
+**Shared types** (`src/types/`):
+- `simulationState.ts`: Centralized SimulationState type
+- `voiceCommands.ts`: Voice command types, constants, routing utilities
 
 ## Core Concepts
 
