@@ -140,7 +140,7 @@ service cloud.firestore {
       match /voiceCommands/{commandId} {
         // Commands that only presenters/admins can send
         function isPresenterOnlyCommand(type) {
-          return type in ["pause_ai", "resume_ai", "force_reply", "end_turn", "mute_user", "freeze", "unfreeze", "skip_stage"];
+          return type in ["pause_ai", "resume_ai", "force_reply", "end_turn", "mute_user", "freeze", "unfreeze", "skip_stage", "treatment", "scenario_event"];
         }
 
         // "Safe" commands that participants can also send
