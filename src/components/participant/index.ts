@@ -15,6 +15,9 @@ export type { ExamFindingsPanelProps, ExamFindings, ExamAudioClip } from "./Exam
 export { ParticipantHeader } from "./ParticipantHeader";
 export type { ParticipantHeaderProps, ParticipantHeaderVitals } from "./ParticipantHeader";
 
+export { QuestionSection, QuestionPlaceholder } from "./QuestionSection";
+export type { QuestionSectionProps } from "./QuestionSection";
+
 // Re-export ParticipantOrdersPanel from parent directory
 export { ParticipantOrdersPanel } from "../ParticipantOrdersPanel";
 export type { ParticipantOrdersPanelProps, Order, OrderResult } from "../ParticipantOrdersPanel";
