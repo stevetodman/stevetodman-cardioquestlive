@@ -123,6 +123,21 @@ Toggle via the mode switch in presenter header. Mode persists in localStorage.
   - Custom focus-visible states for keyboard accessibility
   - Spring animation on collapsible panels
 
+## Team Mode Features
+
+### Team Chat
+Private messaging within teams - teammates can coordinate without other teams seeing.
+- **Firestore**: `sessions/{sessionId}/teamMessages/{messageId}` subcollection
+- **Security**: Only team members can read/write their team's messages (enforced via `isSameTeam()` rule)
+- **Components**: `useTeamChat` hook, `TeamChat` component
+- **Features**: Collapsible UI, unread badge, message grouping, 500 char limit
+
+### Team Lead Role
+One member per team can claim the "lead" role for special privileges.
+- **Data**: `ParticipantDoc.role` field (`"member"` | `"lead"`)
+- **Components**: `useTeamLead` hook, `TeamRoleBadge` component
+- **Features**: Claim/resign buttons, star icon indicator, race condition protection
+
 ## Mobile (iPhone) Participant Experience
 - Safe area insets for notch/home indicator
 - Hold-to-speak with pointer capture for reliable touch

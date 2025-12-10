@@ -39,8 +39,12 @@ This guide is a quick map for developers joining the project. It highlights wher
   - Fields: `userId`, `questionId`, `choiceIndex`, `createdAt`, `sessionId`.
   - Security: user can create/update their own deterministic doc; reads require auth.
 - `sessions/{sessionId}/participants/{userId}`: participant state for gamification
-  - Fields: `userId`, `sessionId`, `teamId`, `teamName`, `points`, `streak`, `correctCount`, `incorrectCount`, `createdAt`.
+  - Fields: `userId`, `sessionId`, `teamId`, `teamName`, `points`, `streak`, `correctCount`, `incorrectCount`, `createdAt`, `role?` (`"member"` | `"lead"`), `displayName?`.
   - Security: any authenticated user can read; only the user can write their own doc with validated shape.
+- `sessions/{sessionId}/teamMessages/{messageId}`: team chat messages
+  - Fields: `userId`, `teamId`, `text`, `createdAt`, `senderName?`.
+  - Security: only users on the same team can read/write (enforced via `isSameTeam()` helper in rules).
+  - 500-character limit enforced in rules.
 - `configs/{...}`: deck/config documents
   - Admin-only writes; reads require auth.
 

@@ -57,6 +57,30 @@ export type Vitals = {
   temp?: number;
 };
 
+// Patient interventions for visual display
+export type IVLocation = "left_ac" | "right_ac" | "left_hand" | "right_hand" | "left_foot" | "right_foot";
+
+export type IVStatus = {
+  location: IVLocation;
+  gauge?: number;
+  fluidsRunning?: boolean;
+  fluidType?: string;
+};
+
+export type OxygenStatus = {
+  type: "nasal_cannula" | "mask" | "non_rebreather" | "high_flow" | "blow_by";
+  flowRateLpm?: number;
+};
+
+export type Interventions = {
+  iv?: IVStatus;
+  oxygen?: OxygenStatus;
+  defibPads?: { placed: boolean };
+  monitor?: { leads: boolean };
+  ngTube?: { placed: boolean };
+  foley?: { placed: boolean };
+};
+
 export type SimState = {
   simId: string;
   scenarioId: string;
@@ -72,6 +96,7 @@ export type SimState = {
     heartAudioUrl?: string;
     lungAudioUrl?: string;
   };
+  interventions?: Interventions;
   telemetry?: boolean;
   rhythmSummary?: string;
   telemetryWaveform?: number[];
@@ -80,11 +105,12 @@ export type SimState = {
   treatmentHistory?: { ts: number; treatmentType: string; note?: string }[];
   findings?: string[];
   fallback: boolean;
+  scenarioStartedAt?: number;
   stageEnteredAt?: number;
   stageIds?: string[];
   orders?: {
     id: string;
-    type: "vitals" | "ekg" | "labs" | "imaging";
+    type: "vitals" | "ekg" | "labs" | "imaging" | "cardiac_exam" | "lung_exam" | "general_exam";
     status: "pending" | "complete";
     result?: import("../messageTypes").OrderResult;
     completedAt?: number;

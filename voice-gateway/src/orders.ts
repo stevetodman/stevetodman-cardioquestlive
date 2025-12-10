@@ -7,7 +7,7 @@ import { SessionManager } from "./sessionManager";
 import { Runtime } from "./typesRuntime";
 import { OrderResult } from "./messageTypes";
 
-type OrderType = "vitals" | "ekg" | "labs" | "imaging";
+type OrderType = "vitals" | "ekg" | "labs" | "imaging" | "cardiac_exam" | "lung_exam" | "general_exam";
 
 export type OrderDeps = {
   ensureRuntime: (sessionId: string) => Runtime;

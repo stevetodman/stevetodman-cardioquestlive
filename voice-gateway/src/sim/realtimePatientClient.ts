@@ -7,6 +7,7 @@ type RealtimePatientClientOptions = {
   model: string;
   apiKey: string;
   systemPrompt: string;
+  voice?: string; // OpenAI voice: alloy, ash, ballad, coral, echo, sage, shimmer, verse
   onAudioOut: (buf: Buffer) => void;
   onTranscriptDelta: (text: string, isFinal: boolean) => void;
   onToolIntent: (intent: ToolIntent) => void;
@@ -46,6 +47,17 @@ export class RealtimePatientClient {
     this.ws.on("open", () => {
       this.connected = true;
       log("[realtime] connected", this.opts.simId);
+      // Configure session with voice and modalities
+      this.send({
+        type: "session.update",
+        session: {
+          voice: this.opts.voice || "coral", // coral is more natural-sounding
+          modalities: ["text", "audio"],
+          input_audio_format: "pcm16",
+          output_audio_format: "pcm16",
+          turn_detection: null, // We handle turn detection manually
+        },
+      });
       this.send({
         type: "conversation.item.create",
         item: {

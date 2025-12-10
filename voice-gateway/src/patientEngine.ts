@@ -74,10 +74,22 @@ export function getOrCreatePatientEngine(sessionId: string) {
   };
 }
 
-export function getPersonaPrompt(character: CharacterId, caseData?: PatientCase): ChatMessage {
+type SimContext = {
+  vitals?: any;
+  stageId?: string;
+  scenarioId?: string;
+  demographics?: { ageYears: number; weightKg: number };
+  treatmentHistory?: { ts: number; treatmentType: string; note?: string }[];
+  orders?: any[];
+};
+
+export function getPersonaPrompt(character: CharacterId, caseData?: PatientCase, simContext?: SimContext): ChatMessage {
   if (character === "patient" && caseData) {
     return { role: "system", content: buildPatientSystemPrompt(caseData) };
-  };
+  }
+  if (character === "nurse" && simContext) {
+    return { role: "system", content: buildNursePrompt(simContext) };
+  }
   const prompt = CHARACTER_PROMPTS[character] || "Respond briefly and helpfully.";
   return { role: "system", content: prompt };
 }

@@ -32,6 +32,11 @@ import { SessionSkeleton } from "../components/SessionSkeleton";
 import { TextQuestionInput } from "../components/TextQuestionInput";
 import { VoiceStatusBadge } from "../components/VoiceStatusBadge";
 import { CompactVitalsChip } from "../components/CompactVitalsChip";
+import { CaseTimeline } from "../components/CaseTimeline";
+import { TeamChat } from "../components/TeamChat";
+import { useTeamChat } from "../hooks/useTeamChat";
+import { useTeamLead } from "../hooks/useTeamLead";
+import { TeamRoleBadge } from "../components/TeamRoleBadge";
 import { FLOOR_AUTO_RELEASE_MS, FLOOR_RELEASE_DELAY_MS, DEFAULT_TIMEOUT_MS } from "../constants";
 
 function getLocalUserId(): string {
@@ -128,6 +133,9 @@ export default function JoinSession() {
     scenarioId?: string;
     stageIds?: string[];
     orders?: { id: string; type: string; status: string; result?: any; completedAt?: number }[];
+    treatmentHistory?: { ts: number; treatmentType: string; note?: string }[];
+    ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
+    scenarioStartedAt?: number;
   } | null>(null);
   const [micStatus, setMicStatus] = useState<MicStatus>("unknown");
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
@@ -144,6 +152,7 @@ export default function JoinSession() {
     return stored === "true";
   });
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const characterAudioRef = useRef<HTMLAudioElement | null>(null);
   const [playingClipId, setPlayingClipId] = useState<string | null>(null);
   const [loadingClipId, setLoadingClipId] = useState<string | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
@@ -154,6 +163,7 @@ export default function JoinSession() {
   const [isMobile, setIsMobile] = useState(false);
   const [isOffline, setIsOffline] = useState<boolean>(false);
   const [showVitalsPanel, setShowVitalsPanel] = useState(false);
+  const [myTeam, setMyTeam] = useState<{ teamId: string; teamName: string } | null>(null);
   const showToast = useCallback((message: string) => {
     setToast({ message, ts: Date.now() });
   }, []);
@@ -233,6 +243,30 @@ export default function JoinSession() {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
+      }
+    };
+  }, []);
+
+  // Subscribe to patient/character audio from voice gateway and play it
+  useEffect(() => {
+    const unsub = voiceGatewayClient.onPatientAudio((audioUrl) => {
+      // Stop any currently playing character audio
+      if (characterAudioRef.current) {
+        characterAudioRef.current.pause();
+        characterAudioRef.current = null;
+      }
+      // Create and play new audio
+      const audio = new Audio(audioUrl);
+      characterAudioRef.current = audio;
+      audio.play().catch((err) => {
+        console.error("Failed to play character audio", err);
+      });
+    });
+    return () => {
+      unsub();
+      if (characterAudioRef.current) {
+        characterAudioRef.current.pause();
+        characterAudioRef.current = null;
       }
     };
   }, []);
@@ -524,6 +558,34 @@ export default function JoinSession() {
     ensureParticipantDoc();
   }, [sessionId, userId]);
 
+  // Listen to participant doc for team info
+  useEffect(() => {
+    if (!sessionId || !userId) return;
+    const participantRef = doc(db, "sessions", sessionId, "participants", userId);
+    const unsub = onSnapshot(participantRef, (snap: any) => {
+      const data = snap.data?.() ?? snap.data;
+      if (data?.teamId && data?.teamName) {
+        setMyTeam({ teamId: data.teamId, teamName: data.teamName });
+      }
+    });
+    return () => unsub();
+  }, [sessionId, userId]);
+
+  // Team chat hook
+  const teamChat = useTeamChat({
+    sessionId,
+    teamId: myTeam?.teamId ?? null,
+    userId,
+    senderName: userDisplayName,
+  });
+
+  // Team lead hook
+  const teamLead = useTeamLead({
+    sessionId,
+    teamId: myTeam?.teamId ?? null,
+    userId,
+  });
+
   const slides = session ? [...session.slides].sort((a, b) => a.index - b.index) : [];
   const currentSlide = slides.length > 0 ? slides[session?.currentSlideIndex ?? 0] ?? slides[0] : null;
 
@@ -773,20 +835,26 @@ export default function JoinSession() {
         </div>
       )}
 
-      {/* Target Character Indicator */}
-      {targetCharacter !== "patient" && (
-        <div className="mt-2 flex items-center gap-2 text-xs bg-slate-800/40 rounded-lg px-2.5 py-1.5">
-          <span className="text-slate-400">Asking:</span>
-          <span className="font-medium text-slate-200 capitalize">{targetCharacter}</span>
-          <button
-            type="button"
-            onClick={() => setTargetCharacter("patient")}
-            className="text-sky-400 hover:text-sky-300 ml-auto"
-          >
-            Reset
-          </button>
+      {/* Character Selector - Always visible */}
+      <div className="mt-3 flex items-center gap-2 text-xs">
+        <span className="text-slate-400">Talk to:</span>
+        <div className="flex gap-1 flex-wrap">
+          {(["patient", "nurse", "tech", "consultant"] as const).map((char) => (
+            <button
+              key={char}
+              type="button"
+              onClick={() => setTargetCharacter(char)}
+              className={`px-2.5 py-1 rounded-full capitalize transition-colors ${
+                targetCharacter === char
+                  ? "bg-sky-600 text-white"
+                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+              }`}
+            >
+              {char}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* Advanced Options Toggle */}
       <div className="mt-3 pt-2 border-t border-slate-800/60">
@@ -808,25 +876,6 @@ export default function JoinSession() {
 
         {showAdvancedVoice && (
           <div className="mt-2 space-y-3 pl-4">
-            {/* Target character selector */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <label htmlFor="target-character" className="text-[11px] text-slate-400">
-                Ask:
-              </label>
-              <select
-                id="target-character"
-                value={targetCharacter}
-                onChange={(e) => setTargetCharacter(e.target.value as CharacterId)}
-                className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100"
-              >
-                <option value="patient">Patient</option>
-                <option value="nurse">Nurse</option>
-                <option value="tech">Tech</option>
-                <option value="imaging">Imaging</option>
-                <option value="consultant">Consultant</option>
-              </select>
-            </div>
-
             {/* Queue and mic info */}
             <div className="text-[11px] text-slate-500 space-y-0.5">
               <div>{waitingCount > 1 ? `${waitingCount} residents waiting` : waitingCount === 1 ? "1 resident waiting" : "Queue clear"}</div>
@@ -1078,6 +1127,48 @@ export default function JoinSession() {
               />
             </div>
           )}
+        </div>
+      )}
+      {/* Case Timeline - shows orders, treatments, and EKGs */}
+      {simState && (simState.orders?.length || simState.treatmentHistory?.length || simState.ekgHistory?.length) ? (
+        <div className="mt-2">
+          <CaseTimeline
+            orders={simState.orders}
+            treatmentHistory={simState.treatmentHistory}
+            ekgHistory={simState.ekgHistory}
+            scenarioStartedAt={simState.scenarioStartedAt}
+            compact={isMobile}
+            maxEvents={isMobile ? 5 : 10}
+          />
+        </div>
+      ) : null}
+      {/* Team Role Badge - shows team and lead status */}
+      {myTeam && (
+        <div className="mt-2">
+          <TeamRoleBadge
+            teamName={myTeam.teamName}
+            isTeamLead={teamLead.isTeamLead}
+            canClaimLead={teamLead.canClaimLead}
+            onClaimLead={teamLead.claimTeamLead}
+            onResignLead={teamLead.resignTeamLead}
+            compact={isMobile}
+          />
+        </div>
+      )}
+      {/* Team Chat - private communication with teammates */}
+      {myTeam && userId && (
+        <div className="mt-2">
+          <TeamChat
+            teamName={myTeam.teamName}
+            messages={teamChat.messages}
+            currentUserId={userId}
+            onSendMessage={teamChat.sendMessage}
+            loading={teamChat.loading}
+            error={teamChat.error}
+            unreadCount={teamChat.unreadCount}
+            onMarkAsRead={teamChat.markAsRead}
+            compact={isMobile}
+          />
         </div>
       )}
       <div className="mt-2 text-[12px] text-slate-400 bg-slate-900/60 border border-slate-800 rounded-lg p-3 space-y-1">
@@ -1375,7 +1466,7 @@ export default function JoinSession() {
         )}
       </header>
 
-      <main className="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6 pb-[env(safe-area-inset-bottom)]">
+      <main className={`flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6 ${isMobile && voice.enabled ? "pb-36" : "pb-[env(safe-area-inset-bottom)]"}`}>
         {isOffline && (
           <div className="bg-amber-900/40 border border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-100 flex items-center gap-2" role="status" aria-live="polite">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" aria-hidden="true"></span>
@@ -1538,15 +1629,39 @@ export default function JoinSession() {
         )}
         {isMobile && voicePanel}
       </main>
+      {/* Mobile Character Selector + Floating Mic */}
       {isMobile && voice.enabled && (
-        <FloatingMicButton
-          disabled={holdDisabled}
-          onPressStart={handlePressStart}
-          onPressEnd={handlePressEnd}
-          statusLabel={voiceStatusData.message}
-          connectionState={connectionStatus.state === "ready" ? "connected" : connectionStatus.state === "connecting" ? "connecting" : "disconnected"}
-          aiSpeaking={voice.mode === "ai-speaking"}
-        />
+        <div className="fixed bottom-0 left-0 right-0 z-40 pb-safe">
+          {/* Character selector bar */}
+          <div className="bg-slate-900/95 backdrop-blur-sm border-t border-slate-800 px-4 py-2 flex items-center justify-center gap-1.5">
+            <span className="text-[10px] text-slate-500 mr-1">Talk to:</span>
+            {(["patient", "nurse", "tech", "consultant"] as const).map((char) => (
+              <button
+                key={char}
+                type="button"
+                onClick={() => setTargetCharacter(char)}
+                className={`px-2.5 py-1.5 rounded-full text-[11px] font-medium capitalize transition-colors ${
+                  targetCharacter === char
+                    ? "bg-sky-600 text-white"
+                    : "bg-slate-800 text-slate-400 active:bg-slate-700"
+                }`}
+              >
+                {char}
+              </button>
+            ))}
+          </div>
+          {/* Floating mic button */}
+          <div className="flex justify-center py-3 bg-slate-950/90">
+            <FloatingMicButton
+              disabled={holdDisabled}
+              onPressStart={handlePressStart}
+              onPressEnd={handlePressEnd}
+              statusLabel={voiceStatusData.message}
+              connectionState={connectionStatus.state === "ready" ? "connected" : connectionStatus.state === "connecting" ? "connecting" : "disconnected"}
+              aiSpeaking={voice.mode === "ai-speaking"}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

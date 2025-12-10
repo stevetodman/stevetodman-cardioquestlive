@@ -16,12 +16,12 @@ import { RealtimePatientClient } from "./sim/realtimePatientClient";
 import { InMemoryEventLog } from "./sim/eventLog";
 import { ScenarioEngine } from "./sim/scenarioEngine";
 import { ToolGate } from "./sim/toolGate";
-import { ToolIntent } from "./sim/types";
+import { ToolIntent, Interventions } from "./sim/types";
 import { CostController } from "./sim/costController";
 import { persistSimState, logSimEvent, loadSimState } from "./persistence";
 import { validateMessage, validateSimStateMessage } from "./validators";
 import { getAuth } from "./firebaseAdmin";
-import { respondForCharacter, chooseCharacter, isUnsafeUtterance } from "./speechHelpers";
+import { respondForCharacter, chooseCharacter, isUnsafeUtterance, parseOrderRequest } from "./speechHelpers";
 import { buildTelemetryWaveform, checkAlarms } from "./telemetry";
 import { Runtime } from "./typesRuntime";
 import { createOrderHandler } from "./orders";
@@ -70,12 +70,13 @@ const runtimes: Map<string, Runtime> = new Map();
 const scenarioTimers: Map<string, NodeJS.Timeout> = new Map();
 const hydratedSessions: Set<string> = new Set();
 
+// Natural-sounding voices: coral (warm), sage (calm), ballad (expressive), verse (versatile)
 const CHARACTER_VOICE_MAP: Partial<Record<CharacterId, string>> = {
-  patient: process.env.OPENAI_TTS_VOICE_PATIENT,
-  nurse: process.env.OPENAI_TTS_VOICE_NURSE,
-  tech: process.env.OPENAI_TTS_VOICE_TECH,
-  consultant: process.env.OPENAI_TTS_VOICE_CONSULTANT,
-  imaging: process.env.OPENAI_TTS_VOICE_TECH,
+  patient: process.env.OPENAI_TTS_VOICE_PATIENT || "coral",
+  nurse: process.env.OPENAI_TTS_VOICE_NURSE || "sage",
+  tech: process.env.OPENAI_TTS_VOICE_TECH || "verse",
+  consultant: process.env.OPENAI_TTS_VOICE_CONSULTANT || "ballad",
+  imaging: process.env.OPENAI_TTS_VOICE_IMAGING || "verse",
 };
 
 async function verifyAuthToken(authToken: string | undefined, claimedUserId: string): Promise<boolean> {
@@ -548,6 +549,46 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
               delta: { hr: 0, spo2: 0, bp: "0/0" },
               reason: "presenter_triggered_code_blue",
             });
+          } else if (event === "vitals_change") {
+            // Direct vitals change from InjectsPalette
+            const vitalsChange = parsed.payload?.vitalsChange as Record<string, any> | undefined;
+            if (vitalsChange) {
+              runtime.scenarioEngine.applyIntent({
+                type: "intent_updateVitals",
+                delta: vitalsChange,
+                reason: "presenter_inject_vitals",
+              });
+            }
+          } else if (event === "equipment_failure") {
+            // Equipment failure - update interventions
+            const patientChange = parsed.payload?.patientChange as string | undefined;
+            if (patientChange === "iv_lost") {
+              runtime.scenarioEngine.updateIntervention("iv", undefined as any);
+            } else if (patientChange === "oxygen_lost") {
+              runtime.scenarioEngine.updateIntervention("oxygen", undefined as any);
+            } else if (patientChange === "monitor_artifact") {
+              // Keep monitor but note artifact (could affect telemetry display)
+            }
+          } else if (event === "patient_symptom") {
+            // Patient symptom changes - record in treatment history
+            const patientChange = parsed.payload?.patientChange as string | undefined;
+            const history = runtime.scenarioEngine.getState().treatmentHistory ?? [];
+            runtime.scenarioEngine.setTreatmentHistory([
+              ...history,
+              { ts: Date.now(), treatmentType: `[event] ${patientChange ?? "symptom change"}` },
+            ]);
+          }
+
+          // Handle character announcement if provided
+          const announcement = parsed.payload?.announcement as string | undefined;
+          const character = parsed.payload?.character as CharacterId | undefined;
+          if (announcement) {
+            sessionManager.broadcastToSession(simId, {
+              type: "patient_transcript_delta",
+              sessionId: simId,
+              text: announcement,
+              character: character ?? "nurse",
+            });
           }
 
           // Update rhythm based on vitals changes from the event
@@ -604,9 +645,31 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
     }
     return "";
   })();
-  if (!openai || routedCharacter !== "patient") {
-    log(openai ? "force_reply stub (non-patient)" : "OPENAI_API_KEY not set; using stub patient response");
-    const text = respondForCharacter(routedCharacter, doctorUtterance, latestOrderSummary);
+  // Characters that use AI: patient and nurse. Others use stub responses.
+  const aiCharacters: CharacterId[] = ["patient", "nurse"];
+  const useAI = openai && aiCharacters.includes(routedCharacter);
+
+  if (!useAI) {
+    log(openai ? `force_reply stub (${routedCharacter})` : "OPENAI_API_KEY not set; using stub response");
+    const response = respondForCharacter(routedCharacter, doctorUtterance, latestOrderSummary);
+    const text = response.text;
+    const action = response.action;
+
+    // Add to treatment history if an action was taken (shows on presenter timeline)
+    if (action && runtime.scenarioEngine) {
+      const currentHistory = runtime.scenarioEngine.getState().treatmentHistory ?? [];
+      runtime.scenarioEngine.setTreatmentHistory([
+        ...currentHistory,
+        { ts: Date.now(), treatmentType: `[${routedCharacter}] ${action}` },
+      ]);
+      // Broadcast updated sim state to reflect the action
+      broadcastSimState(sessionId, {
+        ...runtime.scenarioEngine.getState(),
+        stageIds: runtime.scenarioEngine.getStageIds(),
+        budget: runtime.cost.getState?.() ?? undefined,
+      });
+    }
+
     sessionManager.broadcastToSession(sessionId, {
       type: "patient_state",
       sessionId,
@@ -619,6 +682,26 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
       text,
       character: routedCharacter,
     });
+    // Generate TTS audio for non-patient characters (only send to presenter, not all participants)
+    const voice = CHARACTER_VOICE_MAP[routedCharacter];
+    log("TTS for non-patient", routedCharacter, "voice:", voice, "text:", text.slice(0, 50));
+    try {
+      const audioBuffer = await synthesizePatientAudio(text, voice);
+      if (audioBuffer) {
+        log("TTS audio generated", routedCharacter, "bytes:", audioBuffer.length);
+        // Send audio only to presenter (role === "presenter")
+        sessionManager.broadcastToPresenters(sessionId, {
+          type: "patient_audio",
+          sessionId,
+          audioBase64: audioBuffer.toString("base64"),
+          character: routedCharacter,
+        });
+      } else {
+        log("TTS returned null for", routedCharacter);
+      }
+    } catch (err) {
+      logError("TTS failed for non-patient", err);
+    }
     sessionManager.broadcastToSession(sessionId, {
       type: "patient_state",
       sessionId,
@@ -629,10 +712,22 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
   }
 
   const engine = getOrCreatePatientEngine(sessionId);
-  const personaPrompt = getPersonaPrompt(routedCharacter, engine.getCase());
+  const simState = runtime.scenarioEngine.getState();
+  const demographics = runtime.scenarioEngine.getDemographics();
+  const simContext = {
+    vitals: simState.vitals,
+    stageId: simState.stageId,
+    scenarioId: simState.scenarioId,
+    demographics,
+    treatmentHistory: simState.treatmentHistory,
+    orders: simState.orders,
+  };
+  const personaPrompt = getPersonaPrompt(routedCharacter, engine.getCase(), simContext);
   const doctorPrompt =
     doctorUtterance && doctorUtterance.length > 0
       ? doctorUtterance
+      : routedCharacter === "nurse"
+      ? "The doctor needs help. Respond naturally as the bedside nurse."
       : "The doctor has just asked you a follow-up question about your chest pain and palpitations. Answer naturally in character.";
 
   engine.appendDoctorTurn(doctorPrompt);
@@ -871,6 +966,23 @@ function maybeAutoForceReply(sessionId: string, text: string, explicitCharacter?
     });
     return;
   }
+
+  // Check if this is an order request (vitals, exam, EKG, labs, imaging)
+  const orderRequest = parseOrderRequest(trimmed);
+  if (orderRequest) {
+    log("Order request detected from speech", sessionId, orderRequest.type);
+    // Handle exam orders via handleExamRequest, other orders via handleOrder
+    if (orderRequest.type === "cardiac_exam" || orderRequest.type === "lung_exam" || orderRequest.type === "general_exam") {
+      const examType = orderRequest.type === "cardiac_exam" ? "cardiac"
+        : orderRequest.type === "lung_exam" ? "lungs"
+        : undefined;
+      handleExamRequest(sessionId, examType);
+    } else {
+      handleOrder(sessionId, orderRequest.type);
+    }
+    return;
+  }
+
   const allow = shouldAutoReply({
     sessionId,
     userId,
@@ -1122,13 +1234,16 @@ function startScenarioHeartbeat(sessionId: string) {
         ...runtime.scenarioEngine.getState(),
         stageIds: runtime.scenarioEngine.getStageIds(),
         telemetryWaveform,
+        elapsedSeconds: runtime.scenarioEngine.getElapsedSeconds(),
         budget: runtime.cost.getState?.(),
       });
-    } else if (telemetryWaveform) {
+    } else {
+      // Always broadcast to keep elapsed time updated
       broadcastSimState(sessionId, {
         ...runtime.scenarioEngine.getState(),
         stageIds: runtime.scenarioEngine.getStageIds(),
         telemetryWaveform,
+        elapsedSeconds: runtime.scenarioEngine.getElapsedSeconds(),
         budget: runtime.cost.getState?.(),
       });
     }
@@ -1143,6 +1258,7 @@ function broadcastSimState(
     stageId: string;
     vitals: any;
     exam?: Record<string, string>;
+    interventions?: Interventions;
     telemetry?: boolean;
     rhythmSummary?: string;
     telemetryWaveform?: number[];
@@ -1151,10 +1267,12 @@ function broadcastSimState(
     stageIds?: string[];
     scenarioId?: string;
     findings?: string[];
-    orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending" | "complete"; result?: OrderResult; completedAt?: number }[];
+    orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging" | "cardiac_exam" | "lung_exam" | "general_exam"; status: "pending" | "complete"; result?: OrderResult; completedAt?: number }[];
     ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
     telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
     treatmentHistory?: { ts: number; treatmentType: string; note?: string }[];
+    scenarioStartedAt?: number;
+    elapsedSeconds?: number;
   }
 ) {
   const validated = validateSimStateMessage(state);
@@ -1175,6 +1293,7 @@ function broadcastSimState(
     vitals: validated.vitals ?? {},
     exam: validated.exam ?? {},
     examAudio,
+    interventions: (state as any).interventions,
     telemetry: validated.telemetry,
     rhythmSummary: validated.rhythmSummary,
     telemetryWaveform: validated.telemetryWaveform,
@@ -1185,23 +1304,40 @@ function broadcastSimState(
     ekgHistory: (state as any).ekgHistory,
     telemetryHistory: (state as any).telemetryHistory,
     treatmentHistory: (state as any).treatmentHistory,
+    scenarioStartedAt: (state as any).scenarioStartedAt,
     stageEnteredAt: (state as any).stageEnteredAt,
+    elapsedSeconds: (state as any).elapsedSeconds,
   };
 
   // Send full state to presenters
   sessionManager.broadcastToPresenters(sessionId, fullState);
 
-  // For participants: only show vitals/telemetry if they've ordered them
+  // For participants: only show vitals/telemetry/exam if they've explicitly ordered them
   // Check completed orders to determine what participant can see
   const completedOrders = (validated.orders ?? []).filter(o => o.status === "complete");
   const hasVitalsOrder = completedOrders.some(o => o.type === "vitals");
   const hasEkgOrder = completedOrders.some(o => o.type === "ekg");
+  const hasCardiacExam = completedOrders.some(o => o.type === "cardiac_exam");
+  const hasLungExam = completedOrders.some(o => o.type === "lung_exam");
+  const hasGeneralExam = completedOrders.some(o => o.type === "general_exam");
+  const hasAnyExam = hasCardiacExam || hasLungExam || hasGeneralExam;
   const hasTelemetryEnabled = validated.telemetry === true;
+
+  // Build partial exam based on what was ordered
+  const partialExam: typeof validated.exam = {};
+  if (hasGeneralExam && validated.exam?.general) partialExam.general = validated.exam.general;
+  if ((hasCardiacExam || hasGeneralExam) && validated.exam?.cardio) partialExam.cardio = validated.exam.cardio;
+  if ((hasLungExam || hasGeneralExam) && validated.exam?.lungs) partialExam.lungs = validated.exam.lungs;
+  if (hasGeneralExam && validated.exam?.perfusion) partialExam.perfusion = validated.exam.perfusion;
+  if (hasGeneralExam && validated.exam?.neuro) partialExam.neuro = validated.exam.neuro;
+  // Audio URLs: cardiac exam reveals heart audio, lung exam reveals lung audio
+  if (hasCardiacExam && validated.exam?.heartAudioUrl) partialExam.heartAudioUrl = validated.exam.heartAudioUrl;
+  if (hasLungExam && validated.exam?.lungAudioUrl) partialExam.lungAudioUrl = validated.exam.lungAudioUrl;
 
   // Participants only see:
   // - Vitals if they ordered vitals OR telemetry is on (continuous monitoring)
   // - Telemetry/rhythm if they ordered EKG or turned on telemetry
-  // - Exam findings only if they examined the patient
+  // - Exam findings only if they ordered specific exam types
   const participantState = {
     type: "sim_state" as const,
     sessionId,
@@ -1209,9 +1345,12 @@ function broadcastSimState(
     scenarioId,
     // Vitals revealed when ordered or telemetry on
     vitals: (hasVitalsOrder || hasTelemetryEnabled) ? (validated.vitals ?? {}) : {},
-    // Exam available if they did physical exam (check findings)
-    exam: (validated.findings?.length ?? 0) > 0 ? (validated.exam ?? {}) : {},
-    examAudio: (validated.findings?.length ?? 0) > 0 ? examAudio : [],
+    // Exam available based on specific exam orders
+    exam: hasAnyExam ? partialExam : {},
+    examAudio: hasAnyExam ? examAudio.filter(a =>
+      (hasCardiacExam && a.type === "heart") ||
+      (hasLungExam && a.type === "lung")
+    ) : [],
     // Telemetry/rhythm only if EKG ordered or telemetry enabled
     telemetry: hasTelemetryEnabled,
     rhythmSummary: (hasEkgOrder || hasTelemetryEnabled) ? validated.rhythmSummary : undefined,
@@ -1221,6 +1360,9 @@ function broadcastSimState(
     // Orders always visible (so they know status)
     orders: validated.orders,
     ekgHistory: (hasEkgOrder || hasTelemetryEnabled) ? (state as any).ekgHistory : undefined,
+    // Treatment history for timeline (always visible so participants can see what's been done)
+    treatmentHistory: (state as any).treatmentHistory,
+    scenarioStartedAt: (state as any).scenarioStartedAt,
   };
 
   sessionManager.broadcastToParticipants(sessionId, participantState);
@@ -1247,86 +1389,114 @@ function buildSystemPrompt(scenario: PatientScenarioId): string {
 
 main();
 
+type ExamOrderType = "cardiac_exam" | "lung_exam" | "general_exam";
+
 function handleExamRequest(sessionId: string, examType?: string) {
   const runtime = ensureRuntime(sessionId);
   const state = runtime.scenarioEngine.getState();
   const exam = state.exam ?? {};
   const maneuver = examType ?? (runtime as any).lastManeuver as string | undefined;
 
-  // Add finding to reveal exam/audio to participants
-  // This allows participants to see exam findings and play heart/lung sounds
-  const currentFindings = new Set(state.findings ?? []);
-  currentFindings.add("physical_exam_performed");
-  if (maneuver === "cardiac" || maneuver === "auscultation") {
-    currentFindings.add("cardiac_exam");
-  }
-  if (maneuver === "pulmonary" || maneuver === "lungs") {
-    currentFindings.add("pulmonary_exam");
+  // Determine which exam order type to create based on the maneuver/request
+  let orderType: ExamOrderType = "general_exam";
+  if (maneuver === "cardiac" || maneuver === "auscultation" || maneuver === "heart" || maneuver === "cardiovascular") {
+    orderType = "cardiac_exam";
+  } else if (maneuver === "pulmonary" || maneuver === "lungs" || maneuver === "respiratory" || maneuver === "breath") {
+    orderType = "lung_exam";
   }
 
-  // Update findings in state
-  runtime.scenarioEngine.applyIntent({
-    type: "intent_revealFinding",
-    findingId: "physical_exam_performed",
-  });
+  // Create exam order
+  const currentOrders = state.orders ?? [];
+  const newOrder = {
+    id: `order-${orderType}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    type: orderType,
+    status: "pending" as const,
+  };
+  const nextOrders = [...currentOrders, newOrder];
 
-  const summary = [
-    exam.general && `General: ${exam.general}`,
-    exam.cardio && `CV: ${exam.cardio}`,
-    exam.lungs && `Lungs: ${exam.lungs}`,
-    exam.perfusion && `Perfusion: ${exam.perfusion}`,
-    exam.neuro && `Neuro: ${exam.neuro}`,
-  ]
-    .filter(Boolean)
-    .join(" | ");
-
-  // Nurse reports exam findings
-  const text = summary || "Exam unchanged from prior check.";
-  sessionManager.broadcastToSession(sessionId, {
-    type: "patient_state",
-    sessionId,
-    state: "speaking",
-    character: "nurse",
-  });
-  sessionManager.broadcastToSession(sessionId, {
-    type: "patient_transcript_delta",
-    sessionId,
-    text: maneuver ? `${maneuver} exam: ${text}` : text,
-    character: "nurse",
-  });
-
-  // If auscultation, prompt about listening
-  if (maneuver === "cardiac" || maneuver === "auscultation" || maneuver === "heart") {
-    sessionManager.broadcastToSession(sessionId, {
-      type: "patient_transcript_delta",
-      sessionId,
-      text: "Heart sounds available - use your headphones to listen.",
-      character: "nurse",
-    });
-  }
-  if (maneuver === "pulmonary" || maneuver === "lungs") {
-    sessionManager.broadcastToSession(sessionId, {
-      type: "patient_transcript_delta",
-      sessionId,
-      text: "Breath sounds available - use your headphones to listen.",
-      character: "nurse",
-    });
-  }
-
-  sessionManager.broadcastToSession(sessionId, {
-    type: "patient_state",
-    sessionId,
-    state: "idle",
-    character: "nurse",
-  });
-
-  // Broadcast updated state with findings (allows participants to see examAudio)
+  // Broadcast pending state
   broadcastSimState(sessionId, {
-    ...runtime.scenarioEngine.getState(),
+    ...state,
     stageIds: runtime.scenarioEngine.getStageIds(),
+    orders: nextOrders,
   });
 
-  logSimEvent(sessionId, { type: "exam.requested", payload: { maneuver: maneuver ?? "standard" } }).catch(() => {});
+  // After brief delay, complete the exam order and announce results
+  setTimeout(() => {
+    const completedOrders = nextOrders.map(o =>
+      o.id === newOrder.id ? { ...o, status: "complete" as const, completedAt: Date.now() } : o
+    );
+
+    // Build exam summary based on exam type
+    let summary: string;
+    if (orderType === "cardiac_exam") {
+      summary = exam.cardio ? `CV exam: ${exam.cardio}` : "Cardiac exam: Normal heart sounds, regular rate and rhythm.";
+    } else if (orderType === "lung_exam") {
+      summary = exam.lungs ? `Lung exam: ${exam.lungs}` : "Lung exam: Clear to auscultation bilaterally.";
+    } else {
+      // general exam - show all
+      summary = [
+        exam.general && `General: ${exam.general}`,
+        exam.cardio && `CV: ${exam.cardio}`,
+        exam.lungs && `Lungs: ${exam.lungs}`,
+        exam.perfusion && `Perfusion: ${exam.perfusion}`,
+        exam.neuro && `Neuro: ${exam.neuro}`,
+      ]
+        .filter(Boolean)
+        .join(" | ") || "Exam: Appears well, no acute distress.";
+    }
+
+    // Nurse reports exam findings
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_state",
+      sessionId,
+      state: "speaking",
+      character: "nurse",
+    });
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: summary,
+      character: "nurse",
+    });
+
+    // If cardiac exam, prompt about heart sounds
+    if (orderType === "cardiac_exam" && exam.heartAudioUrl) {
+      sessionManager.broadcastToSession(sessionId, {
+        type: "patient_transcript_delta",
+        sessionId,
+        text: "Heart sounds available - use your headphones to listen.",
+        character: "nurse",
+      });
+    }
+    // If lung exam, prompt about breath sounds
+    if (orderType === "lung_exam" && exam.lungAudioUrl) {
+      sessionManager.broadcastToSession(sessionId, {
+        type: "patient_transcript_delta",
+        sessionId,
+        text: "Breath sounds available - use your headphones to listen.",
+        character: "nurse",
+      });
+    }
+
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_state",
+      sessionId,
+      state: "idle",
+      character: "nurse",
+    });
+
+    // Broadcast updated state with completed order
+    broadcastSimState(sessionId, {
+      ...runtime.scenarioEngine.getState(),
+      stageIds: runtime.scenarioEngine.getStageIds(),
+      orders: completedOrders,
+    });
+
+    logSimEvent(sessionId, { type: `exam.${orderType}.complete`, payload: { summary } }).catch(() => {});
+  }, 1500);
+
+  logSimEvent(sessionId, { type: "exam.requested", payload: { maneuver: maneuver ?? "standard", orderType } }).catch(() => {});
 }
 
 function handleTelemetryToggle(sessionId: string, enabled: boolean) {
@@ -1438,7 +1608,13 @@ function handleTreatment(
     case "o2": {
       delta.spo2 = 3;
       delta.hr = -3;
-      nurseResponse = "Oxygen on. SpO2 should improve.";
+      const flowRate = (payload?.flowRate as number) ?? 2;
+      const o2Type = (payload?.o2Type as string) ?? "nasal_cannula";
+      runtime.scenarioEngine.updateIntervention("oxygen", {
+        type: o2Type as any,
+        flowRateLpm: flowRate,
+      });
+      nurseResponse = `Oxygen on at ${flowRate} L/min via ${o2Type.replace(/_/g, " ")}. SpO2 should improve.`;
       techResponse = "Oxygenation improving on the monitor.";
       decayIntent = { type: "intent_updateVitals", delta: { spo2: -2, hr: 2 } as any };
       break;
@@ -1450,9 +1626,37 @@ function handleTreatment(
       delta.hr = -4;
       delta.sbpPerMin = 6;
       delta.dbpPerMin = 4;
+      // Update IV intervention if not already set
+      const currentIv = runtime.scenarioEngine.getState().interventions?.iv;
+      if (!currentIv) {
+        runtime.scenarioEngine.updateIntervention("iv", {
+          location: "right_ac",
+          gauge: 22,
+          fluidsRunning: true,
+          fluidType: "NS",
+        });
+      } else {
+        runtime.scenarioEngine.updateIntervention("iv", {
+          ...currentIv,
+          fluidsRunning: true,
+          fluidType: "NS",
+        });
+      }
       nurseResponse = `NS bolus ${volumeMl} mL IV running in. That's ${Math.round(volumeMl / weightKg)} mL/kg.`;
       techResponse = "Perfusion improving with fluids.";
       decayIntent = { type: "intent_updateVitals", delta: { hr: 2, sbpPerMin: -4, dbpPerMin: -3 } as any };
+      break;
+    }
+    case "iv":
+    case "iv_access": {
+      const ivLocation = (payload?.location as string) ?? "right_ac";
+      const ivGauge = (payload?.gauge as number) ?? 22;
+      runtime.scenarioEngine.updateIntervention("iv", {
+        location: ivLocation as any,
+        gauge: ivGauge,
+        fluidsRunning: false,
+      });
+      nurseResponse = `${ivGauge} gauge IV placed in ${ivLocation.replace(/_/g, " ")}. Good blood return, flushing well.`;
       break;
     }
     case "position":
@@ -1610,6 +1814,7 @@ function handleTreatment(
       // Synchronized cardioversion: 0.5-1 J/kg, may increase to 2 J/kg
       const joulesOrdered = joules ?? Math.round(0.5 * weightKg);
       delta.hr = -80; // Convert rhythm
+      runtime.scenarioEngine.updateIntervention("defibPads", { placed: true });
       nurseResponse = `Synchronized cardioversion at ${joulesOrdered} J delivered. That's ${(joulesOrdered / weightKg).toFixed(1)} J/kg. Patient sedated.`;
       techResponse = "Shock delivered... watching rhythm... ";
       break;
@@ -1619,8 +1824,37 @@ function handleTreatment(
       // VF/pVT: 2 J/kg first, then 4 J/kg
       const joulesOrdered = joules ?? Math.round(2 * weightKg);
       delta.hr = 0; // Pulseless - either converts or stays in arrest
+      runtime.scenarioEngine.updateIntervention("defibPads", { placed: true });
       nurseResponse = `Defibrillation at ${joulesOrdered} J delivered! That's ${(joulesOrdered / weightKg).toFixed(0)} J/kg. Resuming compressions.`;
       techResponse = "Shock delivered. Checking rhythm...";
+      break;
+    }
+    case "defib_pads":
+    case "pads": {
+      runtime.scenarioEngine.updateIntervention("defibPads", { placed: true });
+      nurseResponse = "Defibrillator pads placed - apex and right sternal border.";
+      techResponse = "Pads on. Ready for rhythm analysis.";
+      break;
+    }
+    case "monitor":
+    case "cardiac_monitor": {
+      runtime.scenarioEngine.updateIntervention("monitor", { leads: true });
+      nurseResponse = "Patient on the cardiac monitor. Leads attached.";
+      techResponse = "Monitor on. Displaying rhythm strip.";
+      break;
+    }
+    case "ng_tube":
+    case "ng":
+    case "nasogastric": {
+      runtime.scenarioEngine.updateIntervention("ngTube", { placed: true });
+      nurseResponse = "NG tube placed and secured. Good placement confirmed with auscultation.";
+      break;
+    }
+    case "foley":
+    case "foley_catheter":
+    case "urinary_catheter": {
+      runtime.scenarioEngine.updateIntervention("foley", { placed: true });
+      nurseResponse = "Foley catheter placed. Draining clear yellow urine.";
       break;
     }
 

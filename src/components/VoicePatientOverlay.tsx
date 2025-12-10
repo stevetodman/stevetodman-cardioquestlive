@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ROLE_COLORS } from "../types/voiceGateway";
 
 export type TranscriptTurn = {
@@ -19,6 +19,7 @@ interface VoicePatientOverlayProps {
   patientAudioUrl?: string;
   onClearTranscript: () => void;
   onAddMockTranscript?: () => void;
+  compact?: boolean;
 }
 
 const modeLabels: Record<VoiceOverlayMode, string> = {
@@ -37,7 +38,14 @@ export function VoicePatientOverlay({
   patientAudioUrl,
   onClearTranscript,
   onAddMockTranscript,
+  compact = false,
 }: VoicePatientOverlayProps) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
+
+  // Dev detection - fallback to false if import.meta.env is not available
+  const isDev = typeof import.meta !== "undefined" && (import.meta as any).env?.DEV === true;
+
   const statusColor = useMemo(() => {
     switch (voiceMode) {
       case "ai-speaking":
@@ -84,39 +92,52 @@ export function VoicePatientOverlay({
   };
 
   return (
-    <div className="absolute top-4 left-4 z-40 w-[320px] max-w-[80vw]">
+    <div className={`absolute top-4 left-4 z-40 ${compact ? "w-[280px]" : "w-[320px]"} max-w-[80vw]`}>
       <div className="rounded-2xl bg-slate-950/90 border border-slate-800 shadow-xl shadow-black/40 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-sky-600/20 border border-sky-500/50 flex items-center justify-center text-sky-200 font-semibold text-sm">
+        {/* Header - always visible, clickable to collapse */}
+        <button
+          type="button"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="w-full flex items-center justify-between px-4 py-2.5 border-b border-slate-800 hover:bg-slate-900/50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <div className={`${compact ? "w-8 h-8 text-xs" : "w-10 h-10 text-sm"} rounded-full bg-sky-600/20 border border-sky-500/50 flex items-center justify-center text-sky-200 font-semibold`}>
               VP
             </div>
-            <div>
-              <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Virtual Patient</div>
-              <div className="text-sm font-semibold text-white">Interactive</div>
+            <div className="text-left">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Transcript</div>
+              <div className={`${compact ? "text-xs" : "text-sm"} font-semibold text-white`}>
+                {transcriptTurns.length > 0 ? `${transcriptTurns.length} turns` : "No turns"}
+              </div>
             </div>
           </div>
-          <div className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${statusColor}`}>
-            {modeLabels[voiceMode]}
+          <div className="flex items-center gap-2">
+            <div className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${statusColor}`}>
+              {modeLabels[voiceMode]}
+            </div>
+            <span className="text-slate-500 text-sm">{isCollapsed ? "+" : "−"}</span>
           </div>
-        </div>
+        </button>
 
-        <div className="px-4 py-2 text-xs text-slate-400 flex items-center justify-between">
-          <div>
-            {enabled ? (
-              floorHolderName ? `Floor: ${floorHolderName}` : "Floor open"
-            ) : (
-              "Voice disabled"
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClearTranscript}
-            className="text-[11px] text-sky-300 hover:text-sky-200 underline decoration-dotted"
-          >
-            Clear
-          </button>
-        </div>
+        {/* Collapsible content */}
+        {!isCollapsed && (
+          <>
+            <div className="px-4 py-1.5 text-[11px] text-slate-400 flex items-center justify-between border-b border-slate-800/50">
+              <div>
+                {enabled ? (
+                  floorHolderName ? `Floor: ${floorHolderName}` : "Floor open"
+                ) : (
+                  "Voice disabled"
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onClearTranscript(); }}
+                className="text-[10px] text-sky-300 hover:text-sky-200"
+              >
+                Clear
+              </button>
+            </div>
 
         {patientAudioUrl && (
           <div className="px-4 pb-2">
@@ -166,27 +187,39 @@ export function VoicePatientOverlay({
             </div>
           )}
         </div>
-        <div className="px-4 pb-3 flex items-center gap-3 text-[10px] text-slate-500">
-          <span className="uppercase tracking-[0.14em]">Legend:</span>
-          <span className="text-slate-300">patient</span>
-          <span className="text-emerald-300">nurse</span>
-          <span className="text-sky-300">tech</span>
-          <span className="text-indigo-300">consultant</span>
+        {/* Collapsible legend */}
+        <div className="px-4 py-2 flex items-center justify-between text-[10px] text-slate-500">
+          <button
+            type="button"
+            onClick={() => setShowLegend(!showLegend)}
+            className="hover:text-slate-400 transition-colors"
+          >
+            {showLegend ? "Hide legend" : "Show legend"}
+          </button>
+          {showLegend && (
+            <div className="flex items-center gap-2">
+              <span className="text-slate-300">patient</span>
+              <span className="text-emerald-300">nurse</span>
+              <span className="text-sky-300">tech</span>
+              <span className="text-indigo-300">consultant</span>
+            </div>
+          )}
         </div>
 
-        {process.env.NODE_ENV !== "production" && (
-          <div className="px-4 pb-3 flex items-center justify-between text-[11px] text-slate-500">
-            <span>DEV: Transcript helper</span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onAddMockTranscript}
-                className="px-2 py-1 rounded border border-slate-700 bg-slate-900 hover:border-slate-600 text-slate-200"
-              >
-                Add line
-              </button>
-            </div>
+        {/* Dev tools - only in development */}
+        {isDev && onAddMockTranscript && (
+          <div className="px-4 pb-2 flex items-center justify-between text-[10px] text-slate-600 border-t border-slate-800/50 pt-2">
+            <span>DEV</span>
+            <button
+              type="button"
+              onClick={onAddMockTranscript}
+              className="px-2 py-0.5 rounded border border-slate-700 bg-slate-900 hover:border-slate-600 text-slate-300 text-[9px]"
+            >
+              + Mock turn
+            </button>
           </div>
+        )}
+          </>
         )}
       </div>
     </div>

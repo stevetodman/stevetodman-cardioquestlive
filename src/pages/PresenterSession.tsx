@@ -23,6 +23,8 @@ import { PresenterVoiceControls } from "../components/PresenterVoiceControls";
 import { AutonomousSimPanel } from "../components/AutonomousSimPanel";
 import { VoiceCharacterTile } from "../components/VoiceCharacterTile";
 import { VitalsMonitor } from "../components/VitalsMonitor";
+import { PatientStatusOutline, Interventions } from "../components/PatientStatusOutline";
+import { InjectsPalette, Inject } from "../components/InjectsPalette";
 import { voiceGatewayClient } from "../services/VoiceGatewayClient";
 import {
   PatientState,
@@ -225,6 +227,7 @@ const [voiceGuideOpen, setVoiceGuideOpen] = useState<boolean>(false);
     stageId: string;
     vitals: Record<string, unknown>;
     exam?: Record<string, string | undefined>;
+    interventions?: Interventions;
     telemetry?: boolean;
     rhythmSummary?: string;
     telemetryWaveform?: number[];
@@ -938,6 +941,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
   const lastDoctorTurnIdRef = useRef<string | null>(null);
   const lastAutoForcedRef = useRef<string | null>(null);
   const loggedOrderIdsRef = useRef<Set<string>>(new Set());
+  const characterAudioRef = useRef<HTMLAudioElement | null>(null);
   const teams = useTeamScores(sessionId);
   const players = useIndividualScores(sessionId);
   const voice = useVoiceState(sessionId ?? undefined);
@@ -1394,6 +1398,28 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
       unsubAnalysis();
     };
   }, [makeTurnId, autoForceReply, forceReplyWithQuestion]);
+
+  // Auto-play character audio when new audio URL arrives
+  useEffect(() => {
+    if (!patientAudioUrl) return;
+    // Stop any currently playing audio
+    if (characterAudioRef.current) {
+      characterAudioRef.current.pause();
+      characterAudioRef.current = null;
+    }
+    // Create and play new audio
+    const audio = new Audio(patientAudioUrl);
+    characterAudioRef.current = audio;
+    audio.play().catch((err) => {
+      console.error("Failed to auto-play character audio", err);
+    });
+    return () => {
+      if (characterAudioRef.current) {
+        characterAudioRef.current.pause();
+        characterAudioRef.current = null;
+      }
+    };
+  }, [patientAudioUrl]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -1980,6 +2006,20 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                 vitals={simState.vitals as any}
                 telemetryWaveform={simState.telemetryWaveform as any}
                 telemetryOn={simState.telemetry}
+              />
+              <PatientStatusOutline
+                interventions={simState.interventions ?? {}}
+                compact
+              />
+              <InjectsPalette
+                onInject={(inject) => {
+                  voiceGatewayClient.sendVoiceCommand("scenario_event", {
+                    event: inject.payload.eventType,
+                    ...inject.payload,
+                  });
+                }}
+                disabled={gatewayStatus.state !== "ready"}
+                compact
               />
               {simState.telemetry && (
                 <div className="flex items-center gap-2">

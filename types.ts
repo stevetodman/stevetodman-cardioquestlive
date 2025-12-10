@@ -47,6 +47,8 @@ export interface ResponseDoc {
   createdAt: string;
 }
 
+export type ParticipantRole = "member" | "lead";
+
 export interface ParticipantDoc {
   userId: string;
   sessionId: string;
@@ -57,6 +59,8 @@ export interface ParticipantDoc {
   correctCount: number;
   incorrectCount: number;
   createdAt: string;
+  role?: ParticipantRole; // "lead" = team lead, "member" = regular (default)
+  displayName?: string; // Optional display name for team chat/leaderboard
 }
 
 // Shared tile data for interactive clue grids / phenotype slides
@@ -100,4 +104,15 @@ export interface VoiceCommandDoc {
   createdBy: string;
   payload?: Record<string, any>;
   character?: string;
+}
+
+// Team chat message document
+export interface TeamMessageDoc {
+  id?: string;
+  userId: string;
+  teamId: string;
+  text: string;
+  createdAt: any; // Firestore Timestamp or ISO string
+  // Optional: for displaying sender name without extra queries
+  senderName?: string;
 }

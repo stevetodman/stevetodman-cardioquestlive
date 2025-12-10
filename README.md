@@ -51,7 +51,8 @@ Interactive pediatric cardiology teaching with presenter + student modes, Gemini
 
 - `sessions/{sessionId}`: `title`, `joinCode`, `slides[]`, `questions[]`, `currentSlideIndex`, `currentQuestionId`, `showResults`, `createdAt`, `createdBy`.
 - `sessions/{sessionId}/responses/{userId}_{questionId}`: one answer per user/question (`userId`, `questionId`, `choiceIndex`, `createdAt`, `sessionId`).
-- `sessions/{sessionId}/participants/{userId}`: `teamId`, `teamName`, `points`, `streak`, `correctCount`, `incorrectCount`, `createdAt`.
+- `sessions/{sessionId}/participants/{userId}`: `teamId`, `teamName`, `points`, `streak`, `correctCount`, `incorrectCount`, `createdAt`, `role?` (`"member"` | `"lead"`), `displayName?`.
+- `sessions/{sessionId}/teamMessages/{messageId}`: Team chat messages (`userId`, `teamId`, `text`, `createdAt`, `senderName?`). Only visible to same-team members.
 - `configs/deck`: deck configuration loaded by `deckService`.
 
 Deeper dive: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -67,6 +68,8 @@ Deeper dive: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Teams**
   - Automatic least-loaded assignment on join (Team Ductus, Team Cyanosis, Team QpQs).
   - Team score = sum of member points.
+  - **Team chat**: Private messaging within teams; teammates coordinate without other teams seeing.
+  - **Team lead role**: One member per team can claim the "lead" role with visual indicator (star badge).
 - **Presenter overlays**
   - Team scoreboard (rank + points) and individual scoreboard (top N players).
   - Toggles in presenter controls to show/hide each overlay; overlays sit over the slide without blocking interactions.

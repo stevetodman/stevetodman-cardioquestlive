@@ -119,7 +119,9 @@ service cloud.firestore {
             data.streak is number &&
             data.correctCount is number &&
             data.incorrectCount is number &&
-            (data.createdAt is timestamp || data.createdAt is string);
+            (data.createdAt is timestamp || data.createdAt is string) &&
+            (!("role" in data) || data.role in ["member", "lead"]) &&
+            (!("displayName" in data) || data.displayName is string);
         }
 
         allow read: if isAuthenticated();
@@ -174,6 +176,34 @@ service cloud.firestore {
         allow create: if isAuthenticated() &&
           (isSessionOwner(sessionId) || isAdmin()) &&
           isValidTranscript(request.resource.data);
+        allow update, delete: if false;
+      }
+
+      // Team chat messages - only visible to same team members
+      match /teamMessages/{messageId} {
+        function isValidTeamMessage(data) {
+          return data.userId is string &&
+            data.teamId is string &&
+            data.text is string &&
+            data.text.size() <= 500 &&
+            (data.createdAt is timestamp || data.createdAt is string);
+        }
+
+        function isSameTeam(teamId) {
+          return isAuthenticated() &&
+            get(/databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid)).data.teamId == teamId;
+        }
+
+        // Read: only if user is on the same team
+        allow read: if isAuthenticated() &&
+          isSameTeam(resource.data.teamId);
+
+        // Create: only if user is on the team they're posting to
+        allow create: if isAuthenticated() &&
+          request.resource.data.userId == request.auth.uid &&
+          isSameTeam(request.resource.data.teamId) &&
+          isValidTeamMessage(request.resource.data);
+
         allow update, delete: if false;
       }
     }

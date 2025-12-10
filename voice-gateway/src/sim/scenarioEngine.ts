@@ -1,5 +1,5 @@
 import { ScenarioDef, ScenarioId, StageDef, StageTransition } from "./scenarioTypes";
-import { SimState, ToolIntent, Vitals } from "./types";
+import { SimState, ToolIntent, Vitals, Interventions } from "./types";
 
 const syncopeScenario: ScenarioDef = {
   id: "syncope",
@@ -554,6 +554,7 @@ export class ScenarioEngine {
   constructor(simId: string, scenarioId: ScenarioId) {
     this.scenario = scenarioMap[scenarioId] ?? syncopeScenario;
     const initialStage = this.scenario.stages.find((s) => s.id === this.scenario.initialStage) ?? this.scenario.stages[0];
+    const now = Date.now();
     this.state = {
       simId,
       scenarioId: this.scenario.id,
@@ -566,9 +567,10 @@ export class ScenarioEngine {
       telemetryHistory: [],
       ekgHistory: [],
       findings: [],
-      stageEnteredAt: Date.now(),
+      scenarioStartedAt: now,
+      stageEnteredAt: now,
     };
-    this.lastTickMs = Date.now();
+    this.lastTickMs = now;
   }
 
   hydrate(partial: Partial<SimState> & { updatedAtMs?: number }) {
@@ -589,6 +591,7 @@ export class ScenarioEngine {
       treatmentHistory: partial.treatmentHistory ?? this.state.treatmentHistory,
       findings: partial.findings ?? this.state.findings,
       orders: partial.orders ?? this.state.orders,
+      scenarioStartedAt: partial.scenarioStartedAt ?? this.state.scenarioStartedAt ?? now,
       stageEnteredAt: partial.stageEnteredAt ?? this.state.stageEnteredAt ?? now,
       fallback: partial.fallback ?? this.state.fallback,
       budget: partial.budget ?? this.state.budget,
@@ -598,6 +601,11 @@ export class ScenarioEngine {
 
   getState(): SimState {
     return this.state;
+  }
+
+  getElapsedSeconds(): number {
+    const startedAt = this.state.scenarioStartedAt ?? Date.now();
+    return Math.floor((Date.now() - startedAt) / 1000);
   }
 
   getDemographics() {
@@ -644,6 +652,17 @@ export class ScenarioEngine {
 
   setTreatmentHistory(history: { ts: number; treatmentType: string; note?: string }[]) {
     this.state = { ...this.state, treatmentHistory: history };
+  }
+
+  setInterventions(interventions: Interventions) {
+    this.state = { ...this.state, interventions };
+  }
+
+  updateIntervention<K extends keyof Interventions>(key: K, value: Interventions[K]) {
+    this.state = {
+      ...this.state,
+      interventions: { ...this.state.interventions, [key]: value },
+    };
   }
 
   /**

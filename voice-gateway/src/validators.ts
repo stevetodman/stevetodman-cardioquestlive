@@ -146,11 +146,11 @@ const simStateSchema = z
       .array(
         z.object({
           id: z.string(),
-          type: z.enum(["vitals", "ekg", "labs", "imaging"]),
+          type: z.enum(["vitals", "ekg", "labs", "imaging", "cardiac_exam", "lung_exam", "general_exam"]),
           status: z.enum(["pending", "complete"]),
           result: z
             .object({
-              type: z.enum(["vitals", "ekg", "labs", "imaging"]),
+              type: z.enum(["vitals", "ekg", "labs", "imaging", "cardiac_exam", "lung_exam", "general_exam"]),
               hr: z.number().optional(),
               bp: z.string().optional(),
               rr: z.number().optional(),
