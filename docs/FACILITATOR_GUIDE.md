@@ -1,6 +1,6 @@
 # CardioQuest Live - Facilitator Guide
 
-Complete guide for facilitators running pediatric cardiology simulation scenarios. This document covers all 10 scenarios with clinical details, teaching objectives, expected progressions, and intervention strategies.
+Complete guide for facilitators running pediatric cardiology simulation scenarios. This document covers all 11 scenarios with clinical details, teaching objectives, expected progressions, and intervention strategies.
 
 ## Table of Contents
 
@@ -10,8 +10,9 @@ Complete guide for facilitators running pediatric cardiology simulation scenario
 4. [Teen Scenarios](#teen-scenarios)
 5. [Pediatric Scenarios](#pediatric-scenarios)
 6. [Infant Scenarios](#infant-scenarios)
-7. [Code Blue Management](#code-blue-management)
-8. [PALS Reference](#pals-reference)
+7. [Complex Scenarios](#complex-scenarios)
+8. [Code Blue Management](#code-blue-management)
+9. [PALS Reference](#pals-reference)
 
 ---
 
@@ -77,6 +78,8 @@ Trigger physiological changes:
 | `cyanotic_spell` | 2yo | 12kg | Tet spell | High |
 | `ductal_shock` | 1mo | 3.5kg | Ductal-dependent lesion | Critical |
 | `coarctation_shock` | 2mo | 4.5kg | Coarctation with shock | Critical |
+| `teen_svt_complex_v1` | 14yo | 50kg | Complex SVT (PALS algorithm) | High |
+| `peds_myocarditis_silent_crash_v1` | 9yo | 28kg | Fulminant myocarditis | Critical |
 
 ---
 
@@ -568,6 +571,173 @@ Wide complex tachycardia features:
 
 ---
 
+## Complex Scenarios
+
+These advanced scenarios feature deterministic physiology engines, phase-based progression, scoring systems, and NPC character triggers for high-fidelity simulation.
+
+### 11. Complex SVT - Teen (`teen_svt_complex_v1`)
+
+**Patient**: Alex Chen, 14-year-old female, 50kg
+
+**Presentation**: Recurrent episodes of rapid heartbeat. Current episode with HR 220, anxiety, mild chest discomfort. Family history of WPW in mother.
+
+**Teaching Objectives**:
+- Master PALS SVT algorithm
+- Vagal maneuver technique selection
+- Correct adenosine dosing (0.1 mg/kg first, 0.2 mg/kg second)
+- Recognition of when to cardiovert
+- Sedation before cardioversion
+
+**Runtime**: ~15-20 minutes
+
+**Phase Progression** (6 phases):
+
+| Phase | Duration | HR | BP | SpO2 | Key Mechanics |
+|-------|----------|----|----|------|---------------|
+| `presentation` | 2 min | 90 | 115/72 | 99% | History taking, baseline ECG |
+| `svt_onset` | 3 min | 220 | 105/68 | 98% | SVT starts, patient stable |
+| `treatment_window` | 5 min | 220-240 | 100/65 | 97% | Vagal/adenosine opportunity |
+| `cardioversion_decision` | 3 min | 240 | 90/55 | 95% | Adenosine failed, cardioversion needed |
+| `decompensating` | 5 min | 250 | 75/45 | 92% | Unstable - urgent cardioversion |
+| `converted` | 3 min | 95 | 112/70 | 99% | Resolution, monitoring |
+
+**Physical Exam Findings**:
+- *Baseline*: Well-appearing teen. Regular rhythm at 90 bpm. Normal S1/S2, no murmur. Clear lungs. Warm, strong pulses.
+- *SVT Episode*: Anxious, rapid regular pulse ~220 bpm. JVP visible. Slightly diaphoretic. Alert and oriented.
+- *Decompensating*: Ill-appearing, drowsy. Rapid weak pulse ~250 bpm. Delayed cap refill. Altered mental status.
+
+**EKG Patterns**:
+- *Baseline*: Normal sinus rhythm 90s, normal intervals, no pre-excitation
+- *SVT Episode*: Narrow complex tachycardia 220 bpm, regular, P waves not visible (AVNRT pattern)
+- *Decompensating*: Persistent SVT 240+ bpm with ST depression
+
+**CRITICAL: PALS SVT Algorithm**
+
+**Step 1 - Vagal Maneuvers** (if hemodynamically stable):
+- **Ice to face**: Bag of ice on forehead/eyes for 15-20 sec (diving reflex)
+- **Modified Valsalva**: Blow into 10mL syringe then leg raise 45° for 15 sec
+- **Standard Valsalva**: Bear down/blow out against resistance
+
+**Step 2 - Adenosine** (if vagal fails):
+| Dose | mg/kg | Max | Technique |
+|------|-------|-----|-----------|
+| First | 0.1 mg/kg | 6mg | Rapid IV push + 5mL flush |
+| Second | 0.2 mg/kg | 12mg | Same technique, repeat if needed |
+
+**Step 3 - Synchronized Cardioversion** (if unstable OR adenosine fails):
+- 0.5-1 J/kg synchronized (may increase to 2 J/kg)
+- **Sedate first if possible** (midazolam 0.1 mg/kg, ketamine, or propofol)
+
+**Scoring System**:
+
+*Checklist (need 4/5 to pass):*
+| Item | Criteria |
+|------|----------|
+| ECG ordered | 12-lead obtained |
+| Vagal attempted | Tried before adenosine (stable patient) |
+| Adenosine dose correct | First dose 0.1 mg/kg ±20% |
+| Continuous monitoring | Monitor on before treatment |
+| Patient reassured | Communication with patient/parent |
+
+*Bonuses*:
+- Early ECG (<60 sec): +10 pts
+- Vagal conversion: +20 pts
+- First-dose adenosine conversion: +15 pts
+- Cardiology consult: +10 pts
+- Proper flush technique: +5 pts
+
+*Penalties*:
+- Adenosine underdose (<0.05 mg/kg): -10 pts
+- Adenosine overdose (>0.25 mg/kg): -15 pts
+- Skipped vagal in stable patient: -5 pts
+- Delayed treatment (>5 min): -15 pts
+- Unsedated cardioversion: -20 pts
+- Patient decompensated: -15 pts
+
+**Character Triggers**:
+
+*Nurse (safety-critical):*
+- "Heart rate is 220. Want me to get a 12-lead?"
+- "Vagal didn't work. Adenosine is drawn up - 5mg ready."
+- "BP is dropping - she's at 90 systolic now."
+- "Do you want sedation before we cardiovert?"
+
+*Parent:*
+- "What's happening? Her heart is racing so fast!"
+- "My mother had WPW - could Alex have that too?"
+
+*Patient:*
+- "My heart is racing again! I'm scared..."
+- "That medicine felt weird - like my heart stopped for a second"
+- "It stopped! That feels so much better."
+
+**Key Teaching Points**:
+1. SVT >220 bpm in pediatrics = PALS pathway
+2. Vagal maneuvers first in stable patients
+3. Adenosine: weight-based dosing, rapid push with flush
+4. Document rhythm before/during/after conversion attempt
+5. Family history of WPW → EP study referral
+6. Sedate before cardioversion when possible
+
+---
+
+### 12. The Silent Crash - Myocarditis (`peds_myocarditis_silent_crash_v1`)
+
+**Patient**: Marcus Johnson, 9-year-old male, 28kg
+
+**Presentation**: Post-viral illness (2 weeks ago), now with progressive fatigue, exercise intolerance, and subtle signs of cardiogenic shock.
+
+**Teaching Objectives**:
+- Recognize subtle myocarditis presentation
+- Understand cardiogenic shock progression
+- Avoid fluid overload in pump failure
+- Inotrope selection and timing
+- Intubation risks in cardiogenic shock
+
+**Runtime**: ~25-30 minutes
+
+**Phase Progression** (6 phases):
+
+| Phase | Duration | HR | BP | SpO2 | Shock Stage | Key Event |
+|-------|----------|----|----|------|-------------|-----------|
+| `presentation` | 5 min | 128 | 94/62 | 96% | 1 | Initial assessment |
+| `compensated_shock` | 5 min | 135 | 88/58 | 94% | 2 | Declining perfusion |
+| `decompensated_shock` | 5 min | 145 | 80/52 | 92% | 3 | Frank shock |
+| `crisis` | 5 min | 155+ | 70/45 | 88% | 4 | Arrest imminent |
+| `resuscitation` | 10 min | varies | varies | varies | 5 | Active resuscitation |
+| `stabilized` | 5 min | 110 | 95/60 | 96% | 2 | Inotrope response |
+
+**Critical Physiology Rules**:
+
+| Rule | Trigger | Effect |
+|------|---------|--------|
+| Fluid overload | >20 mL/kg fluid | Worsens SpO2, crackles, gallop |
+| Dobutamine response | Dobutamine started | HR -10, BP +15, cap refill improves |
+| Milrinone response | Milrinone started | Gradual improvement over 15 min |
+| Epinephrine bridge | Epi push + milrinone | Stabilizes for milrinone onset |
+| Intubation collapse | Intubation without inotropes | Severe hypotension, possible arrest |
+| Amiodarone effect | For VT/SVT | Rate control, rhythm stabilization |
+
+**Scoring System**:
+
+*Checklist (need 4/5 to pass):*
+| Item | Criteria |
+|------|----------|
+| Cardiology consult | Called within first 10 minutes |
+| Echo ordered | Bedside echo requested |
+| Avoided fluid overload | Total fluids <20 mL/kg |
+| Started inotropes | Before intubation attempt |
+| Avoided NSAIDs | No ibuprofen/ketorolac ordered |
+
+**Key Teaching Points**:
+1. Post-viral fatigue + tachycardia = think myocarditis
+2. Fluid restriction - these patients are volume overloaded
+3. Inotropes BEFORE intubation in cardiogenic shock
+4. Echo early - function tells the story
+5. NSAIDs contraindicated (worsen myocardial inflammation)
+
+---
+
 ## Code Blue Management
 
 ### Activating Code Blue Mode
@@ -687,5 +857,13 @@ The presenter interface includes an automated **Code Blue Panel** that activates
 
 ## Version History
 
+- **v1.2.0** (Dec 2024): Added Complex SVT scenario (`teen_svt_complex_v1`)
+  - 6-phase PALS SVT algorithm teaching
+  - Deterministic physiology with vagal, adenosine, cardioversion paths
+  - Scoring system with checklist, bonuses, penalties
+  - NPC triggers (nurse, parent, patient)
+- **v1.1.0** (Dec 2024): Added "The Silent Crash" myocarditis scenario
+  - Complex physiology engine for cardiogenic shock
+  - Phase-based progression with shock staging
 - **v1.0.0** (Dec 2024): Initial facilitator guide with all 10 scenarios
-- Includes Code Blue panel, CPR metronome, dynamic rhythm waveforms
+  - Includes Code Blue panel, CPR metronome, dynamic rhythm waveforms

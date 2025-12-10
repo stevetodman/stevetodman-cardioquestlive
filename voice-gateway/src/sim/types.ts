@@ -1,4 +1,4 @@
-import type { MyocarditisPhase, ShockStage } from "./scenarioTypes";
+import type { MyocarditisPhase, ShockStage, SVTPhase } from "./scenarioTypes";
 
 export type ToolIntentType =
   | "intent_updateVitals"
@@ -256,8 +256,8 @@ export type SimStateBase = {
 
 /** SimState with optional extended state for complex scenarios */
 export type SimState = SimStateBase & {
-  /** Extended state for complex scenarios (e.g., myocarditis) */
-  extended?: MyocarditisExtendedState;
+  /** Extended state for complex scenarios (e.g., myocarditis, SVT) */
+  extended?: MyocarditisExtendedState | SVTExtendedState;
 };
 
 export type CostSnapshot = {
@@ -272,6 +272,120 @@ export function hasMyocarditisExtended(
 ): state is SimState & { extended: MyocarditisExtendedState } {
   return (
     state.scenarioId === "peds_myocarditis_silent_crash_v1" &&
+    "extended" in state &&
+    state.extended !== undefined
+  );
+}
+
+// ============================================================================
+// Complex Scenario Extended State (SVT)
+// ============================================================================
+
+/** Adenosine dose record */
+export type AdenosineDose = {
+  ts: number;
+  doseMg: number;
+  doseMgKg: number;
+  doseNumber: 1 | 2;
+  rapidPush: boolean;
+  flushGiven: boolean;
+};
+
+/** Cardioversion attempt record */
+export type CardioversionAttempt = {
+  ts: number;
+  joules: number;
+  joulesPerKg: number;
+  synchronized: boolean;
+  sedated: boolean;
+  sedationAgent?: string;
+};
+
+/** Extended state for SVT complex scenario */
+export type SVTExtendedState = {
+  // Phase tracking
+  phase: SVTPhase;
+  phaseEnteredAt: number;
+  stabilityLevel: 1 | 2 | 3 | 4; // 1=stable, 2=mildly unstable, 3=unstable, 4=critical
+
+  // Rhythm state
+  currentRhythm: "sinus" | "svt";
+  converted: boolean;
+  conversionMethod?: "vagal" | "adenosine_first" | "adenosine_second" | "cardioversion";
+  conversionTs?: number;
+
+  // Treatment tracking
+  vagalAttempts: number;
+  vagalAttemptTs?: number;
+  adenosineDoses: AdenosineDose[];
+  totalAdenosineMg: number;
+  cardioversionAttempts: CardioversionAttempt[];
+
+  // Intervention tracking
+  ivAccess: boolean;
+  ivAccessTs?: number;
+  monitorOn: boolean;
+  monitorOnTs?: number;
+  sedationGiven: boolean;
+  sedationAgent?: string;
+  sedationTs?: number;
+
+  // Diagnostic tracking
+  ecgOrdered: boolean;
+  ecgOrderedTs?: number;
+  diagnostics: DiagnosticOrder[];
+  orderedDiagnostics: string[];
+
+  // Consults
+  consults: ConsultRecord[];
+  consultsCalled: string[];
+
+  // Flags
+  flags: {
+    patientReassured: boolean;
+    parentInformed: boolean;
+    valsalvaExplained: boolean;
+    reboundSVT: boolean;
+    unsedatedCardioversion: boolean;
+  };
+
+  // Scenario clock control
+  scenarioStartedAt: number;
+  scenarioClockPaused: boolean;
+  totalPausedMs: number;
+
+  // Rule tracking
+  ruleTriggers: RuleTriggerRecord[];
+  pendingEffects: { ruleId: string; effect: unknown; executeAt: number }[];
+
+  // Scoring
+  checklistCompleted: string[];
+  bonusesEarned: string[];
+  penaltiesIncurred: string[];
+  currentScore: number;
+
+  // Nurse pending clarification
+  pendingClarification?: {
+    orderType: string;
+    question: string;
+    askedAt: number;
+  };
+
+  // Timeline events for debrief
+  timelineEvents: {
+    ts: number;
+    type: "phase_change" | "treatment" | "diagnostic" | "consult" | "conversion" | "critical";
+    description: string;
+    details?: Record<string, unknown>;
+  }[];
+};
+
+/** Type guard to check if a SimState has extended SVT state */
+export function hasSVTExtended(
+  state: SimState
+): state is SimState & { extended: SVTExtendedState } {
+  return (
+    state.scenarioId === "teen_svt_complex_v1" &&
     "extended" in state &&
     state.extended !== undefined
   );

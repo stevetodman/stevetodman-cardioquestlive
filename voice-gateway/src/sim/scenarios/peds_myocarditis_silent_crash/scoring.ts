@@ -102,7 +102,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     description: "Performed safe intubation",
     explanation: "Used ketamine (not propofol) and had pressor ready before intubation",
     isRequired: false,
-    check: (state) => {
+    check: (state, elapsedMs) => {
       if (!state.airway || state.airway.type !== "intubation") {
         // If never intubated, this is N/A - give credit
         return true;
@@ -113,7 +113,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
 
       // Safe = ketamine (or etomidate) AND pressor ready
       const safeInduction = details.inductionAgent === "ketamine" || details.inductionAgent === "etomidate";
-      const pressorReady = details.pressorReady || details.pushDoseEpiDrawn;
+      const pressorReady = Boolean(details.pressorReady || details.pushDoseEpiDrawn);
 
       return safeInduction && pressorReady;
     },

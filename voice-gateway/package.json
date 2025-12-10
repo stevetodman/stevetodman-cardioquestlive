@@ -11,6 +11,7 @@
     "sim:harness": "node scripts/sim-harness.js",
     "ws:harness": "node scripts/ws-harness.js",
     "events:replay": "ts-node scripts/replaySimEvents.ts",
+    "scenario": "node scripts/run-scenario.js",
     "test": "cd .. && npm test -- --runInBand voice-gateway/src/__tests__"
   },
   "dependencies": {

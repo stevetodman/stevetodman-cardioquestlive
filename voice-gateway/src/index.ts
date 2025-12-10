@@ -1669,6 +1669,49 @@ function handleTreatment(
       break;
     }
 
+    // ===== SVT INTERVENTIONS =====
+    case "vagal":
+    case "vagal_maneuver": {
+      // Vagal maneuvers for SVT: ~30% success rate if HR > 200
+      // Modified Valsalva, ice to face, or bearing down
+      const currentHr = runtime.scenarioEngine.getState().vitals.hr ?? 90;
+      const method = (payload?.method as string) ?? "valsalva";
+      const methodName = method === "ice_to_face" ? "ice to face" :
+                         method === "modified_valsalva" ? "modified Valsalva" : "bearing down";
+
+      if (currentHr > 180) {
+        // SVT likely - vagal may work (~30% chance simulated by patient state)
+        // For teaching, we make the first vagal attempt fail to demonstrate algorithm progression
+        nurseResponse = `Trying ${methodName} now... watching the monitor...`;
+        techResponse = "Rate unchanged. Vagal didn't convert her.";
+        // Small HR drop but no conversion
+        delta.hr = -5;
+        decayIntent = { type: "intent_updateVitals", delta: { hr: 5 } as any };
+        decayMs = 30000;
+      } else {
+        nurseResponse = `Heart rate is only ${currentHr}. Vagal maneuvers are for SVT rates over 180.`;
+      }
+      break;
+    }
+    case "sedation": {
+      // Procedural sedation for cardioversion
+      const agent = (payload?.agent as string) ?? "midazolam";
+      const agentDoses: Record<string, { dose: number; unit: string; onset: string }> = {
+        midazolam: { dose: 0.1, unit: "mg/kg", onset: "1-2 minutes" },
+        ketamine: { dose: 1.0, unit: "mg/kg", onset: "30 seconds" },
+        propofol: { dose: 1.0, unit: "mg/kg", onset: "30 seconds" },
+      };
+      const info = agentDoses[agent] ?? agentDoses.midazolam;
+      const actualDose = Math.round(info.dose * weightKg * 10) / 10;
+      nurseResponse = `${agent.charAt(0).toUpperCase() + agent.slice(1)} ${actualDose} ${info.unit === "mg/kg" ? "mg" : info.unit} IV given. ` +
+                      `That's ${info.dose} ${info.unit}. Onset in about ${info.onset}.`;
+      if (agent === "propofol") {
+        delta.sbpPerMin = -10; // Propofol causes hypotension
+        nurseResponse += " Watching the BP closely.";
+      }
+      break;
+    }
+
     // ===== CARDIAC MEDICATIONS =====
     case "adenosine": {
       // PALS: First dose 0.1 mg/kg IV rapid push (max 6mg), second dose 0.2 mg/kg (max 12mg)

@@ -58,9 +58,20 @@ const complexMyocarditisPlaceholder: ScenarioDef = {
   stages: [{ id: "scene_set", vitals: { hr: 115, bp: "88/52", rr: 28, spo2: 94 } }],
 };
 
+// Placeholder for complex SVT scenario - handled by ComplexScenarioEngine
+const complexSvtPlaceholder: ScenarioDef = {
+  id: "teen_svt_complex_v1",
+  version: "1.0.0",
+  persona: "Complex SVT scenario - handled by ComplexScenarioEngine",
+  demographics: { ageYears: 14, weightKg: 50, sex: "female" },
+  initialStage: "presentation",
+  stages: [{ id: "presentation", vitals: { hr: 90, bp: "115/72", rr: 16, spo2: 99 } }],
+};
+
 const scenarioMap: Record<ScenarioId, ScenarioDef> = {
   syncope: syncopeScenario,
   peds_myocarditis_silent_crash_v1: complexMyocarditisPlaceholder,
+  teen_svt_complex_v1: complexSvtPlaceholder,
   exertional_chest_pain: {
     id: "exertional_chest_pain",
     version: "1.0.0",
@@ -519,6 +530,23 @@ const examTemplates: Record<
       neuro: "Lethargic, slow to respond.",
     },
   },
+  // Complex SVT scenario - exam findings are phase-based and handled by ComplexScenarioEngine
+  teen_svt_complex_v1: {
+    baseline: {
+      general: "Alert 14-year-old female, appears comfortable at rest.",
+      cardio: "Regular rhythm, no murmurs, normal S1/S2.",
+      lungs: "Clear to auscultation bilaterally.",
+      perfusion: "Warm, well-perfused, brisk cap refill <2 seconds.",
+      neuro: "Alert, oriented, no distress.",
+    },
+    decomp: {
+      general: "Anxious teen, clutching chest, visibly uncomfortable.",
+      cardio: "Very rapid regular pulse, no murmurs audible.",
+      lungs: "Clear, mild tachypnea.",
+      perfusion: "Warm, slightly diaphoretic, cap refill 2 seconds.",
+      neuro: "Alert, anxious, oriented.",
+    },
+  },
 };
 
 const rhythmTemplates: Record<
@@ -570,6 +598,12 @@ const rhythmTemplates: Record<
   peds_myocarditis_silent_crash_v1: {
     baseline: "Sinus tachycardia 115 bpm, low voltage QRS, diffuse ST-T wave abnormalities",
     decomp: "Sinus tachycardia 140 bpm, low voltage, ST depressions V4-V6, frequent PVCs",
+  },
+  // Complex SVT scenario - rhythm is phase-dependent and handled by ComplexScenarioEngine
+  teen_svt_complex_v1: {
+    baseline: "Normal sinus rhythm 90 bpm, normal intervals, no pre-excitation",
+    episode: "SVT 220 bpm, narrow complex, regular, P waves not visible",
+    decomp: "SVT 240 bpm, narrow complex, showing hemodynamic compromise",
   },
 };
 

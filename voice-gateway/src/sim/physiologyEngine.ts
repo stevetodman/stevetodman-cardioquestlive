@@ -491,6 +491,198 @@ export function calculateTotalFluidsMlKg(fluids: FluidBolus[]): number {
   return fluids.reduce((sum, f) => sum + f.mlKg, 0);
 }
 
+// ============================================================================
+// SVT Physiology Rules
+// ============================================================================
+
+/**
+ * SVT-specific physiology rules for deterministic scenario progression.
+ *
+ * Key mechanics:
+ * - Vagal maneuvers: 30% conversion rate
+ * - Adenosine first dose (0.1 mg/kg): 60% conversion rate
+ * - Adenosine second dose (0.2 mg/kg): 90% cumulative conversion rate
+ * - Cardioversion: 95% conversion rate
+ * - Decompensation if untreated for >5 minutes
+ */
+export const SVT_PHYSIOLOGY_RULES: PhysiologyRule[] = [
+  // Rule 1: Vagal Maneuver Success (30% handled elsewhere, this fires on success)
+  {
+    id: "vagal_conversion",
+    name: "Vagal Maneuver Conversion",
+    conditions: [{ type: "vagal_attempted" }, { type: "converted" }],
+    conditionLogic: "all",
+    effects: [
+      { type: "vitals_delta", hr: -125 }, // Drop from ~220 to ~95
+      { type: "convert_rhythm" },
+      { type: "advance_svt_phase", to: "converted" },
+      { type: "nurse_line", line: "It worked! She's converting... heart rate coming down!", priority: "critical" },
+    ],
+    maxTriggers: 1,
+  },
+
+  // Rule 2: Adenosine First Dose Success
+  {
+    id: "adenosine_first_success",
+    name: "Adenosine First Dose Conversion",
+    conditions: [{ type: "adenosine_given", doseNumber: 1 }, { type: "converted" }],
+    conditionLogic: "all",
+    effects: [
+      { type: "vitals_delta", hr: -125 },
+      { type: "convert_rhythm" },
+      { type: "advance_svt_phase", to: "converted" },
+      { type: "nurse_line", line: "There's the conversion! Sinus rhythm. Heart rate dropping to 95.", priority: "critical" },
+    ],
+    delaySeconds: 10,
+    maxTriggers: 1,
+  },
+
+  // Rule 3: Adenosine First Dose Failure
+  {
+    id: "adenosine_first_failure",
+    name: "Adenosine First Dose Failure",
+    conditions: [{ type: "adenosine_given", doseNumber: 1 }],
+    conditionLogic: "all",
+    effects: [
+      { type: "vitals_delta", hr: -30 }, // Brief dip
+      { type: "nurse_line", line: "Brief pause... and it's back. Still in SVT. Want to try the higher dose?", priority: "normal" },
+    ],
+    delaySeconds: 15,
+    cooldownSeconds: 60,
+    maxTriggers: 1,
+  },
+
+  // Rule 4: Adenosine Second Dose Success
+  {
+    id: "adenosine_second_success",
+    name: "Adenosine Second Dose Conversion",
+    conditions: [{ type: "adenosine_given", doseNumber: 2 }, { type: "converted" }],
+    conditionLogic: "all",
+    effects: [
+      { type: "vitals_delta", hr: -130 },
+      { type: "convert_rhythm" },
+      { type: "advance_svt_phase", to: "converted" },
+      { type: "nurse_line", line: "That did it! She's in sinus. HR 95 and stable.", priority: "critical" },
+    ],
+    delaySeconds: 10,
+    maxTriggers: 1,
+  },
+
+  // Rule 5: Cardioversion Success
+  {
+    id: "cardioversion_success",
+    name: "Synchronized Cardioversion Success",
+    conditions: [{ type: "cardioversion_performed", synchronized: true }, { type: "converted" }],
+    conditionLogic: "all",
+    effects: [
+      { type: "vitals_delta", hr: -150 },
+      { type: "convert_rhythm" },
+      { type: "advance_svt_phase", to: "converted" },
+      { type: "nurse_line", line: "Shock delivered. She's in sinus! HR 90, BP coming up.", priority: "critical" },
+    ],
+    delaySeconds: 5,
+    maxTriggers: 1,
+  },
+
+  // Rule 6: Unsedated Cardioversion
+  {
+    id: "cardioversion_unsedated",
+    name: "Cardioversion Without Sedation",
+    conditions: [{ type: "cardioversion_performed", synchronized: true }],
+    conditionLogic: "all",
+    effects: [
+      { type: "set_flag", flag: "unsedatedCardioversion", value: true },
+      { type: "nurse_line", line: "She felt that! Poor thing. We should have sedated first.", priority: "critical" },
+    ],
+    maxTriggers: 1,
+  },
+
+  // Rule 7: Stability Deterioration
+  {
+    id: "stability_drift",
+    name: "Hemodynamic Deterioration",
+    conditions: [{ type: "time_in_phase_gte", minutes: 3 }, { type: "rhythm_is", rhythm: "svt" }],
+    conditionLogic: "all",
+    effects: [
+      { type: "set_stability_level", level: 2 },
+      { type: "vitals_delta", sbp: -15, spo2: -2 },
+      { type: "nurse_line", line: "BP is dropping. She's not tolerating this rhythm well.", priority: "critical" },
+    ],
+    cooldownSeconds: 180,
+    maxTriggers: 2,
+  },
+
+  // Rule 8: Severe Decompensation
+  {
+    id: "decompensation_severe",
+    name: "Severe Hemodynamic Compromise",
+    conditions: [{ type: "stability_level_gte", level: 3 }, { type: "rhythm_is", rhythm: "svt" }],
+    conditionLogic: "all",
+    effects: [
+      { type: "advance_svt_phase", to: "decompensating" },
+      { type: "vitals_delta", sbp: -20, spo2: -5, hr: 10 },
+      { type: "nurse_line", line: "She's decompensating! Altered mental status, BP 75 systolic. We need to cardiovert NOW.", priority: "critical" },
+    ],
+    maxTriggers: 1,
+  },
+
+  // Rule 9: Rebound SVT (20% chance after adenosine conversion - handled elsewhere)
+  {
+    id: "rebound_svt",
+    name: "Rebound SVT After Conversion",
+    conditions: [{ type: "converted" }],
+    conditionLogic: "all",
+    effects: [
+      { type: "rebound_svt" },
+      { type: "vitals_delta", hr: 125 },
+      { type: "nurse_line", line: "Rate's climbing again - she's back in SVT! Want another dose?", priority: "critical" },
+    ],
+    delaySeconds: 60, // 1 minute after conversion
+    maxTriggers: 1,
+  },
+
+  // Rule 10: Cardiology Consult Response
+  {
+    id: "cardiology_consult",
+    name: "Cardiology Consult Called",
+    conditions: [{ type: "consult_called", service: "cardiology" }],
+    conditionLogic: "all",
+    effects: [
+      {
+        type: "nurse_line",
+        line: "Cardiology is on the phone. They recommend EP study and possible ablation given family history of WPW.",
+        priority: "normal",
+      },
+    ],
+    delaySeconds: 120, // 2 minute callback
+    maxTriggers: 1,
+  },
+
+  // Rule 11: Auto-advance to treatment window
+  {
+    id: "svt_onset_to_treatment",
+    name: "SVT Onset to Treatment Window",
+    conditions: [{ type: "time_in_phase_gte", minutes: 1 }],
+    conditionLogic: "all",
+    effects: [
+      { type: "advance_svt_phase", to: "treatment_window" },
+    ],
+    maxTriggers: 1,
+  },
+
+  // Rule 12: IV Access Established
+  {
+    id: "iv_access_confirmed",
+    name: "IV Access Confirmed",
+    conditions: [],
+    conditionLogic: "all",
+    effects: [
+      { type: "nurse_line", line: "IV is in - 20 gauge in the right AC. Good blood return.", priority: "normal" },
+    ],
+    maxTriggers: 1,
+  },
+];
+
 /**
  * Create initial extended state for myocarditis scenario
  */

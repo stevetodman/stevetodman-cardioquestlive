@@ -17,6 +17,11 @@ export type OrderType =
   | "oxygen"
   | "intubation"
   | "hfnc"
+  // SVT-specific interventions
+  | "vagal_maneuver"
+  | "adenosine"
+  | "cardioversion"
+  | "sedation"
   // Medications
   | "epi_drip"
   | "epi_push"
@@ -64,6 +69,11 @@ const CLARIFICATION_QUESTIONS: Record<string, string> = {
   oxygen_flow: "What flow rate - how many liters?",
   iv_location: "Which site - hand, AC, or foot?",
   milrinone_dose: "What loading dose and maintenance rate?",
+  // SVT-specific clarifications
+  vagal_type: "Modified Valsalva, ice to face, or bearing down?",
+  adenosine_dose: "What dose - 0.1 or 0.2 mg/kg? Rapid push with flush?",
+  cardioversion_settings: "What joules? And what sedation first?",
+  sedation_agent: "Midazolam, ketamine, or propofol for sedation?",
 };
 
 // ============================================================================
@@ -75,6 +85,7 @@ type PatternMatcher = {
   type: OrderType;
   extractor?: (text: string, match: RegExpMatchArray) => Partial<ParsedOrder["params"]>;
   needsClarification?: (params: Record<string, unknown>) => string | null;
+  preCheck?: (text: string) => boolean; // Must return true for matcher to be considered
 };
 
 const MATCHERS: PatternMatcher[] = [
@@ -100,6 +111,99 @@ const MATCHERS: PatternMatcher[] = [
     },
     needsClarification: (params) => {
       if (!params.mlKg) return CLARIFICATION_QUESTIONS.fluids_volume;
+      return null;
+    },
+  },
+
+  // ========== SVT-SPECIFIC INTERVENTIONS ==========
+  {
+    patterns: [
+      /vagal\s*(?:maneuver)?/i,
+      /valsalva/i,
+      /(?:try|do|attempt)\s*(?:a\s+)?vagal/i,
+      /bear(?:ing)?\s*down/i,
+      /ice\s*(?:to\s*)?(?:the\s*)?face/i,
+      /modified\s*valsalva/i,
+    ],
+    type: "vagal_maneuver",
+    extractor: (text) => {
+      const isValsalva = /valsalva|bear(?:ing)?\s*down/i.test(text);
+      const isIce = /ice/i.test(text);
+      const isModified = /modified/i.test(text);
+      return {
+        method: isIce ? "ice_to_face" : isModified ? "modified_valsalva" : isValsalva ? "valsalva" : undefined,
+      };
+    },
+  },
+  {
+    patterns: [
+      /(?:give|push|administer)\s*(?:some\s+)?adenosine/i,
+      /adenosine\s*(?:(\d+(?:\.\d+)?)\s*(?:mg)?)?/i,
+      /(?:first|second)\s*(?:dose\s+)?(?:of\s+)?adenosine/i,
+    ],
+    type: "adenosine",
+    extractor: (text) => {
+      const doseMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:mg)?/i);
+      const doseMg = doseMatch ? parseFloat(doseMatch[1]) : undefined;
+      const isSecond = /second|0\.2|point\s*two/i.test(text);
+      const rapidPush = /rapid|fast|quick/i.test(text);
+      const flushMentioned = /flush/i.test(text);
+      return {
+        doseMg,
+        isSecondDose: isSecond,
+        rapidPush,
+        flushMentioned,
+      };
+    },
+    needsClarification: (params) => {
+      // If no dose specified, suggest first dose
+      if (!params.doseMg && !params.isSecondDose) return null; // Will use default 0.1 mg/kg
+      return null;
+    },
+  },
+  {
+    patterns: [
+      /cardiovert/i,
+      /(?:sync(?:hronized)?)\s*(?:shock|cardioversion)/i,
+      /electrical\s*cardioversion/i,
+      /shock\s*(?:her|him|the\s*patient|them)/i,
+    ],
+    type: "cardioversion",
+    extractor: (text) => {
+      const joulesMatch = text.match(/(\d+)\s*(?:j(?:oules)?)/i);
+      const joules = joulesMatch ? parseInt(joulesMatch[1]) : undefined;
+      const isSynced = /sync/i.test(text);
+      return {
+        joules,
+        synchronized: isSynced !== false, // Default to synchronized for SVT
+      };
+    },
+    needsClarification: (params) => {
+      if (!params.joules) return CLARIFICATION_QUESTIONS.cardioversion_settings;
+      return null;
+    },
+  },
+  {
+    patterns: [
+      /(?:give|administer)\s*(?:some\s+)?sedation/i,
+      /sedate\s*(?:the\s+)?(?:patient|her|him)/i,
+      /(?:midazolam|versed|ketamine|propofol)\s*(?:for\s+)?(?:sedation|cardioversion)?/i,
+      /(?:give|administer)\s*(?:midazolam|versed|ketamine|propofol)/i,
+      /procedural\s*sedation/i,
+    ],
+    // Note: Don't match if "intubat" is present - let intubation handler take those
+    preCheck: (text: string) => !/intubat/i.test(text),
+    type: "sedation",
+    extractor: (text) => {
+      const isMidazolam = /midazolam|versed/i.test(text);
+      const isKetamine = /ketamine/i.test(text);
+      const isPropofol = /propofol/i.test(text);
+      return {
+        agent: isMidazolam ? "midazolam" : isKetamine ? "ketamine" : isPropofol ? "propofol" : undefined,
+      };
+    },
+    needsClarification: (params) => {
+      if (!params.agent) return CLARIFICATION_QUESTIONS.sedation_agent;
       return null;
     },
   },
@@ -367,6 +471,11 @@ export function parseOrder(utterance: string): ParsedOrder {
   const text = utterance.trim().toLowerCase();
 
   for (const matcher of MATCHERS) {
+    // Skip this matcher if preCheck fails
+    if (matcher.preCheck && !matcher.preCheck(text)) {
+      continue;
+    }
+
     for (const pattern of matcher.patterns) {
       const match = text.match(pattern);
       if (match) {
@@ -482,6 +591,33 @@ export function getNurseResponse(order: ParsedOrder): string {
       return "Patient's on the monitor. I'll set the alarm limits.";
     case "defib_pads":
       return "Defib pads going on now.";
+    // SVT-specific responses
+    case "vagal_maneuver": {
+      const method = order.params.method;
+      if (method === "ice_to_face") return "I'll get the ice pack ready. Want me to hold it to her face?";
+      if (method === "modified_valsalva") return "Got it - I'll coach her through the modified Valsalva.";
+      if (method === "valsalva") return "Okay, trying vagal maneuver now. Alex, I need you to bear down like you're going to the bathroom.";
+      return "Which vagal maneuver - modified Valsalva, ice to face, or bearing down?";
+    }
+    case "adenosine": {
+      const dose = order.params.doseMg;
+      const isSecond = order.params.isSecondDose;
+      if (dose) return `Adenosine ${dose} mg ready. Rapid push with 5 mL flush on your count.`;
+      if (isSecond) return "Second dose adenosine - 0.2 mg/kg ready. That's 10 mg. Rapid push with flush?";
+      return "Adenosine 0.1 mg/kg ready - that's 5 mg. Rapid push with 5 mL flush?";
+    }
+    case "cardioversion": {
+      const joules = order.params.joules;
+      if (joules) return `Setting up for synchronized cardioversion at ${joules} J. Is she sedated?`;
+      return "What joules do you want? And what sedation first?";
+    }
+    case "sedation": {
+      const agent = order.params.agent;
+      if (agent === "midazolam") return "Midazolam 0.1 mg/kg IV ready - that's 5 mg. Want me to give it now?";
+      if (agent === "ketamine") return "Ketamine 1 mg/kg IV ready - that's 50 mg. She'll be out shortly after.";
+      if (agent === "propofol") return "Propofol ready. Going slow to avoid hypotension.";
+      return "What sedation agent - midazolam, ketamine, or propofol?";
+    }
     default:
       return "I'll take care of that.";
   }

@@ -10,7 +10,8 @@ export type ScenarioId =
   | "coarctation_shock"
   | "arrhythmogenic_syncope"
   // Complex scenarios
-  | "peds_myocarditis_silent_crash_v1";
+  | "peds_myocarditis_silent_crash_v1"
+  | "teen_svt_complex_v1";
 
 export type ActionTrigger =
   | { action: "asked_about_exertion" }
@@ -77,6 +78,14 @@ export type MyocarditisPhase =
   | "confirmation_disposition"
   | "end";
 
+export type SVTPhase =
+  | "presentation"
+  | "svt_onset"
+  | "treatment_window"
+  | "cardioversion_decision"
+  | "decompensating"
+  | "converted";
+
 /** Physiology rule trigger condition */
 export type PhysiologyCondition =
   | { type: "fluids_ml_kg_in_window"; thresholdMlKg: number; windowMinutes: number }
@@ -89,7 +98,16 @@ export type PhysiologyCondition =
   | { type: "shock_stage_gte"; stage: ShockStage }
   | { type: "consult_called"; service: "picu" | "cardiology" | "ecmo" }
   | { type: "time_in_phase_gte"; minutes: number }
-  | { type: "diagnostic_ordered"; test: string };
+  | { type: "diagnostic_ordered"; test: string }
+  // SVT-specific conditions
+  | { type: "vagal_attempted" }
+  | { type: "adenosine_given"; doseNumber: 1 | 2 }
+  | { type: "adenosine_dose_range"; minMgKg: number; maxMgKg: number }
+  | { type: "cardioversion_performed"; synchronized: boolean }
+  | { type: "sedation_given" }
+  | { type: "stability_level_gte"; level: 1 | 2 | 3 | 4 }
+  | { type: "rhythm_is"; rhythm: "svt" | "sinus" }
+  | { type: "converted" };
 
 /** Physiology rule effect */
 export type PhysiologyEffect =
@@ -98,7 +116,12 @@ export type PhysiologyEffect =
   | { type: "nurse_line"; line: string; priority?: "critical" | "normal" }
   | { type: "advance_shock_stage"; to: ShockStage }
   | { type: "advance_phase"; to: MyocarditisPhase }
-  | { type: "trigger_code_blue" };
+  | { type: "trigger_code_blue" }
+  // SVT-specific effects
+  | { type: "advance_svt_phase"; to: SVTPhase }
+  | { type: "set_stability_level"; level: 1 | 2 | 3 | 4 }
+  | { type: "convert_rhythm" }
+  | { type: "rebound_svt" };
 
 /** Deterministic physiology rule */
 export type PhysiologyRule = {

@@ -31,8 +31,8 @@ public/               # Static assets (audio files, images)
 ## Core Concepts
 
 ### Scenarios
-11 pediatric cardiology cases with age-appropriate vitals, medications, and exam findings:
-- Teen: syncope, SVT, HCM, arrhythmogenic syncope, chest pain
+12 pediatric cardiology cases with age-appropriate vitals, medications, and exam findings:
+- Teen: syncope, SVT, HCM, arrhythmogenic syncope, chest pain, **Complex SVT (PALS algorithm)**
 - Pediatric: myocarditis, kawasaki, **"The Silent Crash" (complex fulminant myocarditis)**
 - Infant: ductal shock, coarctation, cyanotic spell
 
@@ -63,6 +63,11 @@ npm run dev:tunnel             # Via Cloudflare tunnel (raw, no cleanup)
 cd voice-gateway
 npm install && npm run build && npm start
 
+# Quick-run a scenario (no WebSocket/OpenAI required)
+cd voice-gateway && npm run build && npm run scenario teen_svt_complex_v1
+cd voice-gateway && npm run build && npm run scenario peds_myocarditis_silent_crash_v1
+cd voice-gateway && npm run scenario --help  # List all scenarios
+
 # Testing
 npm test                       # Unit tests
 npm run test:gateway           # Gateway tests
@@ -88,7 +93,7 @@ PORT                          # Default 8081
 - `src/services/VoiceGatewayClient.ts` - WebSocket client
 
 ## Testing
-- 92 gateway tests (rhythm generation, myocarditis scenario, order parsing)
+- 165+ gateway tests (rhythm generation, myocarditis scenario, SVT scenario, order parsing)
 - Playwright E2E with mock sessions
 - Jest unit tests for gateway logic
 
@@ -138,6 +143,14 @@ Toggle via the mode switch in presenter header. Mode persists in localStorage.
   - Pass/fail scoring (4/5 checklist items) + bonus/penalty points
   - Enhanced debrief with timeline, scoring breakdown, teaching points
   - 36 new tests for physiology, orders, results, scoring, triggers
+- **Complex SVT scenario** (Dec 2024):
+  - PALS SVT algorithm teaching: `teen_svt_complex_v1`
+  - 6 phases: presentation → svt_onset → treatment_window → cardioversion_decision → decompensating → converted
+  - Vagal maneuver parsing (ice to face, modified Valsalva, bearing down)
+  - Adenosine dose validation (0.1 mg/kg first, 0.2 mg/kg second)
+  - Cardioversion with sedation tracking
+  - NPC triggers: nurse safety prompts, parent history (WPW), patient responses
+  - 73 new tests for SVT physiology, scoring, triggers
 
 ## Team Mode Features
 

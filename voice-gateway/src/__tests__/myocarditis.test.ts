@@ -30,7 +30,7 @@ import {
 describe("PhysiologyEngine", () => {
   describe("createInitialMyocarditisState", () => {
     it("creates state with correct initial values", () => {
-      const state = createInitialMyocarditisState("test-sim-123");
+      const state = createInitialMyocarditisState(Date.now());
 
       expect(state.phase).toBe("scene_set");
       expect(state.shockStage).toBe(1);
@@ -47,7 +47,7 @@ describe("PhysiologyEngine", () => {
 
   describe("evaluatePhysiology", () => {
     it("detects fluid overload condition", () => {
-      const extended = createInitialMyocarditisState("test");
+      const extended = createInitialMyocarditisState(Date.now());
       extended.totalFluidsMlKg = 25;
       extended.fluids = [
         { ts: Date.now() - 5 * 60 * 1000, mlKg: 25, totalMl: 800, type: "NS" },
@@ -69,7 +69,7 @@ describe("PhysiologyEngine", () => {
     });
 
     it("triggers epi response when epi is running", () => {
-      const extended = createInitialMyocarditisState("test");
+      const extended = createInitialMyocarditisState(Date.now());
       extended.activeInotropes = [
         { drug: "epi", doseMcgKgMin: 0.1, startedAt: Date.now() - 3 * 60 * 1000 },
       ];
@@ -299,7 +299,7 @@ describe("Results", () => {
 describe("Scoring", () => {
   describe("calculateScore", () => {
     it("passes with 4/5 checklist items", () => {
-      const state = createInitialMyocarditisState("test");
+      const state = createInitialMyocarditisState(Date.now());
       // Simulate achieving 4 items
       state.orderedDiagnostics = ["troponin", "ecg"]; // recognized cardiac
       state.totalFluidsMlKg = 20; // avoided overload
@@ -312,7 +312,7 @@ describe("Scoring", () => {
     });
 
     it("fails with fewer than 4 checklist items", () => {
-      const state = createInitialMyocarditisState("test");
+      const state = createInitialMyocarditisState(Date.now());
       state.totalFluidsMlKg = 60; // failed: overload
       // No diagnostics, no consults
 
@@ -322,7 +322,7 @@ describe("Scoring", () => {
     });
 
     it("applies penalties for critical errors", () => {
-      const state = createInitialMyocarditisState("test");
+      const state = createInitialMyocarditisState(Date.now());
       state.totalFluidsMlKg = 70; // severe overload
       state.flags.codeBlueActive = true;
 
@@ -333,7 +333,7 @@ describe("Scoring", () => {
     });
 
     it("awards bonuses for excellent care", () => {
-      const state = createInitialMyocarditisState("test");
+      const state = createInitialMyocarditisState(Date.now());
       state.orderedDiagnostics = ["troponin", "bnp", "ecg", "echo"];
       state.diagnostics = [
         { id: "1", type: "troponin", orderedAt: state.phaseEnteredAt + 2 * 60 * 1000 },
@@ -351,7 +351,7 @@ describe("Scoring", () => {
 
   describe("getChecklistStatus", () => {
     it("returns status for all checklist items", () => {
-      const state = createInitialMyocarditisState("test");
+      const state = createInitialMyocarditisState(Date.now());
       const status = getChecklistStatus(state, 10 * 60 * 1000);
 
       expect(status.length).toBe(5);
@@ -376,7 +376,7 @@ describe("Triggers", () => {
 
   describe("evaluateNurseTriggers", () => {
     it("triggers BP crash alert at high shock stage", () => {
-      const state = createInitialMyocarditisState("test");
+      const state = createInitialMyocarditisState(Date.now());
       state.shockStage = 4;
 
       const triggers = evaluateNurseTriggers(state, 10 * 60 * 1000, {});
@@ -387,7 +387,7 @@ describe("Triggers", () => {
     });
 
     it("triggers fluid overload warning", () => {
-      const state = createInitialMyocarditisState("test");
+      const state = createInitialMyocarditisState(Date.now());
       state.totalFluidsMlKg = 18;
 
       const triggers = evaluateNurseTriggers(state, 10 * 60 * 1000, {});
@@ -397,7 +397,7 @@ describe("Triggers", () => {
     });
 
     it("respects cooldowns", () => {
-      const state = createInitialMyocarditisState("test");
+      const state = createInitialMyocarditisState(Date.now());
       state.shockStage = 4;
 
       const history = {
