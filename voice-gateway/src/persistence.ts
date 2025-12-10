@@ -22,6 +22,7 @@ const stateCache: Map<
     telemetryKey?: string;
     ekgKey?: string;
     treatmentKey?: string;
+    extendedKey?: string;
     stageEnteredAt?: number;
     lastWrite?: number;
   }
@@ -41,6 +42,7 @@ export async function persistSimState(simId: string, state: SimState & { budget?
   const telemetryKey = makeKey(state.telemetryHistory || []);
   const ekgKey = makeKey(state.ekgHistory || []);
   const treatmentKey = makeKey(state.treatmentHistory || []);
+  const extendedKey = makeKey(state.extended || {});
   const stageEnteredAt = state.stageEnteredAt;
   const now = Date.now();
   const shouldSkip =
@@ -54,6 +56,7 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     cache.telemetryKey === telemetryKey &&
     cache.ekgKey === ekgKey &&
     cache.treatmentKey === treatmentKey &&
+    cache.extendedKey === extendedKey &&
     cache.stageEnteredAt === stageEnteredAt &&
     cache.lastWrite &&
     now - cache.lastWrite < 500;
@@ -91,6 +94,9 @@ export async function persistSimState(simId: string, state: SimState & { budget?
   if (state.treatmentHistory) {
     payload.treatmentHistory = state.treatmentHistory;
   }
+  if (state.extended) {
+    payload.extended = state.extended;
+  }
   await docRef.set(payload, { merge: true });
   stateCache.set(simId, {
     stageId: state.stageId,
@@ -103,6 +109,7 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     telemetryKey,
     ekgKey,
     treatmentKey,
+    extendedKey,
     stageEnteredAt,
     lastWrite: now,
   });
@@ -188,6 +195,9 @@ const persistedStateSchema = z
     treatmentHistory: z.array(z.record(z.any())).optional(),
     stageEnteredAt: z.number().optional(),
     telemetry: z.boolean().optional(),
+    // Extended state for complex scenarios (SVT, myocarditis, etc.)
+    // Uses passthrough to allow scenario-specific fields
+    extended: z.record(z.any()).optional(),
   })
   .passthrough();
 

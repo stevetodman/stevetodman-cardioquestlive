@@ -123,6 +123,7 @@ function HeadphonesIcon() {
 }
 
 interface AudioClipButtonProps {
+  key?: React.Key;
   clip: ExamAudioClip;
   isPlaying: boolean;
   isLoading: boolean;

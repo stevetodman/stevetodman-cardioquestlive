@@ -910,6 +910,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
     { id: "exertional_syncope_hcm", label: "Exertional presyncope (HCM suspicion)" },
     { id: "ductal_shock", label: "Infant shock (duct-dependent lesion)" },
     { id: "cyanotic_spell", label: "Cyanotic spell (tet spell-like)" },
+    { id: "teen_svt_complex_v1", label: "★ Complex SVT - PALS Algorithm (Alex Chen)" },
   ];
 
   const generateDebrief = useCallback(() => {
@@ -1343,6 +1344,19 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
       unsubAnalysis();
     };
   }, [makeTurnId, autoForceReply, forceReplyWithQuestion]);
+
+  // Refresh auth token before reconnects so secure gateways accept joins after token expiry
+  useEffect(() => {
+    if (!auth) return;
+    voiceGatewayClient.setTokenRefresher(async () => {
+      if (!auth.currentUser?.getIdToken) return undefined;
+      try {
+        return await auth.currentUser.getIdToken(true);
+      } catch {
+        return undefined;
+      }
+    });
+  }, []);
 
   // Auto-play character audio when new audio URL arrives
   useEffect(() => {

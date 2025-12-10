@@ -229,6 +229,29 @@ const summaries: Record<PatientScenarioId, ScenarioSnapshot> = {
       { name: "Echo", status: "pending", summary: "Rule out structural disease." },
     ],
   },
+  teen_svt_complex_v1: {
+    chiefComplaint: "Rapid palpitations - currently in SVT",
+    hpi: [
+      "14-year-old with recurrent episodes of sudden-onset rapid heartbeat.",
+      "Current episode started 15 minutes ago during volleyball practice.",
+      "Mother had WPW ablated in her 20s.",
+      "One prior ER visit - spontaneously converted before workup.",
+    ],
+    exam: [
+      "Anxious teen, visibly uncomfortable, clutching chest.",
+      "Very rapid regular pulse ~220 bpm; no murmurs audible.",
+      "Warm, slightly diaphoretic, cap refill 2 seconds.",
+      "Alert, oriented, mild dizziness reported.",
+    ],
+    labs: [
+      { name: "Electrolytes", status: "pending", summary: "Obtain before medications." },
+      { name: "Troponin", status: "pending", summary: "Usually normal in SVT; order if prolonged." },
+    ],
+    imaging: [
+      { name: "ECG", status: "result", summary: "Narrow complex tachycardia 220 bpm, regular, no visible P waves." },
+      { name: "Post-conversion ECG", status: "pending", summary: "Look for delta wave (WPW) after conversion." },
+    ],
+  },
 };
 
 export function getScenarioSnapshot(scenarioId: PatientScenarioId | null | undefined): ScenarioSnapshot | null {

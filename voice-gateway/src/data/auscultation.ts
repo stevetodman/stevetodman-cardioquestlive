@@ -59,6 +59,11 @@ const SCENARIO_CLIPS: Record<PatientScenarioId, AuscultationClip[]> = {
     { type: "heart", label: "Harsh systolic ejection murmur (RVOT obstruction)", url: "/audio/ausc/heart-tof-murmur.mp3" },
     { type: "lung", label: "Increased work of breathing during spell", url: "/audio/ausc/lungs-tachypnea.mp3" },
   ],
+  // Complex SVT scenario
+  teen_svt_complex_v1: [
+    { type: "heart", label: "Very rapid regular rhythm ~220 bpm, no murmurs audible", url: "/audio/ausc/heart-svt-rapid.mp3" },
+    { type: "lung", label: "Clear breath sounds", url: "/audio/ausc/lungs-clear.mp3" },
+  ],
 };
 
 // Fallback clips if scenario not mapped

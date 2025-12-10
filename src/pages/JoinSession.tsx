@@ -426,6 +426,19 @@ export default function JoinSession() {
     return () => unsub();
   }, []);
 
+  // Refresh auth token before reconnects so secure gateways accept joins after token expiry
+  useEffect(() => {
+    if (!auth) return;
+    voiceGatewayClient.setTokenRefresher(async () => {
+      if (!auth.currentUser?.getIdToken) return undefined;
+      try {
+        return await auth.currentUser.getIdToken(true);
+      } catch {
+        return undefined;
+      }
+    });
+  }, []);
+
   useEffect(() => {
     const unsub = voicePatientService.onTurnComplete(async (blob) => {
       if (!sessionId || !userId) return;

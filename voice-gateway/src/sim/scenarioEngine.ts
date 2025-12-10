@@ -662,6 +662,7 @@ export class ScenarioEngine {
       stageEnteredAt: partial.stageEnteredAt ?? this.state.stageEnteredAt ?? now,
       fallback: partial.fallback ?? this.state.fallback,
       budget: partial.budget ?? this.state.budget,
+      extended: partial.extended ?? this.state.extended,
     };
     this.lastTickMs = now;
   }
@@ -743,6 +744,27 @@ export class ScenarioEngine {
       rhythmSummary,
       telemetryHistory: [...history, { ts: Date.now(), rhythm: rhythmSummary, note }],
     };
+  }
+
+  /**
+   * Update extended state for complex scenarios (SVT, myocarditis).
+   * Merges the partial update with existing extended state.
+   */
+  updateExtended(partial: Partial<SimState["extended"]>) {
+    if (!partial) return;
+    this.state = {
+      ...this.state,
+      extended: this.state.extended
+        ? { ...this.state.extended, ...partial }
+        : partial,
+    } as SimState;
+  }
+
+  /**
+   * Get extended state (for complex scenarios).
+   */
+  getExtended(): SimState["extended"] {
+    return this.state.extended;
   }
 
   /**

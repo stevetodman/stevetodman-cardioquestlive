@@ -10,7 +10,8 @@ export type PatientScenarioId =
   | "cyanotic_spell"
   | "kawasaki"
   | "coarctation_shock"
-  | "arrhythmogenic_syncope";
+  | "arrhythmogenic_syncope"
+  | "teen_svt_complex_v1";
 
 export type CharacterId = "patient" | "parent" | "nurse" | "tech" | "consultant" | "imaging";
 
@@ -37,7 +38,7 @@ export type VoiceConnectionState = "disconnected" | "connecting" | "ready" | "er
 
 export type VoiceConnectionStatus = {
   state: VoiceConnectionState;
-  reason?: "socket_error" | "closed" | "unsupported" | "unknown";
+  reason?: "socket_error" | "closed" | "unsupported" | "unknown" | "connection_lost" | "max_retries" | "reconnecting";
   lastChangedAt?: number;
 };
 

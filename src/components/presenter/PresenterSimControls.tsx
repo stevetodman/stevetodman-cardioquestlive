@@ -305,11 +305,11 @@ export function PresenterSimControls({
                     className="bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100"
                   >
                     <div className="text-[10px] text-slate-500 mb-1">
-                      {new Date(turn.timestamp).toLocaleTimeString([], {
+                      {turn.timestamp ? new Date(turn.timestamp).toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
                         second: "2-digit",
-                      })}
+                      }) : "—"}
                     </div>
                     <div className="leading-snug whitespace-pre-wrap">{turn.text}</div>
                   </div>

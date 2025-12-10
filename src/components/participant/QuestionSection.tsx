@@ -106,6 +106,7 @@ function ScoringInfo({ difficulty }: { difficulty?: string }) {
 }
 
 interface AnswerButtonProps {
+  key?: React.Key;
   index: number;
   text: string;
   isSelected: boolean;

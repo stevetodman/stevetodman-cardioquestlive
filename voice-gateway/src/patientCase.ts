@@ -8,7 +8,8 @@ export type PatientScenarioId =
   | "cyanotic_spell"
   | "kawasaki"
   | "coarctation_shock"
-  | "arrhythmogenic_syncope";
+  | "arrhythmogenic_syncope"
+  | "teen_svt_complex_v1";
 
 export type PatientCase = {
   id: string;
@@ -231,6 +232,30 @@ export function getPatientCaseForScenario(
         socialHistory: ["toddlers at daycare; otherwise active"],
         baselinePersonality: "active toddler, frightened during spells",
         redFlags: ["cyanosis with exertion/crying", "possible tet spell"],
+      };
+    case "teen_svt_complex_v1":
+      return {
+        id: sessionId,
+        scenarioId,
+        age: 14,
+        sex: "female",
+        name: "Alex Chen",
+        chiefComplaint: "episodes of rapid palpitations",
+        onset: "on and off for 6 months, currently in an episode",
+        associatedSymptoms: ["chest fluttering", "mild dizziness during episodes", "anxiety"],
+        relevantPMH: ["otherwise healthy", "one prior ER visit for palpitations"],
+        medications: [],
+        allergies: ["no known drug allergies"],
+        familyHistory: [
+          "mother had WPW ablated in her 20s",
+          "no sudden deaths in family",
+        ],
+        socialHistory: [
+          "8th grader, plays volleyball",
+          "no tobacco, vaping, alcohol, or drugs",
+        ],
+        baselinePersonality: "anxious during episodes but cooperative; mom is present and concerned",
+        redFlags: ["recurrent SVT", "family history of WPW", "currently symptomatic"],
       };
   }
 }

@@ -7,6 +7,7 @@ export type TranscriptTurn = {
   character?: string;
   text: string;
   isComplete: boolean;
+  timestamp?: number;
 };
 
 type VoiceOverlayMode = "idle" | "resident-speaking" | "ai-speaking" | "disabled" | "disconnected";

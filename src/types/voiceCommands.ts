@@ -3,7 +3,7 @@
  * Extracted from usePresenterVoiceCommands for reuse and token efficiency.
  */
 
-import type { VoiceCommandType } from "./index";
+import type { VoiceCommandType } from "../../types";
 import type { CharacterId } from "./voiceGateway";
 
 // ============================================================================

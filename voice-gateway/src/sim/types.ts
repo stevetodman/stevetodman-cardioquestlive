@@ -374,7 +374,7 @@ export type SVTExtendedState = {
   // Timeline events for debrief
   timelineEvents: {
     ts: number;
-    type: "phase_change" | "treatment" | "diagnostic" | "consult" | "conversion" | "critical";
+    type: "phase_change" | "treatment" | "intervention" | "diagnostic" | "consult" | "conversion" | "critical";
     description: string;
     details?: Record<string, unknown>;
   }[];

@@ -16,7 +16,8 @@ import { RealtimePatientClient } from "./sim/realtimePatientClient";
 import { InMemoryEventLog } from "./sim/eventLog";
 import { ScenarioEngine } from "./sim/scenarioEngine";
 import { ToolGate } from "./sim/toolGate";
-import { ToolIntent, Interventions } from "./sim/types";
+import { ToolIntent, Interventions, hasSVTExtended, SVTExtendedState } from "./sim/types";
+import { createInitialSVTState, SVT_PHASES } from "./sim/scenarios/teen_svt_complex";
 import { CostController } from "./sim/costController";
 import { persistSimState, logSimEvent, loadSimState } from "./persistence";
 import { validateMessage, validateSimStateMessage } from "./validators";
@@ -1099,6 +1100,23 @@ function ensureRuntime(sessionId: string): Runtime {
     runtime.realtime.connect();
   }
   runtimes.set(sessionId, runtime);
+
+  // Initialize extended state for complex scenarios
+  const state = runtime.scenarioEngine.getState();
+  if (scenarioId === "teen_svt_complex_v1" && !state.extended) {
+    const svtExtended = createInitialSVTState(Date.now());
+    // Apply initial phase vitals
+    const presentationPhase = SVT_PHASES.find((p) => p.id === "presentation");
+    if (presentationPhase) {
+      runtime.scenarioEngine.hydrate({
+        vitals: presentationPhase.vitalsTarget,
+        exam: presentationPhase.examFindings,
+        rhythmSummary: presentationPhase.rhythmSummary,
+        extended: svtExtended,
+      });
+    }
+  }
+
   broadcastSimState(sessionId, {
     ...runtime.scenarioEngine.getState(),
     stageIds: runtime.scenarioEngine.getStageIds(),
@@ -1210,11 +1228,125 @@ function handleBudgetHardLimit(sessionId: string) {
   }
 }
 
+/**
+ * Handle SVT phase transitions based on time and state.
+ * Auto-advances from presentation → svt_onset after 2 minutes,
+ * and handles deterioration if untreated.
+ */
+function tickSVTPhase(sessionId: string, runtime: Runtime, ext: SVTExtendedState) {
+  const now = Date.now();
+  const phaseElapsedMs = now - ext.phaseEnteredAt;
+  const phaseElapsedMin = phaseElapsedMs / 60000;
+  const phaseDef = SVT_PHASES.find((p) => p.id === ext.phase);
+
+  // Don't transition if already converted
+  if (ext.converted || ext.phase === "converted") return;
+
+  // Phase: presentation → svt_onset (after 2 min)
+  if (ext.phase === "presentation" && phaseElapsedMin >= 2) {
+    const svtOnsetPhase = SVT_PHASES.find((p) => p.id === "svt_onset");
+    if (svtOnsetPhase) {
+      runtime.scenarioEngine.updateExtended({
+        ...ext,
+        phase: "svt_onset",
+        phaseEnteredAt: now,
+        currentRhythm: "svt",
+        timelineEvents: [
+          ...ext.timelineEvents,
+          { ts: now, type: "phase_change", description: "SVT episode started - HR 220" },
+        ],
+      });
+      runtime.scenarioEngine.hydrate({
+        vitals: svtOnsetPhase.vitalsTarget,
+        exam: svtOnsetPhase.examFindings,
+        rhythmSummary: svtOnsetPhase.rhythmSummary,
+      });
+      sessionManager.broadcastToPresenters(sessionId, {
+        type: "patient_transcript_delta",
+        sessionId,
+        text: "Alex suddenly clutches her chest: 'It's happening again! My heart is going so fast!'",
+        character: "patient",
+      });
+      log("[svt] Phase transition: presentation → svt_onset", sessionId);
+    }
+  }
+
+  // Phase: svt_onset → treatment_window (when any treatment attempted)
+  // This is handled in the treatment handlers
+
+  // Phase: svt_onset → decompensating (after 4 min without treatment)
+  if (ext.phase === "svt_onset" && phaseElapsedMin >= 4 && ext.vagalAttempts === 0 && ext.adenosineDoses.length === 0) {
+    const decompPhase = SVT_PHASES.find((p) => p.id === "decompensating");
+    if (decompPhase) {
+      runtime.scenarioEngine.updateExtended({
+        ...ext,
+        phase: "decompensating",
+        phaseEnteredAt: now,
+        stabilityLevel: 3,
+        penaltiesIncurred: ext.penaltiesIncurred.includes("treatment_delayed")
+          ? ext.penaltiesIncurred
+          : [...ext.penaltiesIncurred, "treatment_delayed", "patient_decompensated"],
+        timelineEvents: [
+          ...ext.timelineEvents,
+          { ts: now, type: "phase_change", description: "Patient decompensating - no treatment given" },
+        ],
+      });
+      runtime.scenarioEngine.hydrate({
+        vitals: decompPhase.vitalsTarget,
+        exam: decompPhase.examFindings,
+        rhythmSummary: decompPhase.rhythmSummary,
+      });
+      sessionManager.broadcastToPresenters(sessionId, {
+        type: "patient_transcript_delta",
+        sessionId,
+        text: "Nurse Martinez: 'She's getting worse! BP dropping, she's looking pale. We need to do something NOW!'",
+        character: "nurse",
+      });
+      log("[svt] Phase transition: svt_onset → decompensating (untreated)", sessionId);
+    }
+  }
+
+  // Phase: treatment_window → cardioversion_decision (after adenosine failed twice)
+  // This is handled in the adenosine treatment handler
+
+  // Apply drift for current phase if defined
+  if (phaseDef?.drift && !ext.converted) {
+    const driftPerTick = scenarioHeartbeatMs / 60000; // Convert to per-minute
+    const currentVitals = runtime.scenarioEngine.getState().vitals;
+    const newVitals = { ...currentVitals };
+
+    if (phaseDef.drift.hrPerMin) {
+      newVitals.hr = Math.round((currentVitals.hr ?? 90) + phaseDef.drift.hrPerMin * driftPerTick);
+    }
+    if (phaseDef.drift.spo2PerMin) {
+      newVitals.spo2 = Math.max(80, Math.min(100, Math.round((currentVitals.spo2 ?? 99) + phaseDef.drift.spo2PerMin * driftPerTick)));
+    }
+    if (phaseDef.drift.sbpPerMin) {
+      const [sbp, dbp] = (currentVitals.bp ?? "100/60").split("/").map(Number);
+      const newSbp = Math.max(60, Math.round(sbp + phaseDef.drift.sbpPerMin * driftPerTick));
+      const newDbp = Math.max(40, Math.round(dbp + (phaseDef.drift.dbpPerMin ?? 0) * driftPerTick));
+      newVitals.bp = `${newSbp}/${newDbp}`;
+    }
+
+    runtime.scenarioEngine.applyVitalsAdjustment({
+      hr: (newVitals.hr ?? 0) - (currentVitals.hr ?? 0),
+      spo2: (newVitals.spo2 ?? 0) - (currentVitals.spo2 ?? 0),
+    });
+  }
+}
+
 function startScenarioHeartbeat(sessionId: string) {
   if (scenarioTimers.has(sessionId)) return;
   const tick = () => {
     const runtime = runtimes.get(sessionId);
     if (!runtime) return;
+
+    // Handle SVT phase transitions
+    const state = runtime.scenarioEngine.getState();
+    if (hasSVTExtended(state)) {
+      tickSVTPhase(sessionId, runtime, state.extended);
+    }
+
     const result = runtime.scenarioEngine.tick(Date.now());
     const telemetryWaveform = runtime.scenarioEngine.getState().telemetry
       ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
@@ -1283,6 +1415,7 @@ function broadcastSimState(
     treatmentHistory?: { ts: number; treatmentType: string; note?: string }[];
     scenarioStartedAt?: number;
     elapsedSeconds?: number;
+    extended?: any; // SVT or Myocarditis extended state
   }
 ) {
   const validated = validateSimStateMessage(state);
@@ -1317,6 +1450,7 @@ function broadcastSimState(
     scenarioStartedAt: (state as any).scenarioStartedAt,
     stageEnteredAt: (state as any).stageEnteredAt,
     elapsedSeconds: (state as any).elapsedSeconds,
+    extended: (state as any).extended, // SVT/Myocarditis extended state for presenters
   };
 
   // Send full state to presenters
@@ -1393,6 +1527,8 @@ function buildSystemPrompt(scenario: PatientScenarioId): string {
       ? "You are an ill infant; responses are limited to fussing/crying cues. Keep outputs minimal, describing distress simply."
       : scenario === "cyanotic_spell"
       ? "You are a toddler who turns blue and sometimes squats to feel better. Very short, simple toddler-like responses."
+      : scenario === "teen_svt_complex_v1"
+      ? "You are Alex Chen, a 14-year-old with episodes of sudden rapid heartbeat. Your heart is racing right now - it feels like it's pounding in your throat. You're scared but trying to stay calm. Answer briefly, stay in character. Your mom is here and worried."
       : "You are a teen with exertional chest pain. Stay in character with short answers, no diagnoses or treatments.";
   return `${persona}\nKeep answers to 1-3 sentences. If unsure, say you are not sure.`;
 }
@@ -1667,6 +1803,21 @@ function handleTreatment(
         fluidsRunning: false,
       });
       nurseResponse = `${ivGauge} gauge IV placed in ${ivLocation.replace(/_/g, " ")}. Good blood return, flushing well.`;
+
+      // Update SVT extended state
+      const ivState = runtime.scenarioEngine.getState();
+      if (hasSVTExtended(ivState)) {
+        const ext = ivState.extended;
+        runtime.scenarioEngine.updateExtended({
+          ...ext,
+          ivAccess: true,
+          ivAccessTs: Date.now(),
+          timelineEvents: [
+            ...ext.timelineEvents,
+            { ts: Date.now(), type: "intervention", description: `IV access established (${ivGauge}g ${ivLocation.replace(/_/g, " ")})` },
+          ],
+        });
+      }
       break;
     }
     case "position":
@@ -1684,7 +1835,8 @@ function handleTreatment(
     case "vagal_maneuver": {
       // Vagal maneuvers for SVT: ~30% success rate if HR > 200
       // Modified Valsalva, ice to face, or bearing down
-      const currentHr = runtime.scenarioEngine.getState().vitals.hr ?? 90;
+      const currentState = runtime.scenarioEngine.getState();
+      const currentHr = currentState.vitals.hr ?? 90;
       const method = (payload?.method as string) ?? "valsalva";
       const methodName = method === "ice_to_face" ? "ice to face" :
                          method === "modified_valsalva" ? "modified Valsalva" : "bearing down";
@@ -1698,6 +1850,23 @@ function handleTreatment(
         delta.hr = -5;
         decayIntent = { type: "intent_updateVitals", delta: { hr: 5 } as any };
         decayMs = 30000;
+
+        // Update SVT extended state
+        if (hasSVTExtended(currentState)) {
+          const ext = currentState.extended;
+          runtime.scenarioEngine.updateExtended({
+            ...ext,
+            vagalAttempts: ext.vagalAttempts + 1,
+            vagalAttemptTs: Date.now(),
+            checklistCompleted: ext.checklistCompleted.includes("vagal_attempted")
+              ? ext.checklistCompleted
+              : [...ext.checklistCompleted, "vagal_attempted"],
+            timelineEvents: [
+              ...ext.timelineEvents,
+              { ts: Date.now(), type: "treatment", description: `Vagal maneuver (${methodName}) attempted` },
+            ],
+          });
+        }
       } else {
         nurseResponse = `Heart rate is only ${currentHr}. Vagal maneuvers are for SVT rates over 180.`;
       }
@@ -1719,6 +1888,22 @@ function handleTreatment(
         delta.sbpPerMin = -10; // Propofol causes hypotension
         nurseResponse += " Watching the BP closely.";
       }
+
+      // Update SVT extended state
+      const sedState = runtime.scenarioEngine.getState();
+      if (hasSVTExtended(sedState)) {
+        const ext = sedState.extended;
+        runtime.scenarioEngine.updateExtended({
+          ...ext,
+          sedationGiven: true,
+          sedationAgent: agent,
+          sedationTs: Date.now(),
+          timelineEvents: [
+            ...ext.timelineEvents,
+            { ts: Date.now(), type: "treatment", description: `Sedation given (${agent} ${actualDose} mg)` },
+          ],
+        });
+      }
       break;
     }
 
@@ -1726,14 +1911,94 @@ function handleTreatment(
     case "adenosine": {
       // PALS: First dose 0.1 mg/kg IV rapid push (max 6mg), second dose 0.2 mg/kg (max 12mg)
       // Must be given rapid IV push followed immediately by NS flush
+      const adenState = runtime.scenarioEngine.getState();
       const maxFirst = 6;
-      const recommendedDose = doseOrdered ?? Math.min(0.1 * weightKg, maxFirst);
+      const maxSecond = 12;
+      let doseNumber: 1 | 2 = 1;
+      let recommendedDose = doseOrdered ?? Math.min(0.1 * weightKg, maxFirst);
+
+      // Check if this is second dose (for SVT scenarios)
+      if (hasSVTExtended(adenState)) {
+        const ext = adenState.extended;
+        if (ext.adenosineDoses.length > 0) {
+          doseNumber = 2;
+          // Second dose is 0.2 mg/kg (max 12mg)
+          recommendedDose = doseOrdered ?? Math.min(0.2 * weightKg, maxSecond);
+        }
+      }
+
       const actualDose = Math.round(recommendedDose * 100) / 100;
-      delta.hr = -80; // SVT conversion
-      decayMs = 10000; // Half-life <10 seconds
-      nurseResponse = `Adenosine ${actualDose} mg IV rapid push given. That's ${(actualDose / weightKg).toFixed(2)} mg/kg. Flushing with 5 mL NS.`;
-      techResponse = "Rate dropping... watching for conversion...";
-      decayIntent = { type: "intent_updateVitals", delta: { hr: 60 } as any }; // May revert if not converted
+      const rapidPush = payload?.rapidPush !== false;
+      const flushGiven = payload?.flush !== false;
+
+      // For SVT scenarios, simulate conversion based on dose number
+      // First dose: 60% success, Second dose: 90% cumulative
+      // For teaching purposes, we'll make first dose fail and second succeed
+      const isFirstDose = doseNumber === 1;
+      if (isFirstDose) {
+        delta.hr = -30; // Brief dip
+        decayIntent = { type: "intent_updateVitals", delta: { hr: 25 } as any };
+        decayMs = 15000;
+        nurseResponse = `Adenosine ${actualDose} mg IV rapid push given. That's ${(actualDose / weightKg).toFixed(2)} mg/kg. Flushing with 5 mL NS.`;
+        techResponse = "Brief pause... and it's back. Still in SVT. Want to try the higher dose?";
+      } else {
+        delta.hr = -125; // Full conversion from ~220 to ~95
+        nurseResponse = `Adenosine ${actualDose} mg IV rapid push given. That's ${(actualDose / weightKg).toFixed(2)} mg/kg. Flushing with 5 mL NS.`;
+        techResponse = "There it is! She's converting... sinus rhythm. Heart rate coming down nicely.";
+      }
+
+      // Update SVT extended state
+      if (hasSVTExtended(adenState)) {
+        const ext = adenState.extended;
+        const newDose = {
+          ts: Date.now(),
+          doseMg: actualDose,
+          doseMgKg: actualDose / weightKg,
+          doseNumber,
+          rapidPush,
+          flushGiven,
+        };
+        const newChecklist = [...ext.checklistCompleted];
+        // Check for correct dosing (within 20% of recommended)
+        const expectedDose = doseNumber === 1 ? 0.1 * weightKg : 0.2 * weightKg;
+        const doseTolerance = expectedDose * 0.2;
+        if (Math.abs(actualDose - expectedDose) <= doseTolerance && !newChecklist.includes("adenosine_correct_dose")) {
+          newChecklist.push("adenosine_correct_dose");
+        }
+
+        const converted = !isFirstDose; // Second dose converts
+        runtime.scenarioEngine.updateExtended({
+          ...ext,
+          adenosineDoses: [...ext.adenosineDoses, newDose],
+          totalAdenosineMg: ext.totalAdenosineMg + actualDose,
+          converted,
+          conversionMethod: converted ? (doseNumber === 1 ? "adenosine_first" : "adenosine_second") : undefined,
+          conversionTs: converted ? Date.now() : undefined,
+          currentRhythm: converted ? "sinus" : "svt",
+          phase: converted ? "converted" : ext.phase,
+          phaseEnteredAt: converted ? Date.now() : ext.phaseEnteredAt,
+          checklistCompleted: newChecklist,
+          bonusesEarned: rapidPush && flushGiven && !ext.bonusesEarned.includes("proper_flush")
+            ? [...ext.bonusesEarned, "proper_flush"]
+            : ext.bonusesEarned,
+          timelineEvents: [
+            ...ext.timelineEvents,
+            { ts: Date.now(), type: "treatment", description: `Adenosine ${actualDose} mg (dose #${doseNumber})${converted ? " - CONVERTED" : ""}` },
+          ],
+        });
+
+        // If converted, update vitals/rhythm to sinus
+        if (converted) {
+          const convertedPhase = SVT_PHASES.find((p) => p.id === "converted");
+          if (convertedPhase) {
+            runtime.scenarioEngine.hydrate({
+              vitals: convertedPhase.vitalsTarget,
+              exam: convertedPhase.examFindings,
+              rhythmSummary: convertedPhase.rhythmSummary,
+            });
+          }
+        }
+      }
       break;
     }
     case "amiodarone": {
@@ -1866,10 +2131,69 @@ function handleTreatment(
     case "sync_cardioversion": {
       // Synchronized cardioversion: 0.5-1 J/kg, may increase to 2 J/kg
       const joulesOrdered = joules ?? Math.round(0.5 * weightKg);
-      delta.hr = -80; // Convert rhythm
+      const cvState = runtime.scenarioEngine.getState();
       runtime.scenarioEngine.updateIntervention("defibPads", { placed: true });
-      nurseResponse = `Synchronized cardioversion at ${joulesOrdered} J delivered. That's ${(joulesOrdered / weightKg).toFixed(1)} J/kg. Patient sedated.`;
-      techResponse = "Shock delivered... watching rhythm... ";
+
+      // Check if patient was sedated for SVT
+      let wasSedated = true;
+      if (hasSVTExtended(cvState)) {
+        wasSedated = cvState.extended.sedationGiven;
+      }
+
+      if (!wasSedated) {
+        nurseResponse = `Synchronized cardioversion at ${joulesOrdered} J delivered. That's ${(joulesOrdered / weightKg).toFixed(1)} J/kg. She felt that! We should have sedated first.`;
+        techResponse = "Shock delivered... she's crying but... rhythm converting!";
+      } else {
+        nurseResponse = `Synchronized cardioversion at ${joulesOrdered} J delivered. That's ${(joulesOrdered / weightKg).toFixed(1)} J/kg. Patient sedated.`;
+        techResponse = "Shock delivered... watching rhythm... she's converting!";
+      }
+
+      delta.hr = -150; // Convert to sinus ~90
+
+      // Update SVT extended state
+      if (hasSVTExtended(cvState)) {
+        const ext = cvState.extended;
+        const cvAttempt = {
+          ts: Date.now(),
+          joules: joulesOrdered,
+          joulesPerKg: joulesOrdered / weightKg,
+          synchronized: true,
+          sedated: wasSedated,
+          sedationAgent: ext.sedationAgent,
+        };
+
+        runtime.scenarioEngine.updateExtended({
+          ...ext,
+          cardioversionAttempts: [...ext.cardioversionAttempts, cvAttempt],
+          converted: true,
+          conversionMethod: "cardioversion",
+          conversionTs: Date.now(),
+          currentRhythm: "sinus",
+          phase: "converted",
+          phaseEnteredAt: Date.now(),
+          flags: {
+            ...ext.flags,
+            unsedatedCardioversion: !wasSedated,
+          },
+          penaltiesIncurred: !wasSedated && !ext.penaltiesIncurred.includes("unsedated_cardioversion")
+            ? [...ext.penaltiesIncurred, "unsedated_cardioversion"]
+            : ext.penaltiesIncurred,
+          timelineEvents: [
+            ...ext.timelineEvents,
+            { ts: Date.now(), type: "treatment", description: `Synchronized cardioversion ${joulesOrdered} J${!wasSedated ? " (UNSEDATED!)" : ""} - CONVERTED` },
+          ],
+        });
+
+        // Update to converted phase vitals
+        const convertedPhase = SVT_PHASES.find((p) => p.id === "converted");
+        if (convertedPhase) {
+          runtime.scenarioEngine.hydrate({
+            vitals: convertedPhase.vitalsTarget,
+            exam: convertedPhase.examFindings,
+            rhythmSummary: convertedPhase.rhythmSummary,
+          });
+        }
+      }
       break;
     }
     case "defibrillation":
@@ -1894,6 +2218,24 @@ function handleTreatment(
       runtime.scenarioEngine.updateIntervention("monitor", { leads: true });
       nurseResponse = "Patient on the cardiac monitor. Leads attached.";
       techResponse = "Monitor on. Displaying rhythm strip.";
+
+      // Update SVT extended state
+      const monState = runtime.scenarioEngine.getState();
+      if (hasSVTExtended(monState)) {
+        const ext = monState.extended;
+        runtime.scenarioEngine.updateExtended({
+          ...ext,
+          monitorOn: true,
+          monitorOnTs: Date.now(),
+          checklistCompleted: ext.checklistCompleted.includes("continuous_monitoring")
+            ? ext.checklistCompleted
+            : [...ext.checklistCompleted, "continuous_monitoring"],
+          timelineEvents: [
+            ...ext.timelineEvents,
+            { ts: Date.now(), type: "intervention", description: "Cardiac monitor attached" },
+          ],
+        });
+      }
       break;
     }
     case "ng_tube":

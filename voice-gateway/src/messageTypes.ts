@@ -98,7 +98,8 @@ export type PatientScenarioId =
   | "cyanotic_spell"
   | "kawasaki"
   | "coarctation_shock"
-  | "arrhythmogenic_syncope";
+  | "arrhythmogenic_syncope"
+  | "teen_svt_complex_v1";
 
 export type DebriefTurn = {
   role: "doctor" | "patient";
