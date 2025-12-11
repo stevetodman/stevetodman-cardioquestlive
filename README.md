@@ -168,6 +168,14 @@ Env for gateway (in `voice-gateway/.env`):
 - Client automatically refreshes token once and retries; on repeated failure, shows "Sign back in to use voice"
 - For local dev, set `ALLOW_INSECURE_VOICE_WS=true` to skip verification (shows warning in UI)
 
+**Voice event logging & alerts** (frontend, in `.env.local`):
+- `VITE_VOICE_LOG_SINK_URL` (optional) - URL to POST redacted voice events (errors, fallbacks, recoveries). Supports any endpoint that accepts JSON, including:
+  - Slack incoming webhook: `https://hooks.slack.com/services/T.../B.../xxx`
+  - PagerDuty Events API: `https://events.pagerduty.com/v2/enqueue`
+  - Custom log aggregator endpoint
+- If not set, production builds log redacted events to `console.warn` for server-side log aggregation.
+- Spike detection: alerts when >5 errors/fallbacks occur within 1 minute (currently logs to console; plug in webhook for real alerts).
+
 Mic access: allow microphone for `127.0.0.1` in your browser, then tap **Re-check mic** in participant view.
 
 **Common local gotchas**

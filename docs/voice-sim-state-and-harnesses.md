@@ -161,7 +161,7 @@ All interventions are shared between presenter and participant views.
 
 **High Priority**:
 - Live OPENAI_API_KEY smoke testing
-- Configure alert target for voice event spikes (Slack/PagerDuty webhook URL)
+- Set `VITE_VOICE_LOG_SINK_URL` in production (see README for Slack/PagerDuty examples)
 
 **Medium Priority**:
 - Budget guardrail live testing (soft/hard thresholds)
