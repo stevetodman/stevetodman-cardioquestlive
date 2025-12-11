@@ -527,6 +527,7 @@ class VoiceGatewayClient {
             vitals: msg.vitals,
             exam: (msg as any).exam,
             examAudio: (msg as any).examAudio,
+            interventions: (msg as any).interventions,
             telemetry: (msg as any).telemetry,
             rhythmSummary: (msg as any).rhythmSummary,
             telemetryWaveform: (msg as any).telemetryWaveform,

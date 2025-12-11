@@ -128,6 +128,28 @@ const simStateSchema = z
         })
       )
       .optional(),
+    interventions: z
+      .object({
+        iv: z
+          .object({
+            location: z.string(),
+            gauge: z.number().optional(),
+            fluidsRunning: z.boolean().optional(),
+            fluidType: z.string().optional(),
+          })
+          .optional(),
+        oxygen: z
+          .object({
+            type: z.string(),
+            flowRateLpm: z.number().optional(),
+          })
+          .optional(),
+        defibPads: z.object({ placed: z.boolean() }).optional(),
+        monitor: z.object({ leads: z.boolean() }).optional(),
+        ngTube: z.object({ placed: z.boolean() }).optional(),
+        foley: z.object({ placed: z.boolean() }).optional(),
+      })
+      .optional(),
     telemetry: z.boolean().optional(),
     rhythmSummary: z.string().optional(),
     telemetryWaveform: z.array(z.number()).optional(),
@@ -146,11 +168,11 @@ const simStateSchema = z
       .array(
         z.object({
           id: z.string(),
-          type: z.enum(["vitals", "ekg", "labs", "imaging", "cardiac_exam", "lung_exam", "general_exam"]),
+          type: z.enum(["vitals", "ekg", "labs", "imaging", "cardiac_exam", "lung_exam", "general_exam", "iv_access"]),
           status: z.enum(["pending", "complete"]),
           result: z
             .object({
-              type: z.enum(["vitals", "ekg", "labs", "imaging", "cardiac_exam", "lung_exam", "general_exam"]),
+              type: z.enum(["vitals", "ekg", "labs", "imaging", "cardiac_exam", "lung_exam", "general_exam", "iv_access"]),
               hr: z.number().optional(),
               bp: z.string().optional(),
               rr: z.number().optional(),

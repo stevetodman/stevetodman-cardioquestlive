@@ -1460,7 +1460,7 @@ function broadcastSimState(
     vitals: validated.vitals ?? {},
     exam: hasAnyExam ? gatedExam : {},
     examAudio: gatedExamAudio,
-    interventions: (state as any).interventions,
+    interventions: (validated as any).interventions,
     telemetry: validated.telemetry,
     rhythmSummary: validated.rhythmSummary,
     telemetryWaveform: validated.telemetryWaveform,
@@ -1489,6 +1489,7 @@ function broadcastSimState(
   // - Vitals if they ordered vitals OR telemetry is on (continuous monitoring)
   // - Telemetry/rhythm if they ordered EKG or turned on telemetry
   // - Exam findings only if they ordered specific exam types (same as presenter)
+  // - Interventions (IV, oxygen, etc.) always visible once placed
   const participantState = {
     type: "sim_state" as const,
     sessionId,
@@ -1499,6 +1500,8 @@ function broadcastSimState(
     // Exam available based on specific exam orders (reuse gated exam from above)
     exam: hasAnyExam ? gatedExam : {},
     examAudio: gatedExamAudio,
+    // Interventions always visible (they can see the IV, oxygen, etc. on the patient)
+    interventions: (validated as any).interventions,
     // Telemetry/rhythm only if EKG ordered or telemetry enabled
     telemetry: hasTelemetryEnabled,
     rhythmSummary: (hasEkgOrder || hasTelemetryEnabled) ? validated.rhythmSummary : undefined,

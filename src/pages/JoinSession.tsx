@@ -980,7 +980,7 @@ export default function JoinSession() {
         </div>
       )}
 
-      {showExam && simState?.exam && (
+      {showExam && simState?.exam && Object.values(simState.exam).some(v => v) && (
         <ExamFindingsPanel
           exam={simState.exam}
           examAudio={simState.examAudio}

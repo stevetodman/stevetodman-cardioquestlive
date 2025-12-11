@@ -29,10 +29,11 @@ Real-time simulation state management and testing harnesses for the voice gatewa
 
 **State Broadcasting** (`voice-gateway/src/index.ts`):
 - `sim_state` WebSocket message with full simulation data
-- **Presenter view**: All vitals, orders, telemetry, exam findings
-- **Participant view**: Only ordered data (vitals, EKG, exam audio)
+- **Presenter view**: All vitals, orders, telemetry, exam findings, interventions
+- **Participant view**: Only ordered data (vitals, EKG, exam audio after request)
 - Telemetry waveform generation
 - Auscultation audio clips (scenario-specific)
+- Interventions tracking (IV, oxygen, defib pads, monitor, NG tube, foley)
 
 **Frontend**:
 - Presenter: Stage/vitals chips, freeze/unfreeze, force reply, skip stage, live captions
@@ -66,10 +67,32 @@ GW_URL=ws://localhost:8081/ws/voice npm run ws:harness
 2. Start frontend: `npm run dev` (root)
 3. Open presenter + participant views
 4. Verify:
-   - Presenter sees full vitals/rhythm/orders
-   - Participant only sees data after ordering it
+   - Presenter sees full vitals/rhythm/orders/interventions
+   - Participant only sees data after ordering it (exam, EKG, etc.)
    - Exam audio plays on participant device (AirPods)
    - Stage transitions update rhythm appropriately
+   - IV and other interventions appear on patient figure after order completes
+
+### Interventions Flow
+
+Interventions (IV, oxygen, defib pads, etc.) follow a unified flow:
+
+```
+Order placed → orders.ts processes → updateIntervention() called
+    → state.interventions updated → broadcastSimState()
+    → VoiceGatewayClient receives sim_state with interventions
+    → PatientStatusOutline renders intervention indicators
+```
+
+**Supported interventions**:
+- `iv`: IV access with location, gauge, fluid type
+- `oxygen`: O2 delivery (nasal cannula, mask, etc.) with flow rate
+- `defibPads`: Defibrillation pads placement
+- `monitor`: Cardiac monitor leads
+- `ngTube`: Nasogastric tube
+- `foley`: Urinary catheter
+
+All interventions are shared between presenter and participant views.
 
 ### Age-Based HR Thresholds (PALS)
 

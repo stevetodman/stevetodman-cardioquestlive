@@ -56,10 +56,12 @@ Two mutually exclusive modes (`presenterMode.ts`):
 - `peds_myocarditis_silent_crash_v1`: Fulminant myocarditis with shock staging
 
 ### Orders System
-- EKG: 90-120s delay, tech acknowledgment
-- CXR: 180-240s delay
-- Duplicate detection: "Still working on current EKG"
-- Viewers: EkgViewer (Muse-like), CxrViewer (PACS-like)
+- **Order types**: vitals, ekg, labs, imaging, cardiac_exam, lung_exam, general_exam, iv_access
+- **Timing**: EKG 90-120s delay, CXR 180-240s delay, exams instant
+- **Tech acknowledgment**: NPC confirms order receipt
+- **Duplicate detection**: "Still working on current EKG"
+- **Viewers**: EkgViewer (Muse-like), CxrViewer (PACS-like)
+- **Interventions**: IV orders update `state.interventions`, rendered on patient figure
 
 ### Voice Gateway
 - WebSocket at `/ws/voice`
@@ -67,8 +69,10 @@ Two mutually exclusive modes (`presenterMode.ts`):
 - Characters: patient, parent, nurse, tech, consultant
 
 ### State Visibility
-- **Presenter**: Full state (vitals, rhythm, all orders)
+- **Presenter**: Full state (vitals, rhythm, all orders, interventions)
 - **Participant**: Only ordered data (exam, EKG after request)
+- **Exam gating**: Exam findings only visible after corresponding exam order completes
+- **Interventions**: Shared between presenter and participant (IV, O2, defib pads, monitor, NG, foley)
 
 ### Gamification & Scoring
 - **Scoring formula**: `100 × streak_bonus × time_bonus`
@@ -101,7 +105,9 @@ Two mutually exclusive modes (`presenterMode.ts`):
 | `src/hooks/useIndividualScores.ts` | Individual leaderboard with inactive status |
 | `voice-gateway/src/index.ts` | WebSocket server |
 | `voice-gateway/src/sim/scenarioEngine.ts` | Scenario state machine |
-| `voice-gateway/src/orders.ts` | Order timers, duplicate detection |
+| `voice-gateway/src/orders.ts` | Order timers, duplicate detection, interventions |
+| `voice-gateway/src/validators.ts` | Zod schemas for sim_state, interventions |
+| `voice-gateway/src/messageTypes.ts` | OrderType, ClientToServerMessage types |
 
 ## Component Patterns
 

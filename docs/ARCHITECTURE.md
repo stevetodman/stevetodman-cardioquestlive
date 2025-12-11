@@ -84,6 +84,41 @@ This guide is a quick map for developers joining the project. It highlights wher
   - **Physiology engine**: `sim/physiologyEngine.ts` - Deterministic rules for complex scenarios (fluid overload, inotrope response, intubation collapse).
 - **Tests**: `npm run test:gateway` runs gateway/unit behavior; page tests cover basic presenter flows; rules tests via `npm run test:rules` (or `test:rules:ports` with env overrides if ports are blocked).
 
+## Interventions system
+
+Physical interventions applied to the patient are tracked in `state.interventions` and rendered on the patient figure.
+
+### Supported interventions
+| Intervention | Schema | Example |
+|-------------|--------|---------|
+| IV access | `{ location, gauge?, fluidsRunning?, fluidType? }` | `{ location: "right_ac", gauge: 22 }` |
+| Oxygen | `{ type, flowRateLpm? }` | `{ type: "nasal_cannula", flowRateLpm: 2 }` |
+| Defib pads | `{ placed: boolean }` | `{ placed: true }` |
+| Monitor | `{ leads: boolean }` | `{ leads: true }` |
+| NG tube | `{ placed: boolean }` | `{ placed: true }` |
+| Foley | `{ placed: boolean }` | `{ placed: true }` |
+
+### Data flow
+1. **Order placed**: Learner requests "IV access" via voice command or order
+2. **Gateway processes**: `orders.ts` schedules order, updates `state.interventions` via `updateIntervention()`
+3. **State broadcast**: `broadcastSimState()` includes validated `interventions` field
+4. **Client receives**: `VoiceGatewayClient.ts` passes `interventions` to sim state listeners
+5. **UI renders**: `PatientStatusOutline` component shows intervention indicators on patient figure
+
+### Order types
+```typescript
+type OrderType = "vitals" | "ekg" | "labs" | "imaging"
+               | "cardiac_exam" | "lung_exam" | "general_exam" | "iv_access";
+```
+
+### Exam visibility gating
+Exam findings (general, cardio, lungs, perfusion, neuro) are only shown after the learner orders the corresponding exam:
+- `cardiac_exam` → reveals `exam.cardio` + heart audio
+- `lung_exam` → reveals `exam.lungs` + lung audio
+- `general_exam` → reveals `exam.general`, `exam.perfusion`, `exam.neuro`
+
+Both presenter and participant views gate exam data behind completed orders.
+
 ## Complex scenarios architecture
 
 The `peds_myocarditis_silent_crash` scenario introduces a new architecture pattern for high-fidelity simulations:

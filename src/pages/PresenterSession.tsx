@@ -486,7 +486,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
         detail: `${th.treatmentType}${th.note ? `: ${th.note}` : ""}`,
       });
     });
-    if (simState?.exam) {
+    if (simState?.exam && Object.values(simState.exam).some(v => v)) {
       items.push({
         id: `exam-${simState.stageId}-${Date.now()}`,
         ts: Date.now(),
@@ -1799,7 +1799,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                   Voice fallback active (text mode)
                 </span>
               )}
-              {simState.exam && (
+              {simState.exam && Object.values(simState.exam).some(v => v) && (
                 <div className="bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-2 w-full">
                   <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold mb-1">
                     <span>Exam</span>
