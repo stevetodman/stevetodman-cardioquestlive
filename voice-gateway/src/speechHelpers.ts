@@ -4,12 +4,8 @@ import { CharacterId } from "./messageTypes";
 function parseNurseRequest(utterance: string): { response: string; action?: string } | null {
   const text = utterance.toLowerCase();
 
-  // IV placement
-  if (/\b(iv|line|access)\b/.test(text) && /(place|start|get|put|establish)/.test(text)) {
-    const gauge = /22|24/.test(text) ? text.match(/22|24/)?.[0] : "22";
-    const site = /hand/.test(text) ? "right hand" : /arm/.test(text) ? "right AC" : /foot/.test(text) ? "right foot" : "right hand";
-    return { response: `${gauge} gauge IV placed in ${site}. Good blood return, flushing well.`, action: `IV access established: ${gauge}g in ${site}` };
-  }
+  // IV placement - DON'T handle here; let orderParser extract gauge/site and pass to IV order handler
+  // This prevents duplicate/conflicting nurse responses (e.g., "20 gauge... twenty-two")
 
   // Vitals
   if (/vitals|blood pressure|bp|hr|pulse|oxygen|spo2|o2 sat/.test(text)) {

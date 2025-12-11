@@ -1409,7 +1409,7 @@ function broadcastSimState(
     stageIds?: string[];
     scenarioId?: string;
     findings?: string[];
-    orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging" | "cardiac_exam" | "lung_exam" | "general_exam"; status: "pending" | "complete"; result?: OrderResult; completedAt?: number }[];
+    orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging" | "cardiac_exam" | "lung_exam" | "general_exam" | "iv_access"; status: "pending" | "complete"; result?: OrderResult; completedAt?: number }[];
     ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
     telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
     treatmentHistory?: { ts: number; treatmentType: string; note?: string }[];
@@ -1426,7 +1426,31 @@ function broadcastSimState(
   const scenarioId = (validated.scenarioId ?? getScenarioForSession(sessionId)) as PatientScenarioId;
   const examAudio = getAuscultationClips(scenarioId, validated.stageId);
 
-  // Full state for presenters - they see everything for monitoring
+  // Check completed orders to determine what everyone can see
+  // Exam data is gated for BOTH presenters and participants until ordered
+  const completedOrders = (validated.orders ?? []).filter(o => o.status === "complete");
+  const hasCardiacExam = completedOrders.some(o => o.type === "cardiac_exam");
+  const hasLungExam = completedOrders.some(o => o.type === "lung_exam");
+  const hasGeneralExam = completedOrders.some(o => o.type === "general_exam");
+  const hasAnyExam = hasCardiacExam || hasLungExam || hasGeneralExam;
+
+  // Build partial exam based on what was ordered (for all users)
+  const gatedExam: typeof validated.exam = {};
+  if (hasGeneralExam && validated.exam?.general) gatedExam.general = validated.exam.general;
+  if ((hasCardiacExam || hasGeneralExam) && validated.exam?.cardio) gatedExam.cardio = validated.exam.cardio;
+  if ((hasLungExam || hasGeneralExam) && validated.exam?.lungs) gatedExam.lungs = validated.exam.lungs;
+  if (hasGeneralExam && validated.exam?.perfusion) gatedExam.perfusion = validated.exam.perfusion;
+  if (hasGeneralExam && validated.exam?.neuro) gatedExam.neuro = validated.exam.neuro;
+  if (hasCardiacExam && validated.exam?.heartAudioUrl) gatedExam.heartAudioUrl = validated.exam.heartAudioUrl;
+  if (hasLungExam && validated.exam?.lungAudioUrl) gatedExam.lungAudioUrl = validated.exam.lungAudioUrl;
+
+  // Gated exam audio based on ordered exams
+  const gatedExamAudio = hasAnyExam ? examAudio.filter(a =>
+    (hasCardiacExam && a.type === "heart") ||
+    (hasLungExam && a.type === "lung")
+  ) : [];
+
+  // Full state for presenters - they see everything EXCEPT exam is gated until ordered
   const fullState = {
     type: "sim_state" as const,
     sessionId,
@@ -1434,8 +1458,8 @@ function broadcastSimState(
     stageIds: validated.stageIds,
     scenarioId,
     vitals: validated.vitals ?? {},
-    exam: validated.exam ?? {},
-    examAudio,
+    exam: hasAnyExam ? gatedExam : {},
+    examAudio: gatedExamAudio,
     interventions: (state as any).interventions,
     telemetry: validated.telemetry,
     rhythmSummary: validated.rhythmSummary,
@@ -1456,32 +1480,15 @@ function broadcastSimState(
   // Send full state to presenters
   sessionManager.broadcastToPresenters(sessionId, fullState);
 
-  // For participants: only show vitals/telemetry/exam if they've explicitly ordered them
-  // Check completed orders to determine what participant can see
-  const completedOrders = (validated.orders ?? []).filter(o => o.status === "complete");
+  // For participants: additional gating for vitals/telemetry
   const hasVitalsOrder = completedOrders.some(o => o.type === "vitals");
   const hasEkgOrder = completedOrders.some(o => o.type === "ekg");
-  const hasCardiacExam = completedOrders.some(o => o.type === "cardiac_exam");
-  const hasLungExam = completedOrders.some(o => o.type === "lung_exam");
-  const hasGeneralExam = completedOrders.some(o => o.type === "general_exam");
-  const hasAnyExam = hasCardiacExam || hasLungExam || hasGeneralExam;
   const hasTelemetryEnabled = validated.telemetry === true;
-
-  // Build partial exam based on what was ordered
-  const partialExam: typeof validated.exam = {};
-  if (hasGeneralExam && validated.exam?.general) partialExam.general = validated.exam.general;
-  if ((hasCardiacExam || hasGeneralExam) && validated.exam?.cardio) partialExam.cardio = validated.exam.cardio;
-  if ((hasLungExam || hasGeneralExam) && validated.exam?.lungs) partialExam.lungs = validated.exam.lungs;
-  if (hasGeneralExam && validated.exam?.perfusion) partialExam.perfusion = validated.exam.perfusion;
-  if (hasGeneralExam && validated.exam?.neuro) partialExam.neuro = validated.exam.neuro;
-  // Audio URLs: cardiac exam reveals heart audio, lung exam reveals lung audio
-  if (hasCardiacExam && validated.exam?.heartAudioUrl) partialExam.heartAudioUrl = validated.exam.heartAudioUrl;
-  if (hasLungExam && validated.exam?.lungAudioUrl) partialExam.lungAudioUrl = validated.exam.lungAudioUrl;
 
   // Participants only see:
   // - Vitals if they ordered vitals OR telemetry is on (continuous monitoring)
   // - Telemetry/rhythm if they ordered EKG or turned on telemetry
-  // - Exam findings only if they ordered specific exam types
+  // - Exam findings only if they ordered specific exam types (same as presenter)
   const participantState = {
     type: "sim_state" as const,
     sessionId,
@@ -1489,12 +1496,9 @@ function broadcastSimState(
     scenarioId,
     // Vitals revealed when ordered or telemetry on
     vitals: (hasVitalsOrder || hasTelemetryEnabled) ? (validated.vitals ?? {}) : {},
-    // Exam available based on specific exam orders
-    exam: hasAnyExam ? partialExam : {},
-    examAudio: hasAnyExam ? examAudio.filter(a =>
-      (hasCardiacExam && a.type === "heart") ||
-      (hasLungExam && a.type === "lung")
-    ) : [],
+    // Exam available based on specific exam orders (reuse gated exam from above)
+    exam: hasAnyExam ? gatedExam : {},
+    examAudio: gatedExamAudio,
     // Telemetry/rhythm only if EKG ordered or telemetry enabled
     telemetry: hasTelemetryEnabled,
     rhythmSummary: (hasEkgOrder || hasTelemetryEnabled) ? validated.rhythmSummary : undefined,
@@ -1795,29 +1799,31 @@ function handleTreatment(
     }
     case "iv":
     case "iv_access": {
+      // Use the delayed order system for IV placement
       const ivLocation = (payload?.location as string) ?? "right_ac";
       const ivGauge = (payload?.gauge as number) ?? 22;
-      runtime.scenarioEngine.updateIntervention("iv", {
-        location: ivLocation as any,
-        gauge: ivGauge,
-        fluidsRunning: false,
-      });
-      nurseResponse = `${ivGauge} gauge IV placed in ${ivLocation.replace(/_/g, " ")}. Good blood return, flushing well.`;
+      const ivOrderedBy = payload?.orderedBy
+        ? { id: (payload.orderedBy as any).id ?? "unknown", name: (payload.orderedBy as any).name ?? "Unknown", role: (payload.orderedBy as any).role ?? "presenter" as const }
+        : { id: "system", name: "System", role: "presenter" as const };
 
-      // Update SVT extended state
-      const ivState = runtime.scenarioEngine.getState();
-      if (hasSVTExtended(ivState)) {
-        const ext = ivState.extended;
-        runtime.scenarioEngine.updateExtended({
-          ...ext,
-          ivAccess: true,
-          ivAccessTs: Date.now(),
-          timelineEvents: [
-            ...ext.timelineEvents,
-            { ts: Date.now(), type: "intervention", description: `IV access established (${ivGauge}g ${ivLocation.replace(/_/g, " ")})` },
-          ],
-        });
+      const orderResult = handleOrder(sessionId, "iv_access", ivOrderedBy, { gauge: ivGauge, location: ivLocation });
+
+      if (orderResult.success) {
+        // Update SVT extended state to track that IV was ordered (completion updates ivAccess)
+        const ivState = runtime.scenarioEngine.getState();
+        if (hasSVTExtended(ivState)) {
+          const ext = ivState.extended;
+          runtime.scenarioEngine.updateExtended({
+            ...ext,
+            timelineEvents: [
+              ...ext.timelineEvents,
+              { ts: Date.now(), type: "intervention", description: `IV access ordered (${ivGauge}g ${ivLocation.replace(/_/g, " ")})` },
+            ],
+          });
+        }
       }
+      // Order handler broadcasts nurse ack, so skip here
+      nurseResponse = "";
       break;
     }
     case "position":

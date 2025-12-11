@@ -2,7 +2,7 @@ export type ClientRole = "presenter" | "participant";
 
 export type CharacterId = "patient" | "parent" | "nurse" | "tech" | "consultant" | "imaging";
 
-export type OrderType = "vitals" | "ekg" | "labs" | "imaging" | "cardiac_exam" | "lung_exam" | "general_exam";
+export type OrderType = "vitals" | "ekg" | "labs" | "imaging" | "cardiac_exam" | "lung_exam" | "general_exam" | "iv_access";
 
 export type OrderResult = {
   type: OrderType;

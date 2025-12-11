@@ -1904,6 +1904,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                     event: inject.payload.eventType,
                     ...inject.payload,
                   });
+                  setCopyToast(`Inject sent: ${inject.label}`);
                 }}
                 disabled={gatewayStatus.state !== "ready"}
                 compact

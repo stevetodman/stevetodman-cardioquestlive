@@ -11,7 +11,7 @@ import { OrderResult } from "./messageTypes";
 // Types
 // ============================================================================
 
-export type OrderType = "vitals" | "ekg" | "labs" | "imaging" | "cardiac_exam" | "lung_exam" | "general_exam";
+export type OrderType = "vitals" | "ekg" | "labs" | "imaging" | "cardiac_exam" | "lung_exam" | "general_exam" | "iv_access";
 
 export interface OrderedBy {
   id: string;
@@ -28,6 +28,11 @@ export interface Order {
   expectedCompletionAt?: number; // For pending orders - when timer will fire
   completedAt?: number;
   result?: OrderResult;
+  // IV-specific params
+  ivParams?: {
+    gauge: number;
+    location: string;
+  };
 }
 
 export type OrderDeps = {
@@ -55,6 +60,9 @@ function getOrderDelay(orderType: OrderType): number {
     case "labs":
       // 2-3 minutes for draw + send
       return 120_000 + Math.floor(Math.random() * 60_000);
+    case "iv_access":
+      // 45-75 seconds (find vein, prep site, place catheter)
+      return 45_000 + Math.floor(Math.random() * 30_000);
     case "cardiac_exam":
     case "lung_exam":
     case "general_exam":
@@ -75,6 +83,8 @@ function getNurseAcknowledgment(orderType: OrderType): string {
       return "Drawing labs now. Results in about 10-15 minutes.";
     case "vitals":
       return "Rechecking vitals now.";
+    case "iv_access":
+      return "Got it, starting an IV. Give me a minute to find a good vein.";
     case "cardiac_exam":
     case "lung_exam":
     case "general_exam":
@@ -93,6 +103,8 @@ function getStillWorkingMessage(orderType: OrderType): string {
       return "X-ray tech is still setting up. Almost ready.";
     case "labs":
       return "Labs were just sent. Still waiting on results.";
+    case "iv_access":
+      return "Still working on the IV. Almost got it.";
     default:
       return "Still working on that order.";
   }
@@ -144,7 +156,12 @@ export function clearPendingOrders(): void {
 // Order Creation & Resolution
 // ============================================================================
 
-function makeOrder(type: OrderType, orderedBy: OrderedBy, delayMs: number): Order {
+function makeOrder(
+  type: OrderType,
+  orderedBy: OrderedBy,
+  delayMs: number,
+  ivParams?: { gauge: number; location: string }
+): Order {
   const now = Date.now();
   return {
     id: `order-${type}-${now}-${Math.random().toString(36).slice(2, 6)}`,
@@ -153,6 +170,7 @@ function makeOrder(type: OrderType, orderedBy: OrderedBy, delayMs: number): Orde
     orderedAt: now,
     orderedBy,
     expectedCompletionAt: now + delayMs,
+    ivParams,
   };
 }
 
@@ -192,13 +210,19 @@ export interface HandleOrderResult {
   order?: Order;
 }
 
+export interface IVOrderParams {
+  gauge?: number;
+  location?: string;
+}
+
 export function createOrderHandler(deps: OrderDeps) {
   const { ensureRuntime, sessionManager, broadcastSimState, schedule = setTimeout } = deps;
 
   return function handleOrder(
     sessionId: string,
     orderType: OrderType,
-    orderedBy?: OrderedBy
+    orderedBy?: OrderedBy,
+    ivParams?: IVOrderParams
   ): HandleOrderResult {
     const runtime = ensureRuntime(sessionId);
 
@@ -219,10 +243,15 @@ export function createOrderHandler(deps: OrderDeps) {
 
     // Calculate delay and create order
     const delayMs = getOrderDelay(orderType);
+    const resolvedIvParams = orderType === "iv_access"
+      ? { gauge: ivParams?.gauge ?? 22, location: ivParams?.location ?? "right_ac" }
+      : undefined;
     const newOrder = makeOrder(
       orderType,
-      orderedBy ?? { id: "system", name: "System", role: "presenter" }
-    , delayMs);
+      orderedBy ?? { id: "system", name: "System", role: "presenter" },
+      delayMs,
+      resolvedIvParams
+    );
 
     // Add to current orders and broadcast immediately
     // Note: existing orders may not have the new fields, so we cast and handle gracefully
@@ -238,23 +267,25 @@ export function createOrderHandler(deps: OrderDeps) {
     // Broadcast nurse acknowledgment (if not an exam)
     const ackMessage = getNurseAcknowledgment(orderType);
     if (ackMessage) {
+      // IV orders come from nurse, other orders from tech/imaging
+      const character = orderType === "iv_access" ? "nurse" : orderType === "imaging" ? "imaging" : "tech";
       sessionManager.broadcastToSession(sessionId, {
         type: "patient_state",
         sessionId,
         state: "speaking",
-        character: orderType === "imaging" ? "imaging" : "tech",
+        character,
       });
       sessionManager.broadcastToSession(sessionId, {
         type: "patient_transcript_delta",
         sessionId,
         text: ackMessage,
-        character: orderType === "imaging" ? "imaging" : "tech",
+        character,
       });
       sessionManager.broadcastToSession(sessionId, {
         type: "patient_state",
         sessionId,
         state: "idle",
-        character: orderType === "imaging" ? "imaging" : "tech",
+        character,
       });
     }
 
@@ -401,6 +432,61 @@ function completeOrder(
       sessionId,
       text: announcement,
       character: "nurse",
+    });
+  } else if (order.type === "iv_access" && order.ivParams) {
+    // Update the interventions with IV placed
+    const gauge = order.ivParams.gauge;
+    const location = order.ivParams.location;
+    const locationDisplay = location.replace(/_/g, " ");
+
+    runtime.scenarioEngine.updateIntervention("iv", {
+      location: location as any,
+      gauge,
+      fluidsRunning: false,
+    });
+
+    // Update SVT extended state if applicable (scenario has ivAccess field)
+    const ivState = runtime.scenarioEngine.getState();
+    if (ivState.extended && "ivAccess" in ivState.extended) {
+      const ext = ivState.extended as any;
+      runtime.scenarioEngine.updateExtended({
+        ...ext,
+        ivAccess: true,
+        ivAccessTs: Date.now(),
+        timelineEvents: [
+          ...(ext.timelineEvents ?? []),
+          { ts: Date.now(), type: "intervention", description: `IV access established (${gauge}g ${locationDisplay})` },
+        ],
+      });
+    }
+
+    // Announce IV completion
+    const announcement = `IV is in — ${gauge} gauge in the ${locationDisplay}. Good blood return, flushing well.`;
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_state",
+      sessionId,
+      state: "speaking",
+      character: "nurse",
+    });
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: announcement,
+      character: "nurse",
+    });
+    sessionManager.broadcastToSession(sessionId, {
+      type: "patient_state",
+      sessionId,
+      state: "idle",
+      character: "nurse",
+    });
+
+    // Re-broadcast state with updated interventions
+    const updatedState = runtime.scenarioEngine.getState();
+    broadcastSimState(sessionId, {
+      ...updatedState,
+      stageIds: runtime.scenarioEngine.getStageIds(),
+      orders: updatedOrders,
     });
   }
 

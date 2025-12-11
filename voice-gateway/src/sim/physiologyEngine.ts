@@ -671,16 +671,18 @@ export const SVT_PHYSIOLOGY_RULES: PhysiologyRule[] = [
   },
 
   // Rule 12: IV Access Established
-  {
-    id: "iv_access_confirmed",
-    name: "IV Access Confirmed",
-    conditions: [],
-    conditionLogic: "all",
-    effects: [
-      { type: "nurse_line", line: "IV is in - 20 gauge in the right AC. Good blood return.", priority: "normal" },
-    ],
-    maxTriggers: 1,
-  },
+  // DISABLED: Nurse response handled by handleOrder in index.ts to avoid duplicate/conflicting gauge responses.
+  // The order handler builds the nurse line from parsed gauge/location, e.g., "22 gauge IV placed in right hand."
+  // {
+  //   id: "iv_access_confirmed",
+  //   name: "IV Access Confirmed",
+  //   conditions: [],
+  //   conditionLogic: "all",
+  //   effects: [
+  //     { type: "nurse_line", line: "IV is in - 20 gauge in the right AC. Good blood return.", priority: "normal" },
+  //   ],
+  //   maxTriggers: 1,
+  // },
 ];
 
 /**
