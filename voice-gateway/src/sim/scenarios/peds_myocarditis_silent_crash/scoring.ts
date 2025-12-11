@@ -140,7 +140,8 @@ export const BONUS_ITEMS: BonusItem[] = [
       const cardiacOrders = state.diagnostics.filter(
         (d) => d.type === "troponin" || d.type === "bnp"
       );
-      return cardiacOrders.some((d) => d.orderedAt - (state.phaseEnteredAt || 0) <= 5 * 60 * 1000);
+      // Use scenarioStartedAt, not phaseEnteredAt (which changes on phase transitions)
+      return cardiacOrders.some((d) => d.orderedAt - state.scenarioStartedAt <= 5 * 60 * 1000);
     },
   },
   {
@@ -149,7 +150,8 @@ export const BONUS_ITEMS: BonusItem[] = [
     points: 5,
     check: (state) => {
       const ecgOrder = state.diagnostics.find((d) => d.type === "ecg");
-      return ecgOrder !== undefined && ecgOrder.orderedAt - (state.phaseEnteredAt || 0) <= 3 * 60 * 1000;
+      // Use scenarioStartedAt, not phaseEnteredAt (which changes on phase transitions)
+      return ecgOrder !== undefined && ecgOrder.orderedAt - state.scenarioStartedAt <= 3 * 60 * 1000;
     },
   },
   {

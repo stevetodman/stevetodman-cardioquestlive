@@ -276,7 +276,7 @@ export const SVT_SCORING_CONFIG = {
     },
     {
       id: "adenosine_correct_dose",
-      description: "Adenosine dosed correctly (0.1 mg/kg ±20%)",
+      description: "Adenosine dosed correctly (0.1 mg/kg ±10%)",
       points: 20,
     },
     {

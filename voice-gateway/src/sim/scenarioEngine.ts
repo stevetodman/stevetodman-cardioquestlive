@@ -1062,6 +1062,11 @@ export class ScenarioEngine {
     return this.scenario.stages.map((s) => s.id);
   }
 
+  /** Returns the full scenario definition (read-only) */
+  getScenarioDef(): ScenarioDef {
+    return this.scenario;
+  }
+
   private getExam(stageId: string, scenarioId: ScenarioId) {
     const template = examTemplates[scenarioId] ?? examTemplates.syncope;
     const isDecomp = stageId.includes("decomp") || stageId.includes("worse") || stageId.includes("support") || stageId.includes("episode");
