@@ -1,6 +1,9 @@
 /**
  * In-memory event logger for voice system observability.
  * Stores up to 50 events per session for debugging and monitoring.
+ *
+ * In production, optionally sinks redacted events to a log endpoint.
+ * Alert hook stubs warn on error/fallback rate spikes.
  */
 
 export type VoiceEventType =
@@ -9,6 +12,7 @@ export type VoiceEventType =
   | "voice_disconnected"
   | "voice_fallback"
   | "voice_recovered"
+  | "reconnect_attempt"
   | "stt_started"
   | "stt_completed"
   | "tts_started"
@@ -21,9 +25,66 @@ export type VoiceEvent = {
   error?: "tts_failed" | "stt_failed" | "openai_failed";
   detail?: string;
   sessionId?: string;
+  userRole?: "presenter" | "participant";
+};
+
+// Redacted event for prod sink (no free text/transcripts)
+type RedactedEvent = {
+  ts: number;
+  event: VoiceEventType;
+  sessionId?: string;
+  correlationId?: string;
+  userRole?: string;
+  errorCode?: string;
 };
 
 const MAX_EVENTS = 50;
+const SPIKE_WINDOW_MS = 60_000; // 1 minute window for rate detection
+const SPIKE_THRESHOLD = 5; // Alert if >5 errors in window
+
+// Environment detection (works in Vite)
+const IS_PROD = typeof import.meta !== "undefined" && (import.meta as any).env?.PROD === true;
+const LOG_SINK_URL = typeof import.meta !== "undefined" ? (import.meta as any).env?.VITE_VOICE_LOG_SINK_URL : undefined;
+
+/**
+ * Redact event for production logging - strips free text, keeps structured fields only.
+ */
+function redactEvent(event: VoiceEvent): RedactedEvent {
+  return {
+    ts: event.timestamp,
+    event: event.type,
+    sessionId: event.sessionId,
+    correlationId: event.correlationId,
+    userRole: event.userRole,
+    errorCode: event.error,
+  };
+}
+
+/**
+ * Production log sink - POSTs redacted events if VITE_VOICE_LOG_SINK_URL is set,
+ * otherwise logs to console.warn for server-side log aggregation.
+ */
+async function sinkToProd(event: VoiceEvent): Promise<void> {
+  if (!IS_PROD) return; // No-op in dev
+
+  const redacted = redactEvent(event);
+
+  if (LOG_SINK_URL) {
+    // POST to configured endpoint
+    try {
+      await fetch(LOG_SINK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(redacted),
+      });
+    } catch {
+      // Silently fail - don't let logging break the app
+    }
+  } else {
+    // Fallback: console.warn for server log aggregation
+    console.warn("[voice-sink]", JSON.stringify(redacted));
+  }
+}
 
 class VoiceEventLogger {
   private events: VoiceEvent[] = [];
