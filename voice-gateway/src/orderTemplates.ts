@@ -3,8 +3,21 @@ import { OrderResult, OrderType } from "./messageTypes";
 
 export function getOrderResultTemplate(type: OrderType, scenario: PatientScenarioId, stageId?: string): OrderResult {
   if (type === "vitals") {
-    if (scenario === "myocarditis") {
+    if (scenario === "myocarditis" || scenario === "peds_myocarditis_silent_crash_v1") {
+      // Complex myocarditis: vitals worsen with stage progression
+      const isDecomp = stageId?.includes("decomp") || stageId?.includes("crash");
+      if (isDecomp) {
+        return { type: "vitals", hr: 155, bp: "78/50", rr: 36, spo2: 91, temp: 38.4 };
+      }
       return { type: "vitals", hr: 128, bp: "94/58", rr: 24, spo2: 95, temp: 38.2 };
+    }
+    if (scenario === "teen_svt_complex_v1" || scenario === "palpitations_svt") {
+      // SVT: rapid narrow complex tachycardia ~200-220 bpm
+      const isConverted = stageId?.includes("converted") || stageId?.includes("sinus");
+      if (isConverted) {
+        return { type: "vitals", hr: 92, bp: "108/68", rr: 16, spo2: 99, temp: 98.4 };
+      }
+      return { type: "vitals", hr: 218, bp: "98/62", rr: 22, spo2: 98, temp: 98.6 };
     }
     if (scenario === "exertional_syncope_hcm") {
       return { type: "vitals", hr: 118, bp: "104/62", rr: 18, spo2: 99, temp: 98.6 };
@@ -18,52 +31,71 @@ export function getOrderResultTemplate(type: OrderType, scenario: PatientScenari
     return { type: "vitals", hr: 102, bp: "112/68", rr: 18, spo2: 99, temp: 98.4 };
   }
   if (type === "ekg") {
+    // SVT scenarios (simple and complex)
+    const isSVT = scenario === "palpitations_svt" || scenario === "teen_svt_complex_v1";
+    const isConverted = stageId?.includes("converted") || stageId?.includes("sinus");
+    // Myocarditis scenarios (simple and complex)
+    const isMyocarditis = scenario === "myocarditis" || scenario === "peds_myocarditis_silent_crash_v1";
+    const isDecomp = stageId?.includes("decomp") || stageId?.includes("crash");
+
     return {
       type: "ekg",
       summary:
-        scenario === "palpitations_svt"
-          ? "Narrow regular tachycardia ~180 bpm, possible RP>PR."
+        isSVT
+          ? isConverted
+            ? "Sinus rhythm ~90 bpm; normal intervals; no ectopy post-conversion."
+            : "Narrow regular tachycardia ~220 bpm, no discernible P waves; RP<PR pattern."
           : scenario === "syncope"
           ? "Sinus rhythm ~96 bpm, borderline QTc."
-          : scenario === "myocarditis"
-          ? "Sinus tachycardia ~125 bpm, diffuse low voltage; nonspecific ST-T changes."
+          : isMyocarditis
+          ? isDecomp
+            ? "Sinus tachycardia ~150 bpm; low voltage; ST depression; frequent PVCs."
+            : "Sinus tachycardia ~125 bpm, diffuse low voltage; nonspecific ST-T changes."
           : scenario === "exertional_syncope_hcm"
           ? "Sinus rhythm ~105 bpm; LVH with deep narrow Q waves in inferolateral leads, repolarization changes."
           : scenario === "ductal_shock"
           ? "Sinus tachycardia; possible RV strain pattern."
-        : scenario === "cyanotic_spell"
+          : scenario === "cyanotic_spell"
           ? "Right axis, RVH; no acute ischemic changes."
           : "Sinus rhythm, occasional PACs, nonspecific ST/T changes.",
       imageUrl:
-        scenario === "palpitations_svt"
-          ? "/images/ekg/ekg-svt.png"
-          : scenario === "myocarditis"
+        isSVT
+          ? isConverted ? "/images/ekg/ekg-baseline.png" : "/images/ekg/ekg-svt.png"
+          : isMyocarditis
           ? "/images/ekg/ekg-myocarditis.png"
           : scenario === "exertional_syncope_hcm"
           ? "/images/ekg/ekg-hcm.png"
           : scenario === "ductal_shock"
           ? "/images/ekg/ekg-ductal.png"
-        : scenario === "cyanotic_spell"
+          : scenario === "cyanotic_spell"
           ? "/images/ekg/ekg-cyanotic.png"
           : "/images/ekg/ekg-baseline.png",
       meta:
-        scenario === "palpitations_svt"
-          ? { rate: "~180 bpm narrow regular", intervals: "RP>PR possible", axis: "Normal" }
-        : scenario === "exertional_syncope_hcm"
+        isSVT
+          ? isConverted
+            ? { rate: "~90 bpm sinus", intervals: "Normal", axis: "Normal" }
+            : { rate: "~220 bpm narrow regular", intervals: "RP<PR pattern", axis: "Normal" }
+          : scenario === "exertional_syncope_hcm"
           ? { rate: "~105 bpm", intervals: "Normal", axis: "Left; LVH with Qs" }
-        : scenario === "myocarditis"
-          ? { rate: "~125 bpm", intervals: "PR/QRS normal", axis: "Low voltage diffuse" }
-        : scenario === "ductal_shock"
+          : isMyocarditis
+          ? isDecomp
+            ? { rate: "~150 bpm", intervals: "PR normal; PVCs", axis: "Low voltage; ST changes" }
+            : { rate: "~125 bpm", intervals: "PR/QRS normal", axis: "Low voltage diffuse" }
+          : scenario === "ductal_shock"
           ? { rate: "~180 bpm", intervals: "Normal", axis: "Rightward" }
-        : scenario === "cyanotic_spell"
+          : scenario === "cyanotic_spell"
           ? { rate: "~150 bpm", intervals: "Normal", axis: "Right axis; RVH" }
           : { rate: "~95 bpm", intervals: "Normal", axis: "Normal" },
-      abnormal: scenario === "palpitations_svt" ? "Narrow tachy ~180" : undefined,
+      abnormal: isSVT && !isConverted ? "Narrow complex tachycardia ~220" : isMyocarditis ? "Low voltage; possible PVCs" : undefined,
       nextAction:
-        scenario === "palpitations_svt"
-          ? "Consider vagal/adenosine if unstable; capture strip."
-          : scenario === "myocarditis"
-          ? "Monitor rhythm; consider troponin/echo if not already."
+        isSVT
+          ? isConverted
+            ? "Monitor for recurrence; consider cardiology follow-up."
+            : "Consider vagal maneuvers first; adenosine if persistent; sync cardioversion if unstable."
+          : isMyocarditis
+          ? isDecomp
+            ? "Urgent ICU; inotropes/diuretics; consider ECMO evaluation."
+            : "Monitor rhythm; consider troponin/echo if not already."
           : scenario === "ductal_shock"
           ? "Support perfusion; ensure prostaglandin/ICU consult."
           : scenario === "cyanotic_spell"
@@ -72,19 +104,22 @@ export function getOrderResultTemplate(type: OrderType, scenario: PatientScenari
     };
   }
   if (type === "labs") {
-    const isDecomp = stageId?.includes("decomp");
+    const isDecomp = stageId?.includes("decomp") || stageId?.includes("crash");
     const isShock = stageId?.includes("shock");
     const isImproving = stageId?.includes("improving") || stageId?.includes("support");
+    const isSVT = scenario === "palpitations_svt" || scenario === "teen_svt_complex_v1";
+    const isMyocarditis = scenario === "myocarditis" || scenario === "peds_myocarditis_silent_crash_v1";
+
     return {
       type: "labs",
       summary:
         scenario === "syncope"
           ? "CBC normal; electrolytes normal; troponin negative; glucose normal."
-        : scenario === "palpitations_svt"
-          ? "CBC normal; electrolytes normal; TSH pending."
-        : scenario === "myocarditis"
+        : isSVT
+          ? "CBC normal; electrolytes normal; TSH pending; troponin negative."
+        : isMyocarditis
           ? isDecomp
-            ? "Troponin markedly elevated; BNP high; CRP/ESR elevated; lactate mild; electrolytes normal."
+            ? "Troponin markedly elevated; BNP high (>2000); CRP/ESR elevated; lactate 3.2; electrolytes normal."
             : isImproving
             ? "Troponin trending down; BNP improving; CRP/ESR elevated."
             : "Troponin elevated; BNP elevated; CRP/ESR elevated; electrolytes normal; lactate normal."
@@ -108,8 +143,8 @@ export function getOrderResultTemplate(type: OrderType, scenario: PatientScenari
       abnormal:
         scenario === "kawasaki"
           ? "Inflammatory markers high"
-          : scenario === "myocarditis"
-          ? "Troponin/BNP elevated"
+          : isMyocarditis
+          ? isDecomp ? "Troponin/BNP markedly elevated; lactate elevated" : "Troponin/BNP elevated"
           : scenario === "ductal_shock"
           ? "Lactate elevated"
           : scenario === "cyanotic_spell"
@@ -118,26 +153,35 @@ export function getOrderResultTemplate(type: OrderType, scenario: PatientScenari
       nextAction:
         scenario === "kawasaki"
           ? "Start IVIG/ASA if criteria met; echo follow-up."
-          : scenario === "myocarditis"
-          ? "Consider ICU support; diuresis/inotrope per status; repeat troponin."
+          : isMyocarditis
+          ? isDecomp
+            ? "Urgent ICU; inotropes/diuretics; consider ECMO evaluation."
+            : "Consider ICU support; diuresis/inotrope per status; repeat troponin."
           : scenario === "ductal_shock"
           ? "Bolus if needed; maintain ductal patency; correct glucose."
           : scenario === "cyanotic_spell"
           ? "Treat spell (knee-chest/O2); plan for definitive repair."
+          : isSVT
+          ? "Check electrolytes/TSH; cardiology follow-up."
           : undefined,
     };
   }
+  // Imaging fallback (CXR/echo)
+  const isSVT = scenario === "palpitations_svt" || scenario === "teen_svt_complex_v1";
+  const isMyocarditis = scenario === "myocarditis" || scenario === "peds_myocarditis_silent_crash_v1";
+  const isDecomp = stageId?.includes("decomp") || stageId?.includes("crash");
+
   return {
     type: "imaging",
     summary:
-      scenario === "palpitations_svt"
-        ? "CXR normal silhouette; no cardiomegaly; clear lungs."
+      isSVT
+        ? "CXR normal silhouette; no cardiomegaly; clear lungs. Echo: structurally normal heart."
         : scenario === "syncope"
           ? "CXR clear; normal heart size; no effusion."
-        : scenario === "myocarditis"
-          ? stageId?.includes("decomp")
-            ? "CXR cardiomegaly with pulmonary edema; echo: depressed function."
-            : "CXR mild cardiomegaly with pulmonary vascular congestion; echo: LV function mildly reduced."
+        : isMyocarditis
+          ? isDecomp
+            ? "CXR cardiomegaly with pulmonary edema; echo: severely depressed LV function (EF 25-30%)."
+            : "CXR mild cardiomegaly with pulmonary vascular congestion; echo: LV function mildly reduced (EF 40-45%)."
       : scenario === "kawasaki"
         ? "CXR clear; echo: possible coronary ectasia; small pericardial effusion in some cases."
       : scenario === "exertional_syncope_hcm"
@@ -154,8 +198,8 @@ export function getOrderResultTemplate(type: OrderType, scenario: PatientScenari
         ? "CXR cardiomegaly; possible rib notching unlikely in infant; echo: severe coarctation with gradient, poor distal flow."
       : "CXR normal; no acute process; no cardiomegaly.",
     abnormal:
-      scenario === "myocarditis"
-        ? "Cardiomegaly/pulmonary edema"
+      isMyocarditis
+        ? isDecomp ? "Severe cardiomegaly/pulmonary edema; EF 25-30%" : "Cardiomegaly/pulmonary congestion"
         : scenario === "kawasaki"
         ? "Coronary ectasia/effusion possible"
         : scenario === "ductal_shock"
@@ -166,8 +210,10 @@ export function getOrderResultTemplate(type: OrderType, scenario: PatientScenari
         ? "Boot-shaped heart"
         : undefined,
     nextAction:
-      scenario === "myocarditis"
-        ? "Consider ICU, inotrope/diuresis; cardiology consult."
+      isMyocarditis
+        ? isDecomp
+          ? "Urgent ICU; inotropes/diuretics; consider ECMO evaluation."
+          : "Consider ICU, inotrope/diuresis; cardiology consult."
         : scenario === "kawasaki"
         ? "Start/continue IVIG/ASA; cardiology follow-up."
         : scenario === "ductal_shock"
@@ -176,6 +222,8 @@ export function getOrderResultTemplate(type: OrderType, scenario: PatientScenari
         ? "Stabilize perfusion; surgical consult for repair."
         : scenario === "cyanotic_spell"
         ? "Treat spell; plan for cath/surgery."
+        : isSVT
+        ? "Cardiology follow-up; consider EP study for recurrent SVT."
         : undefined,
   };
 }

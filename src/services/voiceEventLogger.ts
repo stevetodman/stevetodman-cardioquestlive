@@ -229,6 +229,7 @@ class VoiceEventLogger {
 
   clear() {
     this.events = [];
+    this.lastAlertAt = 0; // Reset alert debounce for clean state
     this.notifyListeners();
   }
 

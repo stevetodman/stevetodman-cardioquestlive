@@ -13,7 +13,7 @@ import { PatientScenarioId } from "./patientCase";
 import { analyzeTranscript, analyzeComplexScenario, type ComplexScenarioId } from "./debriefAnalyzer";
 import { DebriefTurn } from "./messageTypes";
 import { RealtimePatientClient } from "./sim/realtimePatientClient";
-import { InMemoryEventLog } from "./sim/eventLog";
+import { createEventLog } from "./sim/eventLog";
 import { ScenarioEngine } from "./sim/scenarioEngine";
 import { ToolGate } from "./sim/toolGate";
 import { ToolIntent, Interventions, hasSVTExtended, hasMyocarditisExtended, SVTExtendedState } from "./sim/types";
@@ -32,7 +32,7 @@ import { getAuscultationClips } from "./data/auscultation";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
-const eventLog = new InMemoryEventLog();
+const eventLog = createEventLog();
 const lastCommandAt: Map<string, number> = new Map();
 const realtimeModel = process.env.OPENAI_REALTIME_MODEL || "gpt-4o-mini-realtime-preview";
 const realtimeApiKey = process.env.OPENAI_API_KEY || "";
