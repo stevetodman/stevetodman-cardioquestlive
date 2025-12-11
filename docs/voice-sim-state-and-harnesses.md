@@ -158,6 +158,63 @@ All interventions are shared between presenter and participant views.
 - Redacted sink: POSTs to `VITE_VOICE_LOG_SINK_URL` in production (or console.warn fallback)
 - In-memory buffer (50 events) with subscriber pattern for UI debugging
 
+### Complex Scenarios & Scoring
+
+Two advanced scenarios with full scoring and AI-powered debrief:
+
+**Available Scenarios**:
+- `teen_svt_complex_v1`: 14-year-old with SVT, PALS algorithm (vagal → adenosine → cardioversion)
+- `peds_myocarditis_silent_crash_v1`: 10-year-old with fulminant myocarditis, cardiogenic shock management
+
+**Running Scenarios Locally**:
+```bash
+cd voice-gateway && npm run build
+npm run scenario teen_svt_complex_v1
+npm run scenario peds_myocarditis_silent_crash_v1
+```
+
+**Scoring System**:
+| Component | Points |
+|-----------|--------|
+| Base score | 50 |
+| Checklist items (5) | +10 each (max 50) |
+| Bonuses | +5 to +20 each |
+| Penalties | -10 to -20 each |
+| **Pass threshold** | 4/5 checklist items |
+
+**Grading**:
+| Points | Grade |
+|--------|-------|
+| 90-100 | A |
+| 80-89 | B |
+| 70-79 | C |
+| 60-69 | D |
+| <60 or failed | F |
+
+**SVT Checklist** (need 4/5):
+1. Ordered 12-lead ECG
+2. Attempted vagal maneuvers before adenosine
+3. Adenosine dosed correctly (0.1 mg/kg ±10%)
+4. Patient on monitor during treatment
+5. Reassured patient/parent
+
+**Myocarditis Checklist** (need 4/5):
+1. Recognized cardiac etiology (troponin/BNP/ECG)
+2. Avoided fluid overload (≤40 mL/kg)
+3. Called PICU within 10 min of decompensation
+4. Safe intubation (ketamine + pressor ready)
+5. Consulted cardiology
+
+**Debrief System** (`voice-gateway/src/debriefAnalyzer.ts`):
+- AI-powered analysis of transcript + scoring data
+- Generates: summary, strengths, opportunities, teaching points
+- Timeline with positive/negative event classification
+- Full report exportable via "Copy Report" button
+
+**UI Components**:
+- `ComplexDebriefPanel.tsx`: Modal with grade, checklist, bonuses/penalties, timeline
+- Grade badge with color coding (A=emerald, B=green, C=yellow, D=orange, F=red)
+
 ### Remaining Work
 
 **High Priority**:

@@ -53,6 +53,32 @@ import { GamificationControls, ScenarioSnapshotCard, PresenterHeader } from "../
 import { VoiceDebugPanel } from "../components/presenter/VoiceDebugPanel";
 import { SectionLabel } from "../components/ui";
 
+/** Small elapsed timer that updates every second. */
+function ElapsedTimer({ startTime }: { startTime: number }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    // Initial calculation
+    setElapsed(Math.floor((Date.now() - startTime) / 1000));
+
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [startTime]);
+
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+  const display = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+
+  return (
+    <span className="px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-800 font-mono text-[11px] text-slate-300">
+      {display}
+    </span>
+  );
+}
+
 export default function PresenterSession() {
   const { sessionId } = useParams();
   const [presenterMode, setPresenterMode] = usePresenterMode();
@@ -1784,6 +1810,9 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
               <span className="px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-800">
                 Stage: {simState.stageId || "unknown"}
               </span>
+              {simState.scenarioStartedAt && (
+                <ElapsedTimer startTime={simState.scenarioStartedAt} />
+              )}
               <span className="px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-800 text-[11px] text-slate-300">
                 Findings revealed: {simState.findings?.length ?? 0}
               </span>

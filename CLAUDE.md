@@ -56,13 +56,21 @@ Two mutually exclusive modes (`presenterMode.ts`):
 - `teen_svt_complex_v1`: PALS SVT algorithm (vagal → adenosine → cardioversion)
 - `peds_myocarditis_silent_crash_v1`: Fulminant myocarditis with shock staging
 
-### Complex Scenario Debrief
+### Complex Scenario Scoring & Debrief
 When `analyze_transcript` is called for SVT or myocarditis scenarios:
 - Gateway detects complex scenario via `scenarioId` and `extendedState`
 - Runs deterministic scoring (checklist 4/5 to pass, bonuses, penalties)
 - Generates AI summary via `analyzeComplexScenario` in `debriefAnalyzer.ts`
 - Broadcasts `complex_debrief_result` with grade (A-F), timeline, feedback
 - Presenter sees `ComplexDebriefPanel` modal with full debrief
+
+**Scoring Formula**:
+- Base: 50 pts + Checklist (10 pts each, max 50) + Bonuses - Penalties
+- Pass: 4/5 checklist items required
+- Grades: A (90+), B (80-89), C (70-79), D (60-69), F (<60 or failed checklist)
+
+**SVT Checklist**: ECG ordered, vagal attempted, adenosine ±10%, monitor on, patient reassured
+**Myocarditis Checklist**: Cardiac markers, fluids ≤40mL/kg, PICU timely, safe intubation, cardiology consult
 
 ### Orders System
 - **Order types**: vitals, ekg, labs, imaging, cardiac_exam, lung_exam, general_exam, iv_access
