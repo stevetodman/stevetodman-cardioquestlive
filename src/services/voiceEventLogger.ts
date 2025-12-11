@@ -89,6 +89,7 @@ async function sinkToProd(event: VoiceEvent): Promise<void> {
 class VoiceEventLogger {
   private events: VoiceEvent[] = [];
   private listeners: Set<(events: VoiceEvent[]) => void> = new Set();
+  private lastAlertAt: number = 0;
 
   log(event: Omit<VoiceEvent, "timestamp">) {
     const fullEvent: VoiceEvent = {
@@ -101,49 +102,100 @@ class VoiceEventLogger {
       this.events = this.events.slice(-MAX_EVENTS);
     }
     this.notifyListeners();
+
+    // Sink to prod (no-op in dev)
+    sinkToProd(fullEvent);
+
+    // Check for spike and trigger alert hook
+    if (event.type === "voice_error" || event.type === "voice_fallback") {
+      this.checkErrorSpike();
+    }
+  }
+
+  /**
+   * Alert hook stub - triggers when error/fallback rate exceeds threshold.
+   * TODO: Replace with real alerting (PagerDuty, Slack webhook, etc.)
+   */
+  private checkErrorSpike() {
+    const now = Date.now();
+    const windowStart = now - SPIKE_WINDOW_MS;
+
+    // Count errors/fallbacks in the last minute
+    const recentErrors = this.events.filter(
+      (e) =>
+        e.timestamp >= windowStart &&
+        (e.type === "voice_error" || e.type === "voice_fallback")
+    ).length;
+
+    // Debounce alerts to once per minute
+    if (recentErrors >= SPIKE_THRESHOLD && now - this.lastAlertAt > SPIKE_WINDOW_MS) {
+      this.lastAlertAt = now;
+      // Stub alert - in prod this could POST to Slack/PagerDuty
+      console.warn(
+        `[voice-alert] ERROR SPIKE DETECTED: ${recentErrors} errors/fallbacks in last minute`
+      );
+      // TODO: Implement real alert delivery here
+    }
   }
 
   logError(
     error: "tts_failed" | "stt_failed" | "openai_failed",
     correlationId?: string,
-    detail?: string
+    detail?: string,
+    sessionId?: string,
+    userRole?: "presenter" | "participant"
   ) {
     this.log({
       type: "voice_error",
       error,
       correlationId,
       detail,
+      sessionId,
+      userRole,
     });
   }
 
-  logFallback(correlationId?: string) {
+  logFallback(correlationId?: string, sessionId?: string, userRole?: "presenter" | "participant") {
     this.log({
       type: "voice_fallback",
       correlationId,
+      sessionId,
+      userRole,
       detail: "Voice service degraded, using text fallback",
     });
   }
 
-  logRecovered(correlationId?: string) {
+  logRecovered(correlationId?: string, sessionId?: string) {
     this.log({
       type: "voice_recovered",
       correlationId,
+      sessionId,
       detail: "Voice service recovered",
     });
   }
 
-  logConnected(sessionId?: string, correlationId?: string) {
+  logConnected(sessionId?: string, correlationId?: string, userRole?: "presenter" | "participant") {
     this.log({
       type: "voice_connected",
       sessionId,
       correlationId,
+      userRole,
     });
   }
 
-  logDisconnected(detail?: string) {
+  logDisconnected(detail?: string, sessionId?: string) {
     this.log({
       type: "voice_disconnected",
       detail,
+      sessionId,
+    });
+  }
+
+  logReconnect(attempt: number, sessionId?: string) {
+    this.log({
+      type: "reconnect_attempt",
+      sessionId,
+      detail: `Reconnect attempt ${attempt}`,
     });
   }
 
