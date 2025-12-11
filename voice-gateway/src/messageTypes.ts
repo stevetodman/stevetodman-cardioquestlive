@@ -112,6 +112,7 @@ export type ServerToClientMessage =
       type: "joined";
       sessionId: string;
       role: ClientRole;
+      insecureMode?: boolean;
     }
   | {
       type: "participant_state";

@@ -4,7 +4,9 @@ import { MicStatus } from "../services/VoicePatientService";
 import { VoiceStatusBadgeProps } from "../components/VoiceStatusBadge";
 import { VoiceState } from "../types";
 
-export interface SimplifiedVoiceState extends VoiceStatusBadgeProps {}
+export interface SimplifiedVoiceState extends VoiceStatusBadgeProps {
+  insecureMode?: boolean;
+}
 
 interface SimplifiedVoiceStateOptions {
   voice: VoiceState;
@@ -14,6 +16,7 @@ interface SimplifiedVoiceStateOptions {
   userId: string | null;
   queueCount?: number;
   mockStatus?: "ready" | "waiting" | "unavailable" | "active";
+  insecureMode?: boolean;
 }
 
 export function useSimplifiedVoiceState({
@@ -24,8 +27,10 @@ export function useSimplifiedVoiceState({
   userId,
   queueCount = 0,
   mockStatus,
+  insecureMode = false,
 }: SimplifiedVoiceStateOptions): SimplifiedVoiceState {
   return useMemo(() => {
+    const baseInsecure = insecureMode;
     if (mockStatus) {
       if (mockStatus === "ready") return { status: "ready", message: "Ready to speak", detail: "Mock voice ready" };
       if (mockStatus === "waiting")
@@ -50,11 +55,19 @@ export function useSimplifiedVoiceState({
       };
     }
 
+    if (connectionStatus.state === "error" && connectionStatus.reason === "unauthorized") {
+      return {
+        status: "unavailable",
+        message: "Sign back in to use voice",
+        detail: "Your session has expired. Please sign back in.",
+      };
+    }
+
     if (connectionStatus.state === "disconnected" || connectionStatus.state === "error") {
       return {
         status: "unavailable",
         message: "Voice disconnected",
-        detail: "Reconnecting to voice system...",
+        detail: connectionStatus.reason === "reconnecting" ? "Reconnecting to voice system..." : "Connection lost",
       };
     }
 
@@ -115,6 +128,7 @@ export function useSimplifiedVoiceState({
       status: "ready",
       message: "Ready to speak",
       detail: "Hold the button below to ask the patient a question",
+      insecureMode: baseInsecure,
     };
-  }, [voice, connectionStatus.state, micStatus, fallbackActive, userId, queueCount]);
+  }, [voice, connectionStatus.state, connectionStatus.reason, micStatus, fallbackActive, userId, queueCount, insecureMode]);
 }

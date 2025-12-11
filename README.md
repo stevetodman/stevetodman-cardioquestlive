@@ -160,6 +160,14 @@ Env for gateway (in `voice-gateway/.env`):
 - `OPENAI_TTS_MODEL` (default `gpt-4o-mini-tts`)
 - `OPENAI_TTS_VOICE` (default `alloy`)
 - `PORT` (default `8081`)
+- `ALLOW_INSECURE_VOICE_WS` (default `false`) - set to `true` for local dev to skip Firebase token verification
+
+**Voice WebSocket authentication**:
+- In production (default), the `join` message requires a valid Firebase ID token
+- On invalid/expired token: server sends `{ type: "error", message: "unauthorized_token" }` and closes
+- Client automatically refreshes token once and retries; on repeated failure, shows "Sign back in to use voice"
+- For local dev, set `ALLOW_INSECURE_VOICE_WS=true` to skip verification (shows warning in UI)
+
 Mic access: allow microphone for `127.0.0.1` in your browser, then tap **Re-check mic** in participant view.
 
 **Common local gotchas**

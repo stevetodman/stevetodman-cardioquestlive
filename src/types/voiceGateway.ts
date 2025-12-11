@@ -38,7 +38,7 @@ export type VoiceConnectionState = "disconnected" | "connecting" | "ready" | "er
 
 export type VoiceConnectionStatus = {
   state: VoiceConnectionState;
-  reason?: "socket_error" | "closed" | "unsupported" | "unknown" | "connection_lost" | "max_retries" | "reconnecting";
+  reason?: "socket_error" | "closed" | "unsupported" | "unknown" | "connection_lost" | "max_retries" | "reconnecting" | "unauthorized";
   lastChangedAt?: number;
 };
 
@@ -122,6 +122,7 @@ export type ServerToClientMessage =
       type: "joined";
       sessionId: string;
       role: ClientRole;
+      insecureMode?: boolean;
     }
   | {
       type: "participant_state";

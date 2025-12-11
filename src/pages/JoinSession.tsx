@@ -117,6 +117,7 @@ export default function JoinSession() {
     state: "disconnected",
     lastChangedAt: Date.now(),
   });
+  const [voiceInsecureMode, setVoiceInsecureMode] = useState(false);
   const [simState, setSimState] = useState<{
     stageId: string;
     vitals: Record<string, unknown>;
@@ -477,7 +478,12 @@ export default function JoinSession() {
   }, [sessionId, userId, targetCharacter]);
 
   useEffect(() => {
-    const unsub = voiceGatewayClient.onStatus((status) => setConnectionStatus(status));
+    const unsub = voiceGatewayClient.onStatus((status) => {
+      setConnectionStatus(status);
+      if (status.state === "ready") {
+        setVoiceInsecureMode(voiceGatewayClient.isInsecureMode());
+      }
+    });
     return () => unsub();
   }, []);
 
@@ -705,6 +711,7 @@ export default function JoinSession() {
     userId,
     queueCount: waitingCount,
     mockStatus: mockVoice as any,
+    insecureMode: voiceInsecureMode,
   });
   const showTextInput = fallbackActive || preferTextInput || voiceStatusData.status === "unavailable";
   const holdDisabled =
@@ -786,17 +793,24 @@ export default function JoinSession() {
   };
 
   const voiceStatusBar = (
-    <div className="w-full flex items-center gap-3">
-      <div className="flex-1 min-w-0">
-        <VoiceStatusBadge
-          status={voiceStatusData.status}
-          message={voiceStatusData.message}
-          detail={voiceStatusData.detail}
-        />
+    <div className="w-full flex flex-col gap-1">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <VoiceStatusBadge
+            status={voiceStatusData.status}
+            message={voiceStatusData.message}
+            detail={voiceStatusData.detail}
+          />
+        </div>
+        <div className="text-[11px] text-slate-400 whitespace-nowrap">
+          {waitingCount > 1 ? `${waitingCount} waiting` : waitingCount === 1 ? "1 waiting" : "Queue clear"}
+        </div>
       </div>
-      <div className="text-[11px] text-slate-400 whitespace-nowrap">
-        {waitingCount > 1 ? `${waitingCount} waiting` : waitingCount === 1 ? "1 waiting" : "Queue clear"}
-      </div>
+      {voiceStatusData.insecureMode && (
+        <div className="text-[10px] text-amber-400 bg-amber-900/30 border border-amber-700/50 rounded px-2 py-0.5">
+          ⚠️ Insecure voice WS (dev only)
+        </div>
+      )}
     </div>
   );
   const voicePanel = (voice.enabled && mockVoice !== "unavailable") ? (

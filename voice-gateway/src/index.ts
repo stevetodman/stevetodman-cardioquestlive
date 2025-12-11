@@ -117,8 +117,8 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
     }
     const authed = await verifyAuthToken(parsed.authToken, parsed.userId);
     if (!authed) {
-      send(ws, { type: "error", message: "unauthorized" });
-      logEvent("ws.auth.denied", { sessionId: parsed.sessionId, userId: parsed.userId });
+      send(ws, { type: "error", message: "unauthorized_token" });
+      logEvent("ws.auth.denied", { sessionId: parsed.sessionId, userId: parsed.userId, reason: "invalid_or_expired_token" });
       ws.close();
       return;
     }
@@ -126,7 +126,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
     ctx.sessionId = parsed.sessionId;
     ctx.role = parsed.role;
     sessionManager.addClient(parsed.sessionId, parsed.role, ws);
-    send(ws, { type: "joined", sessionId: parsed.sessionId, role: parsed.role });
+    send(ws, { type: "joined", sessionId: parsed.sessionId, role: parsed.role, insecureMode: allowInsecureWs });
     logEvent("ws.join", { sessionId: parsed.sessionId, role: parsed.role, userId: parsed.userId });
     log("Client joined", parsed.sessionId, parsed.role, parsed.userId);
     return;

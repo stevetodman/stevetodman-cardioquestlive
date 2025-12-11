@@ -61,6 +61,28 @@ npm run sim:harness
 GW_URL=ws://localhost:8081/ws/voice npm run ws:harness
 ```
 
+### Authentication
+
+**Production mode** (default): The voice WebSocket requires a valid Firebase ID token in the `join` message.
+- Client sends `{ type: "join", authToken: "<Firebase ID token>", ... }`
+- Gateway verifies token via `firebase-admin` and checks `uid` matches `userId`
+- On invalid/expired token: server sends `{ type: "error", message: "unauthorized_token" }` and closes connection
+- Client receives `unauthorized_token`, refreshes token once, and retries
+- If retry fails, client sets status to `error/unauthorized` and shows "Sign back in to use voice"
+
+**Development mode**: Set `ALLOW_INSECURE_VOICE_WS=true` in voice-gateway `.env`:
+```bash
+# voice-gateway/.env
+ALLOW_INSECURE_VOICE_WS=true
+```
+- Tokens are not verified; any `join` succeeds
+- UI shows "⚠️ Insecure voice WS (dev only)" warning
+- Useful for local dev with emulators or tunnels
+
+**Environment variables**:
+- `VITE_VOICE_GATEWAY_URL` (frontend): WebSocket URL override for tunnels, e.g. `wss://my-tunnel.trycloudflare.com/ws/voice`
+- `ALLOW_INSECURE_VOICE_WS` (gateway): Set to `true` for insecure local dev
+
 ### Manual Testing
 
 1. Start gateway: `cd voice-gateway && npm start`
@@ -72,6 +94,7 @@ GW_URL=ws://localhost:8081/ws/voice npm run ws:harness
    - Exam audio plays on participant device (AirPods)
    - Stage transitions update rhythm appropriately
    - IV and other interventions appear on patient figure after order completes
+   - In dev mode with `ALLOW_INSECURE_VOICE_WS=true`, see insecure warning banner
 
 ### Interventions Flow
 

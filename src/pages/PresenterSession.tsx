@@ -151,6 +151,7 @@ const [voiceGuideOpen, setVoiceGuideOpen] = useState<boolean>(false);
     state: "disconnected",
     lastChangedAt: Date.now(),
   });
+  const [voiceInsecureMode, setVoiceInsecureMode] = useState(false);
   const [simState, setSimState] = useState<{
     stageId: string;
     vitals: Record<string, unknown>;
@@ -1178,7 +1179,12 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
 
   // Voice gateway wiring for presenter
   useEffect(() => {
-    const unsubStatus = voiceGatewayClient.onStatus((status) => setGatewayStatus(status));
+    const unsubStatus = voiceGatewayClient.onStatus((status) => {
+      setGatewayStatus(status);
+      if (status.state === "ready") {
+        setVoiceInsecureMode(voiceGatewayClient.isInsecureMode());
+      }
+    });
     const unsubSim = voiceGatewayClient.onSimState((state) => {
       setSimState(state);
       setAvailableStages(state.stageIds ?? []);
@@ -2101,6 +2107,11 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                 >
                   {gatewayStatus.state}
                 </div>
+                {voiceInsecureMode && (
+                  <div className="text-[10px] text-amber-400 bg-amber-900/40 border border-amber-700/50 rounded px-2 py-0.5">
+                    ⚠️ Insecure WS
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={toggleVoice}

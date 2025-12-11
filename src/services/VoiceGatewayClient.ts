@@ -22,6 +22,7 @@ type SimStateListener = (state: {
   vitals: Record<string, unknown>;
   exam?: Record<string, string | undefined>;
   examAudio?: { type: "heart" | "lung"; label: string; url: string }[];
+  interventions?: Record<string, unknown>;
   telemetry?: boolean;
   rhythmSummary?: string;
   telemetryWaveform?: number[];
@@ -72,6 +73,7 @@ class VoiceGatewayClient {
   private role: ClientRole | null = null;
   private authToken: string | undefined = undefined;
   private connectionStatus: VoiceConnectionStatus = { state: "disconnected", lastChangedAt: Date.now() };
+  private insecureMode: boolean = false;
 
   // Listeners
   private patientListeners = new Set<PatientStateListener>();
@@ -95,6 +97,7 @@ class VoiceGatewayClient {
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private intentionalDisconnect: boolean = false;
   private tokenRefresher: TokenRefresher | null = null;
+  private authRetryPending: boolean = false;
 
   /**
    * Set a function to refresh the auth token before reconnecting.
@@ -123,6 +126,7 @@ class VoiceGatewayClient {
     }
 
     this.intentionalDisconnect = false;
+    this.authRetryPending = false;
     this.cleanupConnection();
 
     this.sessionId = sessionId;
@@ -130,6 +134,26 @@ class VoiceGatewayClient {
     this.displayName = displayName;
     this.role = role;
     this.authToken = authToken;
+
+    // If tokenRefresher is configured and no authToken provided, try to get one first
+    if (this.tokenRefresher && !this.authToken) {
+      this.setStatus({ state: "connecting" });
+      this.tokenRefresher()
+        .then((token) => {
+          if (token) {
+            this.authToken = token;
+            this.createConnection();
+          } else {
+            console.warn("[voice-gateway] Token refresher returned no token");
+            this.setStatus({ state: "error", reason: "unauthorized" });
+          }
+        })
+        .catch((err) => {
+          console.warn("[voice-gateway] Token refresh failed on connect", err);
+          this.setStatus({ state: "error", reason: "unauthorized" });
+        });
+      return;
+    }
 
     this.createConnection();
   }
@@ -318,6 +342,49 @@ class VoiceGatewayClient {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
+  }
+
+  /**
+   * Handle unauthorized_token error from server.
+   * Refresh token once and retry; if it fails again, set error/unauthorized and stop.
+   */
+  private async handleUnauthorizedToken() {
+    // If we already tried refreshing and still got unauthorized, give up
+    if (this.authRetryPending) {
+      console.warn("[voice-gateway] Auth retry failed - unauthorized after token refresh");
+      this.authRetryPending = false;
+      this.intentionalDisconnect = true;
+      this.cleanupConnection();
+      this.setStatus({ state: "error", reason: "unauthorized" });
+      return;
+    }
+
+    // Try to refresh token and reconnect once
+    if (this.tokenRefresher) {
+      console.debug("[voice-gateway] Unauthorized - refreshing token and retrying");
+      this.authRetryPending = true;
+      this.setStatus({ state: "connecting" });
+
+      try {
+        const newToken = await this.tokenRefresher();
+        if (newToken) {
+          this.authToken = newToken;
+          console.debug("[voice-gateway] Token refreshed, reconnecting");
+          this.cleanupConnection();
+          this.createConnection();
+          return;
+        }
+      } catch (err) {
+        console.warn("[voice-gateway] Token refresh failed", err);
+      }
+    }
+
+    // No token refresher or refresh failed - give up
+    console.warn("[voice-gateway] Cannot refresh token - unauthorized");
+    this.authRetryPending = false;
+    this.intentionalDisconnect = true;
+    this.cleanupConnection();
+    this.setStatus({ state: "error", reason: "unauthorized" });
   }
 
   /**
@@ -543,14 +610,16 @@ class VoiceGatewayClient {
       }
       case "error": {
         console.warn("Voice gateway error", msg.message);
-        // Check for auth errors - they may need token refresh
-        if (msg.message === "unauthorized") {
-          console.debug("[voice-gateway] Auth error, will refresh token on reconnect");
+        // Handle auth errors - refresh token once and retry
+        if (msg.message === "unauthorized_token") {
+          this.handleUnauthorizedToken();
         }
         break;
       }
       case "joined":
-        // Successful join - connection fully established
+        // Successful join - connection fully established, reset auth retry state
+        this.authRetryPending = false;
+        this.insecureMode = (msg as any).insecureMode === true;
         break;
       case "pong":
         this.handlePong();
@@ -627,6 +696,13 @@ class VoiceGatewayClient {
    */
   isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN && this.connectionStatus.state === "ready";
+  }
+
+  /**
+   * Check if connected in insecure mode (dev only, no auth required)
+   */
+  isInsecureMode(): boolean {
+    return this.insecureMode;
   }
 }
 
