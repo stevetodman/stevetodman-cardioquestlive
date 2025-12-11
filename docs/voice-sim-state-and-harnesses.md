@@ -128,15 +128,45 @@ All interventions are shared between presenter and participant views.
 | School (5-12y) | 70-120 | 120 | 70 | >220 |
 | Adolescent (>12y) | 60-100 | 100 | 60 | >220 |
 
+### Event Logging & Persistence
+
+**Sim State Persistence** (`voice-gateway/src/persistence.ts`):
+- `persistSimState()`: Writes sim state to Firestore `sessions/{simId}` with change detection
+- `loadSimState()`: Restores state for session recovery
+- `logSimEvent()`: Appends events to `sessions/{simId}/events` subcollection
+- Zod schema validation prevents corrupt state from breaking replay
+
+**Event Log Architecture** (`voice-gateway/src/sim/eventLog.ts`):
+```
+┌─────────────────────────────────────────────────────────┐
+│              CompositeEventLog (prod)                   │
+│  ┌─────────────────────┐  ┌──────────────────────────┐  │
+│  │  InMemoryEventLog   │  │    FirestoreEventLog     │  │
+│  │  (debug/getRecent)  │  │  (replay/persistence)    │  │
+│  └─────────────────────┘  └──────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+- `InMemoryEventLog`: Bounded buffer (5000 events) for dev debugging
+- `FirestoreEventLog`: Fire-and-forget writes to Firestore for production replay
+- `CompositeEventLog`: Combines both; used in prod when `FIREBASE_SERVICE_ACCOUNT` is set
+- `createEventLog()`: Factory that selects appropriate logger based on environment
+
+**Voice Event Logger** (`src/services/voiceEventLogger.ts`):
+- Client-side logging for voice_error, voice_fallback, voice_recovered events
+- Spike detection: alerts when >5 errors in 1-minute window
+- Redacted sink: POSTs to `VITE_VOICE_LOG_SINK_URL` in production (or console.warn fallback)
+- In-memory buffer (50 events) with subscriber pattern for UI debugging
+
 ### Remaining Work
 
 **High Priority**:
-- Firestore persistence for sim_state replay/debug
 - Live OPENAI_API_KEY smoke testing
+- Configure alert target for voice event spikes (Slack/PagerDuty webhook URL)
 
 **Medium Priority**:
 - Budget guardrail live testing (soft/hard thresholds)
-- Observability: intent approvals, stage changes, fallback events
+- HTML sanitization for AdminDeckEditor raw HTML input
 
 **Low Priority**:
 - Jest Firestore emulator integration
+- Accessibility audit for new UI components (fallback banners, debug panel)
