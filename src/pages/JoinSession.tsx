@@ -189,7 +189,10 @@ export default function JoinSession() {
     if (!trimmed) return;
     window.location.hash = `#/join/${trimmed}`;
   }, []);
-  const voice = useVoiceState(sessionId);
+  const voiceFromFirestore = useVoiceState(sessionId);
+  const [mockVoiceEnabled, setMockVoiceEnabled] = useState(false);
+  // Allow test override of voice.enabled via mockVoiceEnabled query param
+  const voice = mockVoiceEnabled ? { ...voiceFromFirestore, enabled: true } : voiceFromFirestore;
   const userDisplayName = displayName;
   useEffect(() => {
     if (!toast) return;
@@ -217,6 +220,17 @@ export default function JoinSession() {
     const mockVoiceParam = params.get("mockVoice");
     if (mockVoiceParam) {
       setMockVoice(mockVoiceParam);
+    }
+    // Test hook for mock fallback state (E2E testing)
+    const mockFallbackParam = params.get("mockFallback");
+    if (mockFallbackParam === "true") {
+      setMockVoiceEnabled(true); // Enable voice panel so banner is visible
+      setSimState({
+        stageId: "mock-fallback",
+        vitals: {},
+        fallback: true,
+        voiceFallback: true,
+      });
     }
     return () => mq.removeEventListener?.("change", handler);
   }, []);
