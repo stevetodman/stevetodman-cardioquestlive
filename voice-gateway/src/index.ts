@@ -67,9 +67,64 @@ if (allowInsecureWs && process.env.NODE_ENV === "production") {
 }
 const timingEnabled = process.env.GATEWAY_TIMING === "true";
 
+// Chaos testing guards - only enabled in non-production
+const isProduction = process.env.NODE_ENV === "production";
+const chaosLatencyMs = !isProduction ? Number(process.env.CHAOS_WS_LATENCY_MS || 0) : 0;
+const chaosDropPct = !isProduction ? Number(process.env.CHAOS_WS_DROP_PCT || 0) : 0;
+if (chaosLatencyMs > 0 || chaosDropPct > 0) {
+  log(`[chaos] Enabled: latency=${chaosLatencyMs}ms, drop=${chaosDropPct}%`);
+}
+if (isProduction && (process.env.CHAOS_WS_LATENCY_MS || process.env.CHAOS_WS_DROP_PCT)) {
+  log("[warn] Chaos testing env vars ignored in production");
+}
+
+function shouldDropMessage(): boolean {
+  if (chaosDropPct <= 0) return false;
+  return Math.random() * 100 < chaosDropPct;
+}
+
+async function applyChaoticLatency(): Promise<void> {
+  if (chaosLatencyMs <= 0) return;
+  await new Promise((res) => setTimeout(res, chaosLatencyMs));
+}
+
 const runtimes: Map<string, Runtime> = new Map();
 const scenarioTimers: Map<string, NodeJS.Timeout> = new Map();
 const hydratedSessions: Set<string> = new Set();
+// Per-session correlation IDs for tracing voice events
+const sessionCorrelationIds: Map<string, string> = new Map();
+// Sessions where voice has fallen back to text-only
+const voiceFallbackSessions: Set<string> = new Set();
+
+function generateCorrelationId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function getOrCreateCorrelationId(sessionId: string): string {
+  let corrId = sessionCorrelationIds.get(sessionId);
+  if (!corrId) {
+    corrId = generateCorrelationId();
+    sessionCorrelationIds.set(sessionId, corrId);
+  }
+  return corrId;
+}
+
+function emitVoiceError(
+  sessionId: string,
+  error: "tts_failed" | "stt_failed" | "openai_failed",
+  detail?: string
+) {
+  const correlationId = getOrCreateCorrelationId(sessionId);
+  voiceFallbackSessions.add(sessionId);
+  sessionManager.broadcastToSession(sessionId, {
+    type: "voice_error",
+    sessionId,
+    error,
+    correlationId,
+    detail,
+  });
+  logEvent("voice_error", { sessionId, error, correlationId, detail });
+}
 
 // Natural-sounding voices: coral (warm), sage (calm), ballad (expressive), verse (versatile)
 const CHARACTER_VOICE_MAP: Partial<Record<CharacterId, string>> = {
@@ -96,6 +151,13 @@ async function verifyAuthToken(authToken: string | undefined, claimedUserId: str
 }
 
 async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.RawData) {
+  // Chaos testing: random message drops and artificial latency (non-production only)
+  if (shouldDropMessage()) {
+    log("[chaos] Dropped incoming message");
+    return;
+  }
+  await applyChaoticLatency();
+
   let parsedRaw: any;
   try {
     parsedRaw = JSON.parse(raw.toString());
@@ -844,6 +906,7 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
     log("Patient reply complete", sessionId, "chars:", fullText.length);
   } catch (err) {
     logError("OpenAI force_reply error", err);
+    emitVoiceError(sessionId, "openai_failed", "OpenAI completion failed");
     sessionManager.broadcastToSession(sessionId, {
       type: "patient_state",
       sessionId,
@@ -1450,6 +1513,10 @@ function broadcastSimState(
     (hasLungExam && a.type === "lung")
   ) : [];
 
+  // Get correlationId and voiceFallback status for this session
+  const correlationId = getOrCreateCorrelationId(sessionId);
+  const voiceFallback = voiceFallbackSessions.has(sessionId);
+
   // Full state for presenters - they see everything EXCEPT exam is gated until ordered
   const fullState = {
     type: "sim_state" as const,
@@ -1466,6 +1533,8 @@ function broadcastSimState(
     telemetryWaveform: validated.telemetryWaveform,
     findings: validated.findings ?? [],
     fallback: validated.fallback,
+    voiceFallback,
+    correlationId,
     budget: validated.budget,
     orders: validated.orders,
     ekgHistory: (state as any).ekgHistory,
@@ -1508,6 +1577,8 @@ function broadcastSimState(
     telemetryWaveform: (hasEkgOrder || hasTelemetryEnabled) ? validated.telemetryWaveform : undefined,
     findings: validated.findings ?? [],
     fallback: validated.fallback,
+    voiceFallback,
+    correlationId,
     // Orders always visible (so they know status)
     orders: validated.orders,
     ekgHistory: (hasEkgOrder || hasTelemetryEnabled) ? (state as any).ekgHistory : undefined,
@@ -2383,7 +2454,14 @@ async function withRetry<T>(
     } catch (err) {
       if (i === attempts - 1) {
         logError(`${label} failed after ${attempts} attempts`, err);
-        if (sessionId) sendDegradedNotice(sessionId, `${label.toUpperCase()} temporarily unavailable.`);
+        if (sessionId) {
+          sendDegradedNotice(sessionId, `${label.toUpperCase()} temporarily unavailable.`);
+          // Emit voice_error for observability
+          const errorType = label === "tts" ? "tts_failed"
+            : label === "stt" ? "stt_failed"
+            : "openai_failed";
+          emitVoiceError(sessionId, errorType, `${label} failed after ${attempts} attempts`);
+        }
         break;
       }
       await new Promise((res) => setTimeout(res, delayMs));

@@ -48,6 +48,7 @@ import { FLOOR_AUTO_RELEASE_MS } from "../constants";
 import { PresenterModeTabs } from "../components/PresenterModeTabs";
 import { usePresenterMode } from "../hooks/usePresenterMode";
 import { GamificationControls, ScenarioSnapshotCard, PresenterHeader } from "../components/presenter";
+import { VoiceDebugPanel } from "../components/presenter/VoiceDebugPanel";
 import { SectionLabel } from "../components/ui";
 
 export default function PresenterSession() {
@@ -152,6 +153,7 @@ const [voiceGuideOpen, setVoiceGuideOpen] = useState<boolean>(false);
     lastChangedAt: Date.now(),
   });
   const [voiceInsecureMode, setVoiceInsecureMode] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
   const [simState, setSimState] = useState<{
     stageId: string;
     vitals: Record<string, unknown>;
@@ -161,6 +163,8 @@ const [voiceGuideOpen, setVoiceGuideOpen] = useState<boolean>(false);
     rhythmSummary?: string;
     telemetryWaveform?: number[];
     fallback: boolean;
+    voiceFallback?: boolean;
+    correlationId?: string;
     findings?: string[];
     budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
     scenarioId?: PatientScenarioId;
@@ -2112,6 +2116,19 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                     ⚠️ Insecure WS
                   </div>
                 )}
+                {simState?.voiceFallback && (
+                  <div className="text-[10px] text-red-400 bg-red-900/40 border border-red-700/50 rounded px-2 py-0.5">
+                    Voice degraded
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowDebugPanel(true)}
+                  className="text-[10px] text-slate-400 hover:text-slate-200 px-1.5 py-0.5 rounded border border-slate-700 hover:border-slate-600"
+                  title="Show voice debug panel"
+                >
+                  Debug
+                </button>
                 <button
                   type="button"
                   onClick={toggleVoice}
@@ -2579,6 +2596,13 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
           onClose={() => setViewingCxrOrder(null)}
         />
       )}
+
+      {/* Voice Debug Panel (presenter only) */}
+      <VoiceDebugPanel
+        isOpen={showDebugPanel}
+        onClose={() => setShowDebugPanel(false)}
+        correlationId={simState?.correlationId}
+      />
     </div>
   );
 }

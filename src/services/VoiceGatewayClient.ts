@@ -10,6 +10,7 @@ import {
   CharacterId,
 } from "../types/voiceGateway";
 import { VoiceCommandType } from "../types";
+import { voiceEventLogger } from "./voiceEventLogger";
 
 type PatientStateListener = (state: PatientState, character?: CharacterId, displayName?: string) => void;
 type TranscriptListener = (text: string) => void;
@@ -28,10 +29,17 @@ type SimStateListener = (state: {
   telemetryWaveform?: number[];
   findings?: string[];
   fallback: boolean;
+  voiceFallback?: boolean;
+  correlationId?: string;
   budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
   orders?: any[];
   ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
   telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
+}) => void;
+type VoiceErrorListener = (error: {
+  error: "tts_failed" | "stt_failed" | "openai_failed";
+  correlationId: string;
+  detail?: string;
 }) => void;
 type AudioListener = (audioUrl: string) => void;
 type DoctorUtteranceListener = (text: string, userId: string, character?: CharacterId) => void;
@@ -85,6 +93,9 @@ class VoiceGatewayClient {
   private doctorListeners = new Set<DoctorUtteranceListener>();
   private scenarioListeners = new Set<ScenarioListener>();
   private analysisListeners = new Set<AnalysisResultListener>();
+  private voiceErrorListeners = new Set<VoiceErrorListener>();
+  private voiceFallback = false;
+  private correlationId?: string;
   private lastAudioUrl: string | null = null;
 
   // Heartbeat
@@ -531,6 +542,19 @@ class VoiceGatewayClient {
     return () => this.analysisListeners.delete(cb);
   }
 
+  onVoiceError(cb: VoiceErrorListener) {
+    this.voiceErrorListeners.add(cb);
+    return () => this.voiceErrorListeners.delete(cb);
+  }
+
+  isVoiceFallback(): boolean {
+    return this.voiceFallback;
+  }
+
+  getCorrelationId(): string | undefined {
+    return this.correlationId;
+  }
+
   // ============================================================================
   // Message Handling
   // ============================================================================
@@ -586,24 +610,49 @@ class VoiceGatewayClient {
         break;
       }
       case "sim_state": {
+        // Track voiceFallback and correlationId
+        const anyMsg = msg as any;
+        if (anyMsg.correlationId) this.correlationId = anyMsg.correlationId;
+        const prevFallback = this.voiceFallback;
+        this.voiceFallback = anyMsg.voiceFallback === true;
+        // Log fallback state changes
+        if (this.voiceFallback && !prevFallback) {
+          voiceEventLogger.logFallback(this.correlationId);
+        } else if (!this.voiceFallback && prevFallback) {
+          voiceEventLogger.logRecovered(this.correlationId);
+        }
         this.simStateListeners.forEach((cb) =>
           cb({
             stageId: msg.stageId,
             stageIds: msg.stageIds,
             scenarioId: msg.scenarioId,
             vitals: msg.vitals,
-            exam: (msg as any).exam,
-            examAudio: (msg as any).examAudio,
-            interventions: (msg as any).interventions,
-            telemetry: (msg as any).telemetry,
-            rhythmSummary: (msg as any).rhythmSummary,
-            telemetryWaveform: (msg as any).telemetryWaveform,
+            exam: anyMsg.exam,
+            examAudio: anyMsg.examAudio,
+            interventions: anyMsg.interventions,
+            telemetry: anyMsg.telemetry,
+            rhythmSummary: anyMsg.rhythmSummary,
+            telemetryWaveform: anyMsg.telemetryWaveform,
             findings: msg.findings,
             fallback: msg.fallback,
+            voiceFallback: anyMsg.voiceFallback,
+            correlationId: anyMsg.correlationId,
             budget: msg.budget,
-            orders: (msg as any).orders,
-            ekgHistory: (msg as any).ekgHistory,
-            telemetryHistory: (msg as any).telemetryHistory,
+            orders: anyMsg.orders,
+            ekgHistory: anyMsg.ekgHistory,
+            telemetryHistory: anyMsg.telemetryHistory,
+          })
+        );
+        break;
+      }
+      case "voice_error": {
+        const errMsg = msg as any;
+        voiceEventLogger.logError(errMsg.error, errMsg.correlationId, errMsg.detail);
+        this.voiceErrorListeners.forEach((cb) =>
+          cb({
+            error: errMsg.error,
+            correlationId: errMsg.correlationId,
+            detail: errMsg.detail,
           })
         );
         break;

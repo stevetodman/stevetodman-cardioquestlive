@@ -13,6 +13,7 @@ interface SimplifiedVoiceStateOptions {
   connectionStatus: VoiceConnectionStatus;
   micStatus: MicStatus;
   fallbackActive: boolean;
+  voiceFallback?: boolean;
   userId: string | null;
   queueCount?: number;
   mockStatus?: "ready" | "waiting" | "unavailable" | "active";
@@ -24,6 +25,7 @@ export function useSimplifiedVoiceState({
   connectionStatus,
   micStatus,
   fallbackActive,
+  voiceFallback = false,
   userId,
   queueCount = 0,
   mockStatus,
@@ -79,6 +81,15 @@ export function useSimplifiedVoiceState({
       };
     }
 
+    // Voice service degraded (STT/TTS/OpenAI failures)
+    if (voiceFallback) {
+      return {
+        status: "unavailable",
+        message: "Voice unavailable, using text-only",
+        detail: "Voice service temporarily unavailable. You can still type questions.",
+      };
+    }
+
     if (micStatus === "blocked") {
       return {
         status: "unavailable",
@@ -130,5 +141,5 @@ export function useSimplifiedVoiceState({
       detail: "Hold the button below to ask the patient a question",
       insecureMode: baseInsecure,
     };
-  }, [voice, connectionStatus.state, connectionStatus.reason, micStatus, fallbackActive, userId, queueCount, insecureMode]);
+  }, [voice, connectionStatus.state, connectionStatus.reason, micStatus, fallbackActive, voiceFallback, userId, queueCount, insecureMode]);
 }

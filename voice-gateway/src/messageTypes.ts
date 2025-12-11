@@ -174,6 +174,8 @@ export type ServerToClientMessage =
       telemetryWaveform?: number[];
       findings?: string[];
       fallback: boolean;
+      voiceFallback?: boolean;
+      correlationId?: string;
       budget?: {
         usdEstimate?: number;
         voiceSeconds?: number;
@@ -191,4 +193,11 @@ export type ServerToClientMessage =
   | {
       type: "error";
       message: string;
+    }
+  | {
+      type: "voice_error";
+      sessionId: string;
+      error: "tts_failed" | "stt_failed" | "openai_failed";
+      correlationId: string;
+      detail?: string;
     };

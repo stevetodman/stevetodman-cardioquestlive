@@ -184,6 +184,8 @@ export type ServerToClientMessage =
       telemetryWaveform?: number[];
       findings?: string[];
       fallback: boolean;
+      voiceFallback?: boolean;
+      correlationId?: string;
       budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
       orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending" | "complete"; result?: any; completedAt?: number }[];
       ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
@@ -195,6 +197,13 @@ export type ServerToClientMessage =
   | {
       type: "error";
       message: string;
+    }
+  | {
+      type: "voice_error";
+      sessionId: string;
+      error: "tts_failed" | "stt_failed" | "openai_failed";
+      correlationId: string;
+      detail?: string;
     };
 
 export type PatientState = "idle" | "listening" | "speaking" | "error";

@@ -127,6 +127,8 @@ export default function JoinSession() {
     rhythmSummary?: string;
     telemetryWaveform?: number[];
     fallback: boolean;
+    voiceFallback?: boolean;
+    correlationId?: string;
     budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
     scenarioId?: string;
     stageIds?: string[];
@@ -708,6 +710,7 @@ export default function JoinSession() {
     connectionStatus,
     micStatus,
     fallbackActive,
+    voiceFallback: simState?.voiceFallback,
     userId,
     queueCount: waitingCount,
     mockStatus: mockVoice as any,

@@ -155,6 +155,8 @@ const simStateSchema = z
     telemetryWaveform: z.array(z.number()).optional(),
     findings: z.array(z.string()).optional(),
     fallback: z.boolean(),
+    voiceFallback: z.boolean().optional(),
+    correlationId: z.string().optional(),
     stageEnteredAt: z.number().optional(),
     budget: z
       .object({
