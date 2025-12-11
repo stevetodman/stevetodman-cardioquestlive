@@ -33,7 +33,7 @@ Real-time simulation state management and testing harnesses for the voice gatewa
 - **Participant view**: Only ordered data (vitals, EKG, exam audio after request)
 - Telemetry waveform generation
 - Auscultation audio clips (scenario-specific)
-- Interventions tracking (IV, oxygen, defib pads, monitor, NG tube, foley)
+- Interventions tracking (IV, oxygen, defib pads, monitor, NG tube, foley, ETT)
 
 **Frontend**:
 - Presenter: Stage/vitals chips, freeze/unfreeze, force reply, skip stage, live captions
@@ -114,6 +114,7 @@ Order placed → orders.ts processes → updateIntervention() called
 - `monitor`: Cardiac monitor leads
 - `ngTube`: Nasogastric tube
 - `foley`: Urinary catheter
+- `ett`: Endotracheal tube (size, depth) - auto-mapped from extended airway state
 
 All interventions are shared between presenter and participant views.
 

@@ -1562,6 +1562,17 @@ function broadcastSimState(
   const correlationId = getOrCreateCorrelationId(sessionId);
   const voiceFallback = voiceFallbackSessions.has(sessionId);
 
+  // Build interventions object, merging ETT from extended state if patient is intubated
+  const extended = (state as any).extended;
+  const baseInterventions = (validated as any).interventions || {};
+  const interventions = {
+    ...baseInterventions,
+    // Add ETT if patient is intubated (from extended airway state)
+    ...(extended?.airway?.type === "intubation" && {
+      ett: { placed: true, size: extended.airway.ettSize, depth: extended.airway.ettDepth }
+    }),
+  };
+
   // Full state for presenters - they see everything EXCEPT exam is gated until ordered
   const fullState = {
     type: "sim_state" as const,
@@ -1572,7 +1583,7 @@ function broadcastSimState(
     vitals: validated.vitals ?? {},
     exam: hasAnyExam ? gatedExam : {},
     examAudio: gatedExamAudio,
-    interventions: (validated as any).interventions,
+    interventions,
     telemetry: validated.telemetry,
     rhythmSummary: validated.rhythmSummary,
     telemetryWaveform: validated.telemetryWaveform,
@@ -1615,7 +1626,7 @@ function broadcastSimState(
     exam: hasAnyExam ? gatedExam : {},
     examAudio: gatedExamAudio,
     // Interventions always visible (they can see the IV, oxygen, etc. on the patient)
-    interventions: (validated as any).interventions,
+    interventions,
     // Telemetry/rhythm only if EKG ordered or telemetry enabled
     telemetry: hasTelemetryEnabled,
     rhythmSummary: (hasEkgOrder || hasTelemetryEnabled) ? validated.rhythmSummary : undefined,

@@ -31,6 +31,12 @@ export interface FoleyStatus {
   placed: boolean;
 }
 
+export interface ETTStatus {
+  placed: boolean;
+  size?: number; // ETT size (e.g., 6.0, 6.5, 7.0)
+  depth?: number; // Depth at lip in cm
+}
+
 export interface Interventions {
   iv?: IVStatus;
   oxygen?: OxygenStatus;
@@ -38,6 +44,7 @@ export interface Interventions {
   monitor?: MonitorStatus;
   ngTube?: NGTubeStatus;
   foley?: FoleyStatus;
+  ett?: ETTStatus;
 }
 
 interface PatientStatusOutlineProps {
@@ -50,6 +57,7 @@ const hotSpots: Record<string, { x: number; y: number }> = {
   // Head/face
   face: { x: 50, y: 18 },
   nose: { x: 50, y: 20 },
+  mouth: { x: 50, y: 24 },
   // Chest
   chest_right: { x: 62, y: 50 }, // Patient's right (viewer's left)
   chest_left: { x: 38, y: 55 },  // Patient's left (viewer's right)
@@ -185,6 +193,11 @@ export function PatientStatusOutline({ interventions, compact }: PatientStatusOu
           {interventions.foley?.placed && (
             <FoleyIcon x={hotSpots.pelvis.x} y={hotSpots.pelvis.y} />
           )}
+
+          {/* ETT / Intubation */}
+          {interventions.ett?.placed && (
+            <ETTIcon x={hotSpots.mouth.x} y={hotSpots.mouth.y} size={interventions.ett.size} />
+          )}
         </svg>
       </div>
 
@@ -214,6 +227,9 @@ export function PatientStatusOutline({ interventions, compact }: PatientStatusOu
           )}
           {interventions.foley?.placed && (
             <InterventionBadge color="rose" label="Foley" />
+          )}
+          {interventions.ett?.placed && (
+            <InterventionBadge color="orange" label={`ETT${interventions.ett.size ? ` ${interventions.ett.size}` : ""}`} />
           )}
         </div>
       )}
@@ -328,6 +344,30 @@ function FoleyIcon({ x, y }: { x: number; y: number }) {
   );
 }
 
+function ETTIcon({ x, y, size }: { x: number; y: number; size?: number }) {
+  return (
+    <g transform={`translate(${x}, ${y})`}>
+      <title>ETT{size ? ` ${size}mm` : ""} - Endotracheal Tube</title>
+      {/* Tube from mouth down to chest */}
+      <path
+        d="M 0 0 L 0 8 Q 0 12, 0 20"
+        fill="none"
+        stroke="#f97316"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+      {/* Connector/flange at mouth */}
+      <rect x="-5" y="-2" width="10" height="4" fill="#f97316" rx="1" />
+      {/* Cuff indicator (small bulge) */}
+      <ellipse cx="0" cy="16" rx="4" ry="2" fill="none" stroke="#f97316" strokeWidth="1" opacity="0.6" />
+      {/* Pulsing glow for ventilation */}
+      <circle cx="0" cy="10" r="3" fill="#f97316" opacity="0.3">
+        <animate attributeName="opacity" from="0.4" to="0.1" dur="1.5s" repeatCount="indefinite" />
+      </circle>
+    </g>
+  );
+}
+
 function InterventionBadge({ color, label }: { color: string; label: string }) {
   const colorClasses: Record<string, string> = {
     sky: "bg-sky-500/20 text-sky-300 border-sky-500/30",
@@ -336,6 +376,7 @@ function InterventionBadge({ color, label }: { color: string; label: string }) {
     cyan: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
     violet: "bg-violet-500/20 text-violet-300 border-violet-500/30",
     rose: "bg-rose-500/20 text-rose-300 border-rose-500/30",
+    orange: "bg-orange-500/20 text-orange-300 border-orange-500/30",
   };
 
   return (

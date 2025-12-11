@@ -148,6 +148,13 @@ const simStateSchema = z
         monitor: z.object({ leads: z.boolean() }).optional(),
         ngTube: z.object({ placed: z.boolean() }).optional(),
         foley: z.object({ placed: z.boolean() }).optional(),
+        ett: z
+          .object({
+            placed: z.boolean(),
+            size: z.number().optional(),
+            depth: z.number().optional(),
+          })
+          .optional(),
       })
       .optional(),
     telemetry: z.boolean().optional(),

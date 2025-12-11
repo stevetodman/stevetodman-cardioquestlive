@@ -29,14 +29,14 @@ voice-gateway/
 │   │   └── triggers/types.ts    # Shared trigger types
 │   └── orders.ts          # Order system with realistic timers
 │   └── debriefAnalyzer.ts     # Complex scenario debrief (SVT/myocarditis)
-└── __tests__/             # 183+ Jest tests
+└── __tests__/             # 200+ Jest tests
 ```
 
 ## Commands
 ```bash
 npm run dev:tunnel:clean   # Recommended: Cloudflare tunnel (iPhone testing)
 npm run dev:stack:local    # Local with Firebase emulators
-npm run test:gateway       # Voice gateway tests (183 tests)
+npm run test:gateway       # Voice gateway tests (200 tests)
 npm run build              # TypeScript + Vite build
 
 # Run scenario without WebSocket
@@ -81,7 +81,7 @@ When `analyze_transcript` is called for SVT or myocarditis scenarios:
 - **Presenter**: Full state (vitals, rhythm, all orders, interventions)
 - **Participant**: Only ordered data (exam, EKG after request)
 - **Exam gating**: Exam findings only visible after corresponding exam order completes
-- **Interventions**: Shared between presenter and participant (IV, O2, defib pads, monitor, NG, foley)
+- **Interventions**: Shared between presenter and participant (IV, O2, defib pads, monitor, NG, foley, ETT)
 
 ### Gamification & Scoring
 - **Scoring formula**: `100 × streak_bonus × time_bonus`
@@ -119,6 +119,7 @@ When `analyze_transcript` is called for SVT or myocarditis scenarios:
 | `voice-gateway/src/messageTypes.ts` | OrderType, ClientToServerMessage types |
 | `voice-gateway/src/debriefAnalyzer.ts` | Complex scenario debrief (SVT/myocarditis scoring + AI) |
 | `src/components/ComplexDebriefPanel.tsx` | Modal showing grade, checklist, timeline, feedback |
+| `src/components/PatientStatusOutline.tsx` | Patient figure with intervention indicators (IV, O2, ETT, etc.) |
 
 ## Component Patterns
 
@@ -141,7 +142,7 @@ import { LABEL_XS, CARD, BTN_PRIMARY, BADGE_SUCCESS } from "../styles/constants"
 ```
 
 ## Testing
-- `npm run test:gateway` - 183+ gateway tests
+- `npm run test:gateway` - 200+ gateway tests
 - `npm run build` - TypeScript check
 - `firebase emulators:exec` - Firestore rules tests
 
