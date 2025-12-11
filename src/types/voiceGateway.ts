@@ -18,6 +18,23 @@ export type ComplexScenarioId = "teen_svt_complex_v1" | "peds_myocarditis_silent
 
 export type CharacterId = "patient" | "parent" | "nurse" | "tech" | "consultant" | "imaging";
 
+export type OrderType = "vitals" | "ekg" | "labs" | "imaging" | "cardiac_exam" | "lung_exam" | "general_exam" | "iv_access";
+
+export type OrderResult = {
+  type: OrderType;
+  summary?: string;
+  hr?: number;
+  bp?: string;
+  rr?: number;
+  spo2?: number;
+  temp?: number;
+  imageUrl?: string;
+  meta?: { rate?: string; axis?: string; intervals?: string };
+  abnormal?: string;
+  nextAction?: string;
+  rationale?: string;
+};
+
 export const ROLE_COLORS: Record<
   CharacterId | "doctor" | "patient",
   { text: string; border: string; bg?: string }
@@ -216,7 +233,7 @@ export type ServerToClientMessage =
       voiceFallback?: boolean;
       correlationId?: string;
       budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
-      orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending" | "complete"; result?: any; completedAt?: number }[];
+      orders?: { id: string; type: OrderType; status: "pending" | "complete"; result?: OrderResult; completedAt?: number }[];
       ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
       telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
     }

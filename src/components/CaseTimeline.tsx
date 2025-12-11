@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { OrderResult, OrderType } from "../types/voiceGateway";
 
 // Timeline event types
 export type TimelineEventType = "order" | "treatment" | "ekg" | "stage" | "finding";
@@ -13,7 +14,7 @@ export interface TimelineEvent {
 }
 
 interface CaseTimelineProps {
-  orders?: { id: string; type: string; status: string; result?: any; completedAt?: number }[];
+  orders?: { id: string; type: OrderType | string; status: string; result?: OrderResult; completedAt?: number }[];
   treatmentHistory?: { ts: number; treatmentType: string; note?: string }[];
   ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
   scenarioStartedAt?: number;

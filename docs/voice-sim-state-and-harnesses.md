@@ -170,3 +170,7 @@ All interventions are shared between presenter and participant views.
 **Low Priority**:
 - Jest Firestore emulator integration
 - Accessibility audit for new UI components (fallback banners, debug panel)
+
+**Before Public Launch**:
+- Harden Firestore rules: lock `participants/{userId}` so clients can only write `displayName`/`inactive` (not `points`/`teamId`/`streak`); validate `responses` have valid `choiceIndex` and matching `sessionId`
+- Refactor god components: decompose `PresenterSession.tsx` and `JoinSession.tsx` into feature modules (voice/, orders/, scoring/, chat/)
