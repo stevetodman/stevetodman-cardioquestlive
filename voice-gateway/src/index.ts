@@ -1958,7 +1958,7 @@ function handleTreatment(
     // ===== SVT INTERVENTIONS =====
     case "vagal":
     case "vagal_maneuver": {
-      // Vagal maneuvers for SVT: ~30% success rate if HR > 200
+      // Vagal maneuvers for SVT: ~30% success rate on second attempt
       // Modified Valsalva, ice to face, or bearing down
       const currentState = runtime.scenarioEngine.getState();
       const currentHr = currentState.vitals.hr ?? 90;
@@ -1967,30 +1967,61 @@ function handleTreatment(
                          method === "modified_valsalva" ? "modified Valsalva" : "bearing down";
 
       if (currentHr > 180) {
-        // SVT likely - vagal may work (~30% chance simulated by patient state)
-        // For teaching, we make the first vagal attempt fail to demonstrate algorithm progression
-        nurseResponse = `Trying ${methodName} now... watching the monitor...`;
-        techResponse = "Rate unchanged. Vagal didn't convert her.";
-        // Small HR drop but no conversion
-        delta.hr = -5;
-        decayIntent = { type: "intent_updateVitals", delta: { hr: 5 } as any };
-        decayMs = 30000;
+        // SVT likely - vagal may work
+        // Teaching progression: first attempt fails, second attempt has 30% success
+        const previousAttempts = hasSVTExtended(currentState) ? currentState.extended.vagalAttempts : 0;
+        const vagalSucceeds = previousAttempts >= 1 && Math.random() < 0.3;
 
-        // Update SVT extended state
-        if (hasSVTExtended(currentState)) {
-          const ext = currentState.extended;
-          runtime.scenarioEngine.updateExtended({
-            ...ext,
-            vagalAttempts: ext.vagalAttempts + 1,
-            vagalAttemptTs: Date.now(),
-            checklistCompleted: ext.checklistCompleted.includes("vagal_attempted")
-              ? ext.checklistCompleted
-              : [...ext.checklistCompleted, "vagal_attempted"],
-            timelineEvents: [
-              ...ext.timelineEvents,
-              { ts: Date.now(), type: "treatment", description: `Vagal maneuver (${methodName}) attempted` },
-            ],
-          });
+        nurseResponse = `Trying ${methodName} now... watching the monitor...`;
+
+        if (vagalSucceeds) {
+          // Vagal converted the SVT!
+          techResponse = "Wait... look at that! Rate's coming down... 180... 140... 100... We're back in sinus!";
+          delta.hr = -(currentHr - 90); // Convert to sinus ~90 bpm
+          decayIntent = null; // No rebound, stay converted
+
+          if (hasSVTExtended(currentState)) {
+            const ext = currentState.extended;
+            runtime.scenarioEngine.updateExtended({
+              ...ext,
+              vagalAttempts: ext.vagalAttempts + 1,
+              vagalAttemptTs: Date.now(),
+              converted: true,
+              conversionMethod: "vagal",
+              conversionTs: Date.now(),
+              currentRhythm: "sinus",
+              checklistCompleted: ext.checklistCompleted.includes("vagal_attempted")
+                ? ext.checklistCompleted
+                : [...ext.checklistCompleted, "vagal_attempted"],
+              timelineEvents: [
+                ...ext.timelineEvents,
+                { ts: Date.now(), type: "treatment", description: `Vagal maneuver (${methodName}) - CONVERTED to sinus rhythm` },
+              ],
+            });
+          }
+        } else {
+          // Vagal failed
+          techResponse = "Rate unchanged. Vagal didn't convert her.";
+          // Small HR drop but no conversion
+          delta.hr = -5;
+          decayIntent = { type: "intent_updateVitals", delta: { hr: 5 } as any };
+          decayMs = 30000;
+
+          if (hasSVTExtended(currentState)) {
+            const ext = currentState.extended;
+            runtime.scenarioEngine.updateExtended({
+              ...ext,
+              vagalAttempts: ext.vagalAttempts + 1,
+              vagalAttemptTs: Date.now(),
+              checklistCompleted: ext.checklistCompleted.includes("vagal_attempted")
+                ? ext.checklistCompleted
+                : [...ext.checklistCompleted, "vagal_attempted"],
+              timelineEvents: [
+                ...ext.timelineEvents,
+                { ts: Date.now(), type: "treatment", description: `Vagal maneuver (${methodName}) attempted - no conversion` },
+              ],
+            });
+          }
         }
       } else {
         nurseResponse = `Heart rate is only ${currentHr}. Vagal maneuvers are for SVT rates over 180.`;

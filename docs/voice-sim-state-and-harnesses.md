@@ -165,7 +165,6 @@ All interventions are shared between presenter and participant views.
 
 **Medium Priority**:
 - Budget guardrail live testing (soft/hard thresholds)
-- HTML sanitization for AdminDeckEditor raw HTML input
 
 **Low Priority**:
 - Jest Firestore emulator integration

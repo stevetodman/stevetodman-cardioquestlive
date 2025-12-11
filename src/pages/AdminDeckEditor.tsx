@@ -43,6 +43,24 @@ function createEmptyQuestion(): Question {
   };
 }
 
+/** Detect dangerous HTML patterns that could lead to XSS. Returns list of pattern names found. */
+function detectDangerousHtml(html: string): string[] {
+  const patterns: Array<{ name: string; regex: RegExp }> = [
+    { name: "<script>", regex: /<script[\s>]/i },
+    { name: "onclick=", regex: /\bon\w+\s*=/i }, // onclick, onerror, onload, etc.
+    { name: "javascript:", regex: /javascript\s*:/i },
+    { name: "<iframe>", regex: /<iframe[\s>]/i },
+    { name: "<embed>", regex: /<embed[\s>]/i },
+    { name: "<object>", regex: /<object[\s>]/i },
+    { name: "data: URL", regex: /\bsrc\s*=\s*["']?\s*data\s*:/i },
+  ];
+  const found: string[] = [];
+  for (const p of patterns) {
+    if (p.regex.test(html)) found.push(p.name);
+  }
+  return found;
+}
+
 export default function AdminDeckEditor() {
   const [deck, setDeck] = useState<DeckData>(defaultDeck);
   const [loading, setLoading] = useState(false);
@@ -87,6 +105,12 @@ export default function AdminDeckEditor() {
   const linkedQuestion = selectedSlide?.questionId
     ? deck.questions.find((q) => q.id === selectedSlide.questionId)
     : null;
+
+  // Warn about dangerous HTML patterns in the selected slide
+  const dangerousPatterns = useMemo(
+    () => (selectedSlide ? detectDangerousHtml(selectedSlide.html) : []),
+    [selectedSlide]
+  );
 
   function updateSlide(id: string, field: SlideField, value: any) {
     setDeck((prev) => ({
@@ -574,6 +598,23 @@ export default function AdminDeckEditor() {
 
             <section className="flex-1 space-y-4">
               <h2 className="text-lg font-semibold">Slide Editor</h2>
+              {dangerousPatterns.length > 0 && (
+                <div
+                  className="rounded-lg border border-rose-600/60 bg-rose-900/20 px-4 py-3 text-xs text-rose-100"
+                  role="alert"
+                >
+                  <div className="font-semibold text-rose-300 text-sm">
+                    ⚠️ Potentially unsafe HTML detected
+                  </div>
+                  <p className="mt-1">
+                    Found: <span className="font-mono">{dangerousPatterns.join(", ")}</span>
+                  </p>
+                  <p className="mt-1 text-rose-200/80">
+                    These patterns are stripped from previews but may still execute in presenter view.
+                    Only include trusted content.
+                  </p>
+                </div>
+              )}
               {selectedSlide ? (
                 <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900 p-4">
                   <div className="flex flex-wrap gap-3 text-sm">

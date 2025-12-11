@@ -310,7 +310,9 @@ export const PATIENT_TRIGGERS: PatientTrigger[] = [
     condition: (state) => {
       if (state.adenosineDoses.length === 0) return false;
       const lastDose = state.adenosineDoses[state.adenosineDoses.length - 1];
-      return Date.now() - lastDose.ts < 30000;
+      // Adjust for paused time to handle scenario pause/resume correctly
+      const adjustedElapsed = (Date.now() - lastDose.ts) - (state.totalPausedMs ?? 0);
+      return adjustedElapsed > 0 && adjustedElapsed < 30000;
     },
     line: "Whoa... that felt so weird... like my heart stopped for a second and then... fluttered...",
     cooldownMs: 60000,

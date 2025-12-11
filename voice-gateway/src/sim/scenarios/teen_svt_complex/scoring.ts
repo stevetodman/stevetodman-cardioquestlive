@@ -71,7 +71,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
   },
   {
     id: "adenosine_correct_dose",
-    description: "Adenosine dosed correctly (0.1 mg/kg ±20%)",
+    description: "Adenosine dosed correctly (0.1 mg/kg ±10%)",
     explanation: "First dose 0.1 mg/kg IV rapid push (max 6mg), second dose 0.2 mg/kg (max 12mg)",
     isRequired: false,
     check: (state) => {
@@ -80,8 +80,8 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
         return state.converted && state.conversionMethod === "vagal";
       }
       const firstDose = state.adenosineDoses[0];
-      // 0.1 mg/kg ±20% = 0.08-0.12 mg/kg for first dose
-      return firstDose.doseMgKg >= 0.08 && firstDose.doseMgKg <= 0.12;
+      // 0.1 mg/kg ±10% = 0.09-0.11 mg/kg for first dose (stricter for teaching)
+      return firstDose.doseMgKg >= 0.09 && firstDose.doseMgKg <= 0.11;
     },
   },
   {

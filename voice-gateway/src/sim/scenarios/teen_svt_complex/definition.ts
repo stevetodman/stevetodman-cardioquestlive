@@ -62,7 +62,7 @@ export const SVT_PHASES: SVTPhaseDef[] = [
   {
     id: "svt_onset",
     name: "SVT Episode",
-    durationMinutes: 3,
+    durationMinutes: 4, // Matches time_in_phase_gte_4min_no_treatment transition
     vitalsTarget: { hr: 220, bp: "105/68", rr: 20, spo2: 98 },
     examFindings: {
       general: "Anxious teen, clutching chest, visibly uncomfortable.",
