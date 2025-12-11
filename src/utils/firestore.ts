@@ -22,9 +22,53 @@ import { db as realDb, isConfigured } from "../firebase";
 // --- Types ---
 type MockDb = { type: 'mock' };
 type MockCollection = { type: 'collection'; path: string; parentId?: string };
-type MockDoc = { type: 'doc'; path: string; id: string; collectionPath: string };
+type MockDoc = { type: 'doc'; path: string; id: string; collectionPath: string; parentId?: string };
 type MockQuery = { type: 'query'; collectionPath: string; parentId?: string; filters: Filter[] };
 type Filter = { field: string; op: string; value: any };
+
+// --- Shape Validators (mirroring firestore.rules for dev/prod parity) ---
+
+function validateSessionShape(data: any): void {
+  const required = ["createdBy", "joinCode", "slides", "questions", "currentSlideIndex", "showResults"];
+  for (const field of required) {
+    if (!(field in data)) throw new Error(`[mock-firestore] Session missing required field: ${field}`);
+  }
+  if (typeof data.createdBy !== "string") throw new Error("[mock-firestore] createdBy must be string");
+  if (typeof data.joinCode !== "string") throw new Error("[mock-firestore] joinCode must be string");
+  if (!Array.isArray(data.slides)) throw new Error("[mock-firestore] slides must be array");
+  if (!Array.isArray(data.questions)) throw new Error("[mock-firestore] questions must be array");
+  if (typeof data.currentSlideIndex !== "number") throw new Error("[mock-firestore] currentSlideIndex must be number");
+  if (typeof data.showResults !== "boolean") throw new Error("[mock-firestore] showResults must be boolean");
+}
+
+function validateResponseShape(data: any, responseId: string): void {
+  if (typeof data.userId !== "string") throw new Error("[mock-firestore] userId must be string");
+  if (typeof data.questionId !== "string") throw new Error("[mock-firestore] questionId must be string");
+  if (typeof data.choiceIndex !== "number") throw new Error("[mock-firestore] choiceIndex must be number");
+  // Deterministic ID per firestore.rules: responseId == userId + "_" + questionId
+  const expectedId = `${data.userId}_${data.questionId}`;
+  if (responseId !== expectedId) {
+    throw new Error(`[mock-firestore] Response ID mismatch: got "${responseId}", expected "${expectedId}"`);
+  }
+}
+
+function validateParticipantShape(data: any, sessionId: string): void {
+  const required = ["userId", "sessionId", "teamId", "teamName", "points", "streak", "correctCount", "incorrectCount", "createdAt"];
+  for (const field of required) {
+    if (!(field in data)) throw new Error(`[mock-firestore] Participant missing required field: ${field}`);
+  }
+  if (typeof data.userId !== "string") throw new Error("[mock-firestore] userId must be string");
+  if (data.sessionId !== sessionId) throw new Error("[mock-firestore] sessionId must match parent session");
+  if (typeof data.teamId !== "string") throw new Error("[mock-firestore] teamId must be string");
+  if (typeof data.teamName !== "string") throw new Error("[mock-firestore] teamName must be string");
+  if (typeof data.points !== "number") throw new Error("[mock-firestore] points must be number");
+  if (typeof data.streak !== "number") throw new Error("[mock-firestore] streak must be number");
+  if (typeof data.correctCount !== "number") throw new Error("[mock-firestore] correctCount must be number");
+  if (typeof data.incorrectCount !== "number") throw new Error("[mock-firestore] incorrectCount must be number");
+  if (data.role !== undefined && data.role !== "member" && data.role !== "lead") {
+    throw new Error("[mock-firestore] role must be 'member' or 'lead'");
+  }
+}
 
 // --- Storage Helpers ---
 const STORAGE_KEY = 'cq_live_db';
@@ -121,15 +165,20 @@ const mockAddDoc = async (coll: any, data: any) => {
     const store = getStore();
     const id = generateId();
     const tableName = coll.path;
-    
+
     if (!store[tableName]) store[tableName] = {};
-    
+
     const docData = { ...data, id };
     // If this is a subcollection mapping (like responses), ensure we link it
     if (coll.parentId && (tableName === 'responses' || tableName === 'participants')) {
         docData.sessionId = coll.parentId;
     }
-    
+
+    // Validate shape based on collection (mirroring firestore.rules)
+    if (tableName === "sessions") {
+        validateSessionShape(docData);
+    }
+
     store[tableName][id] = docData;
     setStore(store);
     return { id, path: `${tableName}/${id}` };
@@ -254,6 +303,16 @@ const mockSetDoc = async (docRef: any, data: any) => {
     const store = getStore();
     const tableName = docRef.collectionPath;
     if (!store[tableName]) store[tableName] = {};
+
+    // Validate shape based on collection (mirroring firestore.rules)
+    if (tableName === "sessions") {
+        validateSessionShape(data);
+    } else if (tableName === "responses") {
+        validateResponseShape(data, docRef.id);
+    } else if (tableName === "participants" && docRef.parentId) {
+        validateParticipantShape(data, docRef.parentId);
+    }
+
     store[tableName][docRef.id] = { ...data, id: docRef.id, sessionId: docRef.parentId ?? data.sessionId };
     setStore(store);
 };
