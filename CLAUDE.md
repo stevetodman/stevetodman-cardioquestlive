@@ -28,14 +28,15 @@ voice-gateway/
 │   │   ├── scenarios/           # teen_svt_complex, peds_myocarditis_silent_crash
 │   │   └── triggers/types.ts    # Shared trigger types
 │   └── orders.ts          # Order system with realistic timers
-└── __tests__/             # 172+ Jest tests
+│   └── debriefAnalyzer.ts     # Complex scenario debrief (SVT/myocarditis)
+└── __tests__/             # 183+ Jest tests
 ```
 
 ## Commands
 ```bash
 npm run dev:tunnel:clean   # Recommended: Cloudflare tunnel (iPhone testing)
 npm run dev:stack:local    # Local with Firebase emulators
-npm run test:gateway       # Voice gateway tests (172 tests)
+npm run test:gateway       # Voice gateway tests (183 tests)
 npm run build              # TypeScript + Vite build
 
 # Run scenario without WebSocket
@@ -54,6 +55,14 @@ Two mutually exclusive modes (`presenterMode.ts`):
 12 pediatric cases. Complex scenarios:
 - `teen_svt_complex_v1`: PALS SVT algorithm (vagal → adenosine → cardioversion)
 - `peds_myocarditis_silent_crash_v1`: Fulminant myocarditis with shock staging
+
+### Complex Scenario Debrief
+When `analyze_transcript` is called for SVT or myocarditis scenarios:
+- Gateway detects complex scenario via `scenarioId` and `extendedState`
+- Runs deterministic scoring (checklist 4/5 to pass, bonuses, penalties)
+- Generates AI summary via `analyzeComplexScenario` in `debriefAnalyzer.ts`
+- Broadcasts `complex_debrief_result` with grade (A-F), timeline, feedback
+- Presenter sees `ComplexDebriefPanel` modal with full debrief
 
 ### Orders System
 - **Order types**: vitals, ekg, labs, imaging, cardiac_exam, lung_exam, general_exam, iv_access
@@ -108,6 +117,8 @@ Two mutually exclusive modes (`presenterMode.ts`):
 | `voice-gateway/src/orders.ts` | Order timers, duplicate detection, interventions |
 | `voice-gateway/src/validators.ts` | Zod schemas for sim_state, interventions |
 | `voice-gateway/src/messageTypes.ts` | OrderType, ClientToServerMessage types |
+| `voice-gateway/src/debriefAnalyzer.ts` | Complex scenario debrief (SVT/myocarditis scoring + AI) |
+| `src/components/ComplexDebriefPanel.tsx` | Modal showing grade, checklist, timeline, feedback |
 
 ## Component Patterns
 
@@ -130,7 +141,7 @@ import { LABEL_XS, CARD, BTN_PRIMARY, BADGE_SUCCESS } from "../styles/constants"
 ```
 
 ## Testing
-- `npm run test:gateway` - 172+ gateway tests
+- `npm run test:gateway` - 183+ gateway tests
 - `npm run build` - TypeScript check
 - `firebase emulators:exec` - Firestore rules tests
 
