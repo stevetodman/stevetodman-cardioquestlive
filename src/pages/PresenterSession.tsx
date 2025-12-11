@@ -32,6 +32,7 @@ import {
   PatientScenarioId,
   DebriefTurn,
   AnalysisResult,
+  ComplexDebriefResult,
   VoiceConnectionStatus,
   CharacterId,
   ROLE_COLORS,
@@ -40,6 +41,7 @@ import { getScenarioSnapshot } from "../data/scenarioSummaries";
 import { SessionTranscriptPanel, TranscriptLogTurn } from "../components/SessionTranscriptPanel";
 import { sendVoiceCommand } from "../services/voiceCommands";
 import { DebriefPanel } from "../components/DebriefPanel";
+import { ComplexDebriefPanel } from "../components/ComplexDebriefPanel";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
 import { QRCodeOverlay } from "../components/QRCodeOverlay";
 import { EkgViewer } from "../components/EkgViewer";
@@ -200,6 +202,7 @@ const [selectedScenario, setSelectedScenario] =
   useState<PatientScenarioId>("exertional_chest_pain");
 const [isAnalyzing, setIsAnalyzing] = useState(false);
 const [debriefResult, setDebriefResult] = useState<AnalysisResult | null>(null);
+const [complexDebriefResult, setComplexDebriefResult] = useState<ComplexDebriefResult | null>(null);
 const [timelineCopyStatus, setTimelineCopyStatus] = useState<"idle" | "copied" | "error">("idle");
 const [timelineFilter, setTimelineFilter] = useState<string>("all");
 const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -1343,6 +1346,10 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
         teachingPoints: res.teachingPoints ?? [],
       });
     });
+    const unsubComplexDebrief = voiceGatewayClient.onComplexDebrief((res) => {
+      setIsAnalyzing(false);
+      setComplexDebriefResult(res);
+    });
     return () => {
       unsubStatus();
       unsubSim();
@@ -1352,6 +1359,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
       unsubAudio();
       unsubScenario();
       unsubAnalysis();
+      unsubComplexDebrief();
     };
   }, [makeTurnId, autoForceReply, forceReplyWithQuestion]);
 
@@ -2602,6 +2610,12 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
         isOpen={showDebugPanel}
         onClose={() => setShowDebugPanel(false)}
         correlationId={simState?.correlationId}
+      />
+
+      {/* Complex Debrief Panel (SVT/Myocarditis scenarios) */}
+      <ComplexDebriefPanel
+        result={complexDebriefResult}
+        onClose={() => setComplexDebriefResult(null)}
       />
     </div>
   );

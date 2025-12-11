@@ -10,13 +10,13 @@ import { transcribeDoctorAudio } from "./sttClient";
 import { Buffer } from "buffer";
 import { performance } from "perf_hooks";
 import { PatientScenarioId } from "./patientCase";
-import { analyzeTranscript } from "./debriefAnalyzer";
+import { analyzeTranscript, analyzeComplexScenario, type ComplexScenarioId } from "./debriefAnalyzer";
 import { DebriefTurn } from "./messageTypes";
 import { RealtimePatientClient } from "./sim/realtimePatientClient";
 import { InMemoryEventLog } from "./sim/eventLog";
 import { ScenarioEngine } from "./sim/scenarioEngine";
 import { ToolGate } from "./sim/toolGate";
-import { ToolIntent, Interventions, hasSVTExtended, SVTExtendedState } from "./sim/types";
+import { ToolIntent, Interventions, hasSVTExtended, hasMyocarditisExtended, SVTExtendedState } from "./sim/types";
 import { createInitialSVTState, SVT_PHASES } from "./sim/scenarios/teen_svt_complex";
 import { CostController } from "./sim/costController";
 import { persistSimState, logSimEvent, loadSimState } from "./persistence";
@@ -988,6 +988,51 @@ async function handleDoctorAudio(
 async function handleAnalyzeTranscript(sessionId: string, turns: DebriefTurn[]) {
   if (!Array.isArray(turns) || turns.length === 0) return;
   try {
+    const runtime = runtimes.get(sessionId);
+    const scenarioId = getScenarioForSession(sessionId);
+
+    // Check if this is a complex scenario with extended state
+    if (runtime?.scenarioEngine) {
+      const simState = runtime.scenarioEngine.getState();
+
+      // SVT complex scenario
+      if (scenarioId === "teen_svt_complex_v1" && hasSVTExtended(simState)) {
+        const scenarioStartTime = simState.extended.scenarioStartedAt;
+        const complexResult = await analyzeComplexScenario(
+          turns,
+          simState.extended,
+          scenarioStartTime,
+          "teen_svt_complex_v1" as ComplexScenarioId
+        );
+        sessionManager.broadcastToPresenters(sessionId, {
+          type: "complex_debrief_result",
+          sessionId,
+          scenarioId: "teen_svt_complex_v1",
+          ...complexResult,
+        });
+        return;
+      }
+
+      // Myocarditis complex scenario
+      if (scenarioId === "peds_myocarditis_silent_crash_v1" && hasMyocarditisExtended(simState)) {
+        const scenarioStartTime = simState.extended.scenarioStartedAt;
+        const complexResult = await analyzeComplexScenario(
+          turns,
+          simState.extended,
+          scenarioStartTime,
+          "peds_myocarditis_silent_crash_v1" as ComplexScenarioId
+        );
+        sessionManager.broadcastToPresenters(sessionId, {
+          type: "complex_debrief_result",
+          sessionId,
+          scenarioId: "peds_myocarditis_silent_crash_v1",
+          ...complexResult,
+        });
+        return;
+      }
+    }
+
+    // Fallback to simple transcript analysis for non-complex scenarios
     const result = await analyzeTranscript(turns);
     sessionManager.broadcastToPresenters(sessionId, {
       type: "analysis_result",

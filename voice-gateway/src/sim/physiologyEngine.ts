@@ -695,6 +695,7 @@ export function createInitialMyocarditisState(nowMs: number = Date.now()): Myoca
     shockStage: 1,
     shockStageEnteredAt: nowMs,
 
+    scenarioStartedAt: nowMs,
     scenarioClockPaused: false,
     totalPausedMs: 0,
     deteriorationRate: 1.0,

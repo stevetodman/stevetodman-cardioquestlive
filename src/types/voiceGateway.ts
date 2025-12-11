@@ -11,7 +11,10 @@ export type PatientScenarioId =
   | "kawasaki"
   | "coarctation_shock"
   | "arrhythmogenic_syncope"
-  | "teen_svt_complex_v1";
+  | "teen_svt_complex_v1"
+  | "peds_myocarditis_silent_crash_v1";
+
+export type ComplexScenarioId = "teen_svt_complex_v1" | "peds_myocarditis_silent_crash_v1";
 
 export type CharacterId = "patient" | "parent" | "nurse" | "tech" | "consultant" | "imaging";
 
@@ -47,6 +50,32 @@ export type AnalysisResult = {
   strengths: string[];
   opportunities: string[];
   teachingPoints: string[];
+};
+
+export type TimelineEvent = {
+  timeMs: number;
+  timeFormatted: string;
+  type: string;
+  description: string;
+  isGood?: boolean;
+  isBad?: boolean;
+};
+
+export type ComplexDebriefResult = AnalysisResult & {
+  scenarioId: ComplexScenarioId;
+  passed: boolean;
+  grade: "A" | "B" | "C" | "D" | "F";
+  checklistScore: string;
+  checklistResults: {
+    description: string;
+    achieved: boolean;
+    explanation: string;
+  }[];
+  bonuses: { description: string; points: number }[];
+  penalties: { description: string; points: number }[];
+  totalPoints: number;
+  timeline: TimelineEvent[];
+  scenarioSpecificFeedback: string[];
 };
 
 export type ClientToServerMessage =
@@ -204,6 +233,28 @@ export type ServerToClientMessage =
       error: "tts_failed" | "stt_failed" | "openai_failed";
       correlationId: string;
       detail?: string;
+    }
+  | {
+      type: "complex_debrief_result";
+      sessionId: string;
+      scenarioId: ComplexScenarioId;
+      summary: string;
+      strengths: string[];
+      opportunities: string[];
+      teachingPoints: string[];
+      passed: boolean;
+      grade: "A" | "B" | "C" | "D" | "F";
+      checklistScore: string;
+      checklistResults: {
+        description: string;
+        achieved: boolean;
+        explanation: string;
+      }[];
+      bonuses: { description: string; points: number }[];
+      penalties: { description: string; points: number }[];
+      totalPoints: number;
+      timeline: TimelineEvent[];
+      scenarioSpecificFeedback: string[];
     };
 
 export type PatientState = "idle" | "listening" | "speaking" | "error";

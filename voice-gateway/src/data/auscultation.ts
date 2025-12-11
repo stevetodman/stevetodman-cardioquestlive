@@ -64,6 +64,11 @@ const SCENARIO_CLIPS: Record<PatientScenarioId, AuscultationClip[]> = {
     { type: "heart", label: "Very rapid regular rhythm ~220 bpm, no murmurs audible", url: "/audio/ausc/heart-svt-rapid.mp3" },
     { type: "lung", label: "Clear breath sounds", url: "/audio/ausc/lungs-clear.mp3" },
   ],
+  // Complex myocarditis scenario - progressive cardiogenic shock
+  peds_myocarditis_silent_crash_v1: [
+    { type: "heart", label: "Distant heart sounds, gallop rhythm (S3), tachycardia", url: "/audio/ausc/heart-gallop-s3.mp3" },
+    { type: "lung", label: "Fine crackles at bases, increased work of breathing", url: "/audio/ausc/lungs-crackles.mp3" },
+  ],
 };
 
 // Fallback clips if scenario not mapped

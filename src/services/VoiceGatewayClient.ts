@@ -6,6 +6,7 @@ import {
   PatientScenarioId,
   DebriefTurn,
   AnalysisResult,
+  ComplexDebriefResult,
   VoiceConnectionStatus,
   CharacterId,
 } from "../types/voiceGateway";
@@ -45,6 +46,7 @@ type AudioListener = (audioUrl: string) => void;
 type DoctorUtteranceListener = (text: string, userId: string, character?: CharacterId) => void;
 type ScenarioListener = (scenarioId: PatientScenarioId) => void;
 type AnalysisResultListener = (result: AnalysisResult) => void;
+type ComplexDebriefResultListener = (result: ComplexDebriefResult) => void;
 type TokenRefresher = () => Promise<string | undefined>;
 
 const DEFAULT_URL =
@@ -93,6 +95,7 @@ class VoiceGatewayClient {
   private doctorListeners = new Set<DoctorUtteranceListener>();
   private scenarioListeners = new Set<ScenarioListener>();
   private analysisListeners = new Set<AnalysisResultListener>();
+  private complexDebriefListeners = new Set<ComplexDebriefResultListener>();
   private voiceErrorListeners = new Set<VoiceErrorListener>();
   private voiceFallback = false;
   private correlationId?: string;
@@ -542,6 +545,11 @@ class VoiceGatewayClient {
     return () => this.analysisListeners.delete(cb);
   }
 
+  onComplexDebrief(cb: ComplexDebriefResultListener) {
+    this.complexDebriefListeners.add(cb);
+    return () => this.complexDebriefListeners.delete(cb);
+  }
+
   onVoiceError(cb: VoiceErrorListener) {
     this.voiceErrorListeners.add(cb);
     return () => this.voiceErrorListeners.delete(cb);
@@ -607,6 +615,10 @@ class VoiceGatewayClient {
       }
       case "analysis_result": {
         this.analysisListeners.forEach((cb) => cb(msg));
+        break;
+      }
+      case "complex_debrief_result": {
+        this.complexDebriefListeners.forEach((cb) => cb(msg));
         break;
       }
       case "sim_state": {

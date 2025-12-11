@@ -99,7 +99,8 @@ export type PatientScenarioId =
   | "kawasaki"
   | "coarctation_shock"
   | "arrhythmogenic_syncope"
-  | "teen_svt_complex_v1";
+  | "teen_svt_complex_v1"
+  | "peds_myocarditis_silent_crash_v1";
 
 export type DebriefTurn = {
   role: "doctor" | "patient";
@@ -200,4 +201,33 @@ export type ServerToClientMessage =
       error: "tts_failed" | "stt_failed" | "openai_failed";
       correlationId: string;
       detail?: string;
+    }
+  | {
+      type: "complex_debrief_result";
+      sessionId: string;
+      scenarioId: "teen_svt_complex_v1" | "peds_myocarditis_silent_crash_v1";
+      summary: string;
+      strengths: string[];
+      opportunities: string[];
+      teachingPoints: string[];
+      passed: boolean;
+      grade: "A" | "B" | "C" | "D" | "F";
+      checklistScore: string;
+      checklistResults: {
+        description: string;
+        achieved: boolean;
+        explanation: string;
+      }[];
+      bonuses: { description: string; points: number }[];
+      penalties: { description: string; points: number }[];
+      totalPoints: number;
+      timeline: {
+        timeMs: number;
+        timeFormatted: string;
+        type: string;
+        description: string;
+        isGood?: boolean;
+        isBad?: boolean;
+      }[];
+      scenarioSpecificFeedback: string[];
     };

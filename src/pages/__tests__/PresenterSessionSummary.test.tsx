@@ -65,6 +65,8 @@ jest.mock("../../services/VoiceGatewayClient", () => ({
     onDoctorUtterance: () => () => {},
     onScenarioChanged: () => () => {},
     onAnalysisResult: () => () => {},
+    onComplexDebrief: () => () => {},
+    onVoiceError: () => () => {},
   },
 }));
 

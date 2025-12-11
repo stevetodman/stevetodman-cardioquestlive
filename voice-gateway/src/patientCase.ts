@@ -9,7 +9,8 @@ export type PatientScenarioId =
   | "kawasaki"
   | "coarctation_shock"
   | "arrhythmogenic_syncope"
-  | "teen_svt_complex_v1";
+  | "teen_svt_complex_v1"
+  | "peds_myocarditis_silent_crash_v1";
 
 export type PatientCase = {
   id: string;

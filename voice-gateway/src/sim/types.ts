@@ -150,6 +150,7 @@ export type MyocarditisExtendedState = {
   shockStageEnteredAt: number;
 
   // Scenario clock control
+  scenarioStartedAt: number;
   scenarioClockPaused: boolean;
   scenarioClockPausedAt?: number;
   totalPausedMs: number;
