@@ -42,9 +42,25 @@ const MAX_EVENTS = 50;
 const SPIKE_WINDOW_MS = 60_000; // 1 minute window for rate detection
 const SPIKE_THRESHOLD = 5; // Alert if >5 errors in window
 
-// Environment detection (works in Vite)
-const IS_PROD = typeof import.meta !== "undefined" && (import.meta as any).env?.PROD === true;
-const LOG_SINK_URL = typeof import.meta !== "undefined" ? (import.meta as any).env?.VITE_VOICE_LOG_SINK_URL : undefined;
+// Environment detection - uses process.env for Jest/Node compatibility
+// In Vite, import.meta.env is available; in Jest/Node, use process.env
+function isProd(): boolean {
+  // Check process.env first (works in both Jest and Node)
+  if (typeof process !== "undefined" && process.env?.NODE_ENV === "production") {
+    return true;
+  }
+  return false;
+}
+
+function getLogSinkUrl(): string | undefined {
+  if (typeof process !== "undefined" && process.env?.VITE_VOICE_LOG_SINK_URL) {
+    return process.env.VITE_VOICE_LOG_SINK_URL;
+  }
+  return undefined;
+}
+
+const IS_PROD = isProd();
+const LOG_SINK_URL = getLogSinkUrl();
 
 /**
  * Redact event for production logging - strips free text, keeps structured fields only.

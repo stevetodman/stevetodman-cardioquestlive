@@ -330,6 +330,7 @@ class VoiceGatewayClient {
 
     console.debug(`[voice-gateway] Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
     this.setStatus({ state: "disconnected", reason: "reconnecting" });
+    voiceEventLogger.logReconnect(this.reconnectAttempts, this.sessionId ?? undefined);
 
     this.reconnectTimeout = setTimeout(async () => {
       if (this.intentionalDisconnect) return;
@@ -627,11 +628,11 @@ class VoiceGatewayClient {
         if (anyMsg.correlationId) this.correlationId = anyMsg.correlationId;
         const prevFallback = this.voiceFallback;
         this.voiceFallback = anyMsg.voiceFallback === true;
-        // Log fallback state changes
+        // Log fallback state changes with session context
         if (this.voiceFallback && !prevFallback) {
-          voiceEventLogger.logFallback(this.correlationId);
+          voiceEventLogger.logFallback(this.correlationId, this.sessionId ?? undefined, this.role ?? undefined);
         } else if (!this.voiceFallback && prevFallback) {
-          voiceEventLogger.logRecovered(this.correlationId);
+          voiceEventLogger.logRecovered(this.correlationId, this.sessionId ?? undefined);
         }
         this.simStateListeners.forEach((cb) =>
           cb({
@@ -659,7 +660,13 @@ class VoiceGatewayClient {
       }
       case "voice_error": {
         const errMsg = msg as any;
-        voiceEventLogger.logError(errMsg.error, errMsg.correlationId, errMsg.detail);
+        voiceEventLogger.logError(
+          errMsg.error,
+          errMsg.correlationId,
+          errMsg.detail,
+          this.sessionId ?? undefined,
+          this.role ?? undefined
+        );
         this.voiceErrorListeners.forEach((cb) =>
           cb({
             error: errMsg.error,
