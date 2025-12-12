@@ -370,7 +370,7 @@ describeIfEmulator("firestore.rules participants", () => {
     });
   });
 
-  test("allows participant create/update for own doc with required fields", async () => {
+  test("allows participant create and safe update (displayName/inactive only)", async () => {
     if (!isEnvReady()) return;
     const userId = "u1";
     const user = getEnv().authenticatedContext(userId);
@@ -389,7 +389,33 @@ describeIfEmulator("firestore.rules participants", () => {
         createdAt: new Date(),
       })
     );
-    await assertSucceeds(updateDoc(participantRef, { points: 100, streak: 1 }));
+    // Participants can only update displayName and inactive (not points/streak/teamId)
+    await assertSucceeds(updateDoc(participantRef, { displayName: "Dr. Alice", inactive: true }));
+  });
+
+  test("blocks participant from updating points/streak directly", async () => {
+    if (!isEnvReady()) return;
+    const userId = "u1";
+    const user = getEnv().authenticatedContext(userId);
+    const db = user.firestore();
+    const participantRef = doc(db, `sessions/${sessionId}/participants/${userId}`);
+    await assertSucceeds(
+      setDoc(participantRef, {
+        userId,
+        sessionId,
+        teamId: "team_ductus",
+        teamName: "Team Ductus",
+        points: 0,
+        streak: 0,
+        correctCount: 0,
+        incorrectCount: 0,
+        createdAt: new Date(),
+      })
+    );
+    // Participants cannot update points/streak (anti-cheat)
+    await assertFails(updateDoc(participantRef, { points: 9999 }));
+    await assertFails(updateDoc(participantRef, { streak: 100 }));
+    await assertFails(updateDoc(participantRef, { teamId: "team_cyanosis" }));
   });
 
   test("allows authenticated users to read participants docs", async () => {
