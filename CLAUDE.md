@@ -84,6 +84,8 @@ When `analyze_transcript` is called for SVT or myocarditis scenarios:
 - WebSocket at `/ws/voice`
 - Heartbeat ping 30s, reconnect with exponential backoff
 - Characters: patient, parent, nurse, tech, consultant
+- Safari mic: `requestPermission()` in VoicePatientService triggers getUserMedia prompt
+- Early debrief guard: requires 3+ turns/events before complex scenario analysis
 
 ### State Visibility
 - **Presenter**: Full state (vitals, rhythm, all orders, interventions)

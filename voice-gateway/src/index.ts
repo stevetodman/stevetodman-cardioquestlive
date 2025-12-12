@@ -995,6 +995,26 @@ async function handleAnalyzeTranscript(sessionId: string, turns: DebriefTurn[]) 
     if (runtime?.scenarioEngine) {
       const simState = runtime.scenarioEngine.getState();
 
+      // Early debrief guard: ensure minimum meaningful interaction for complex scenarios
+      const isComplexScenario = scenarioId === "teen_svt_complex_v1" || scenarioId === "peds_myocarditis_silent_crash_v1";
+      if (isComplexScenario) {
+        const timelineEvents = (simState.extended as any)?.timelineEvents ?? [];
+        const hasMinimumActions = turns.length >= 3 || timelineEvents.length >= 3;
+
+        if (!hasMinimumActions) {
+          log("Debrief skipped: insufficient actions", { sessionId, turns: turns.length, events: timelineEvents.length });
+          sessionManager.broadcastToPresenters(sessionId, {
+            type: "analysis_result",
+            sessionId,
+            summary: "Not enough interaction to generate a meaningful debrief. Continue the scenario and try again.",
+            strengths: [],
+            opportunities: ["Try ordering diagnostics, performing exams, or talking to the patient/family."],
+            teachingPoints: [],
+          });
+          return;
+        }
+      }
+
       // SVT complex scenario
       if (scenarioId === "teen_svt_complex_v1" && hasSVTExtended(simState)) {
         const scenarioStartTime = simState.extended.scenarioStartedAt;

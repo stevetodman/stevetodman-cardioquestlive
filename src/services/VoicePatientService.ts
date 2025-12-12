@@ -169,6 +169,47 @@ export class VoicePatientService {
     return this.micStatus;
   }
 
+  /**
+   * Explicitly request microphone permission (Safari-compatible).
+   * On Safari, the Permissions API doesn't support microphone queries,
+   * so we must call getUserMedia to trigger the permission prompt.
+   * The stream is immediately released after permission is granted.
+   */
+  async requestPermission(): Promise<MicStatus> {
+    // First try the Permissions API (works on Chrome/Firefox)
+    await this.checkPermission();
+    if (this.micStatus === "granted") return "granted";
+    if (this.micStatus === "blocked") return "blocked";
+
+    // On Safari or when Permissions API returns "prompt", we must call getUserMedia
+    if (!navigator.mediaDevices?.getUserMedia) {
+      this.setMicStatus("blocked");
+      return "blocked";
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Immediately release the stream - we just needed to trigger the prompt
+      stream.getTracks().forEach((t) => t.stop());
+      this.setMicStatus("granted");
+      return "granted";
+    } catch (err: any) {
+      const name = err?.name || err?.code;
+      if (name === "NotAllowedError" || name === "SecurityError" || name === "NotFoundError") {
+        this.setMicStatus("blocked");
+        return "blocked";
+      }
+      // Other errors (e.g., AbortError) - leave as prompt
+      this.setMicStatus("prompt");
+      return "prompt";
+    }
+  }
+
+  /** Get current mic status without triggering a permission request */
+  getMicStatus(): MicStatus {
+    return this.micStatus;
+  }
+
   private emitLevel(level: number) {
     this.subscribers.forEach((cb) => {
       try {

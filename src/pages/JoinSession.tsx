@@ -803,7 +803,8 @@ export default function JoinSession() {
 
   const handleRecheckMic = async () => {
     try {
-      await voicePatientService.recheckPermission();
+      // Use requestPermission which works on Safari (triggers actual getUserMedia prompt)
+      await voicePatientService.requestPermission();
     } catch (err) {
       console.error("Mic recheck failed", err);
     }

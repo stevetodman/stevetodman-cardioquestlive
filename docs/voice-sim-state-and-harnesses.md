@@ -38,6 +38,7 @@ Real-time simulation state management and testing harnesses for the voice gatewa
 **Frontend**:
 - Presenter: Stage/vitals chips, freeze/unfreeze, force reply, skip stage, live captions
 - Participant: Status banner, PTT (disabled in fallback), exam audio playback
+- Safari mic fix: `requestPermission()` triggers actual getUserMedia prompt (Permissions API unsupported)
 
 **Characters** (`voice-gateway/src/patientPersona.ts`):
 - Patient, Parent, Nurse, Tech, Consultant—each with sim-context-aware prompts
@@ -210,6 +211,7 @@ npm run scenario peds_myocarditis_silent_crash_v1
 - Generates: summary, strengths, opportunities, teaching points
 - Timeline with positive/negative event classification
 - Full report exportable via "Copy Report" button
+- Early debrief guard: requires 3+ turns or timeline events before analysis
 
 **UI Components**:
 - `ComplexDebriefPanel.tsx`: Modal with grade, checklist, bonuses/penalties, timeline
