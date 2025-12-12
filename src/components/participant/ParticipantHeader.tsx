@@ -37,7 +37,7 @@ export function ParticipantHeader({
   onLeave,
 }: ParticipantHeaderProps) {
   return (
-    <header className="p-3 border-b border-slate-900 bg-slate-950 sticky top-0 z-20 shadow-lg shadow-black/20">
+    <header className="p-3 pt-safe border-b border-slate-900 bg-slate-950 sticky top-0 z-20 shadow-lg shadow-black/20">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <div className="font-bold text-slate-200 tracking-tight text-sm">CardioQuest</div>

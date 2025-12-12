@@ -121,7 +121,14 @@ service cloud.firestore {
             data.incorrectCount is number &&
             (data.createdAt is timestamp || data.createdAt is string) &&
             (!("role" in data) || data.role in ["member", "lead"]) &&
-            (!("displayName" in data) || data.displayName is string);
+            (!("displayName" in data) || data.displayName is string) &&
+            (!("inactive" in data) || data.inactive is bool);
+        }
+
+        // Participants can only update displayName and inactive status (not points/teamId/streak)
+        function isParticipantSafeUpdate() {
+          let changed = request.resource.data.diff(resource.data).changedKeys();
+          return changed.hasOnly(["displayName", "inactive"]);
         }
 
         allow read: if isAuthenticated();
@@ -129,11 +136,13 @@ service cloud.firestore {
           request.auth.uid == userId &&
           request.resource.data.userId == request.auth.uid &&
           isValidParticipant(request.resource.data);
+        // Participants can only change displayName/inactive; owner/admin can change anything
         allow update: if isAuthenticated() &&
           request.auth.uid == userId &&
           request.resource.data.userId == resource.data.userId &&
           request.resource.data.sessionId == resource.data.sessionId &&
-          isValidParticipant(request.resource.data);
+          isValidParticipant(request.resource.data) &&
+          (isSessionOwner(sessionId) || isAdmin() || isParticipantSafeUpdate());
         allow delete: if false;
       }
 

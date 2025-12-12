@@ -1134,7 +1134,7 @@ export default function JoinSession() {
 
   if (loading && !session) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50 p-4">
+      <div className="min-h-screen-safe flex items-center justify-center bg-slate-950 text-slate-50 p-4">
         <SessionSkeleton />
       </div>
     );
@@ -1143,7 +1143,7 @@ export default function JoinSession() {
   if (!session || !sessionId) {
     return (
       <div
-        className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-50 space-y-4 p-6"
+        className="min-h-screen-safe flex flex-col items-center justify-center bg-slate-950 text-slate-50 space-y-4 p-6"
         data-testid="session-not-found"
       >
         <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center text-slate-700 mb-4">
@@ -1282,7 +1282,7 @@ export default function JoinSession() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col" id="main-content">
+    <div className="min-h-screen-safe bg-slate-950 text-slate-50 flex flex-col" id="main-content">
       <ParticipantHeader
         joinCode={session.joinCode}
         connectionState={connectionStatus.state}

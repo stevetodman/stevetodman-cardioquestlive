@@ -1582,7 +1582,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50">
+      <div className="min-h-screen-safe flex items-center justify-center bg-slate-950 text-slate-50">
         <div className="flex flex-col items-center gap-4">
             <div className="w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
             <span className="text-slate-400">Loading Session...</span>
@@ -1612,7 +1612,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
       ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-100"
       : "bg-slate-800 border-slate-700 text-slate-300";
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-50 p-4">
+      <div className="min-h-screen-safe bg-slate-950 text-slate-50 p-4">
         <div
           className="flex flex-wrap items-center justify-between gap-3 py-2 px-2 md:px-3 border-b border-slate-900"
           data-testid="presenter-header"
@@ -1706,7 +1706,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
 
   if (!session || !currentSlide) {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50">
+        <div className="min-h-screen-safe flex items-center justify-center bg-slate-950 text-slate-50">
           <div className="text-center space-y-4">
             <p className="text-xl">Session not found.</p>
             <Link to="/" className="text-sky-400 underline">Return Home</Link>
