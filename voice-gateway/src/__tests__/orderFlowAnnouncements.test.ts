@@ -13,6 +13,10 @@ jest.mock("../persistence", () => {
   };
 });
 
+jest.mock("../ttsClient", () => ({
+  synthesizePatientAudio: jest.fn(() => Promise.resolve(null)),
+}));
+
 function makeDeps(options: { runImmediately?: boolean } = {}) {
   const sm = {
     broadcastToSession: jest.fn(),

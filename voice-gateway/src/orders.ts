@@ -5,7 +5,19 @@ import { assetExists } from "./assetUtils";
 import { PatientScenarioId } from "./patientCase";
 import { SessionManager } from "./sessionManager";
 import { Runtime } from "./typesRuntime";
-import { OrderResult } from "./messageTypes";
+import { OrderResult, CharacterId } from "./messageTypes";
+import { synthesizePatientAudio } from "./ttsClient";
+import { log, logError } from "./logger";
+
+// Voice mapping for TTS (matches characterBroadcast.ts)
+const CHARACTER_VOICE_MAP: Record<CharacterId, string | undefined> = {
+  patient: "coral",
+  parent: "nova",
+  nurse: "sage",
+  tech: "verse",
+  consultant: "ballad",
+  imaging: "shimmer",
+};
 
 // ============================================================================
 // Types
@@ -258,17 +270,20 @@ export function createOrderHandler(deps: OrderDeps) {
     const currentOrders = (runtime.scenarioEngine.getState().orders ?? []) as Order[];
     const nextOrders = [...currentOrders, newOrder];
 
+    // Persist orders to scenarioEngine so they appear in subsequent state broadcasts
+    runtime.scenarioEngine.hydrate({ orders: nextOrders });
+
     broadcastSimState(sessionId, {
       ...runtime.scenarioEngine.getState(),
       stageIds: runtime.scenarioEngine.getStageIds(),
       orders: nextOrders,
     });
 
-    // Broadcast nurse acknowledgment (if not an exam)
+    // Broadcast nurse acknowledgment (if not an exam) with TTS
     const ackMessage = getNurseAcknowledgment(orderType);
     if (ackMessage) {
       // IV orders come from nurse, other orders from tech/imaging
-      const character = orderType === "iv_access" ? "nurse" : orderType === "imaging" ? "imaging" : "tech";
+      const character: CharacterId = orderType === "iv_access" ? "nurse" : orderType === "imaging" ? "imaging" : "tech";
       sessionManager.broadcastToSession(sessionId, {
         type: "patient_state",
         sessionId,
@@ -281,6 +296,20 @@ export function createOrderHandler(deps: OrderDeps) {
         text: ackMessage,
         character,
       });
+      // Generate TTS audio for the acknowledgment
+      const voice = CHARACTER_VOICE_MAP[character];
+      synthesizePatientAudio(ackMessage, voice)
+        .then((audioBuffer) => {
+          if (audioBuffer) {
+            sessionManager.broadcastToSession(sessionId, {
+              type: "patient_audio",
+              sessionId,
+              audioBase64: audioBuffer.toString("base64"),
+              character,
+            });
+          }
+        })
+        .catch((err) => logError("TTS failed for order ack", err));
       sessionManager.broadcastToSession(sessionId, {
         type: "patient_state",
         sessionId,
@@ -335,6 +364,9 @@ function completeOrder(
       ? { ...o, status: "complete" as const, result, completedAt: Date.now() }
       : o
   );
+
+  // Persist completed orders to scenarioEngine
+  runtime.scenarioEngine.hydrate({ orders: updatedOrders });
 
   // Handle EKG-specific updates
   const stateRef: any = state;

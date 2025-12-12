@@ -1754,18 +1754,27 @@ function handleExamRequest(sessionId: string, examType?: string) {
   };
   const nextOrders = [...currentOrders, newOrder];
 
+  // Persist orders to scenarioEngine so subsequent broadcasts include them
+  runtime.scenarioEngine.hydrate({ orders: nextOrders });
+
   // Broadcast pending state
   broadcastSimState(sessionId, {
-    ...state,
+    ...runtime.scenarioEngine.getState(),
     stageIds: runtime.scenarioEngine.getStageIds(),
     orders: nextOrders,
   });
 
   // After brief delay, complete the exam order and announce results
   setTimeout(() => {
-    const completedOrders = nextOrders.map(o =>
+    // Get current orders from scenarioEngine (may have been updated since)
+    const currentState = runtime.scenarioEngine.getState();
+    const currentOrders = currentState.orders ?? nextOrders;
+    const completedOrders = currentOrders.map((o: any) =>
       o.id === newOrder.id ? { ...o, status: "complete" as const, completedAt: Date.now() } : o
     );
+
+    // Persist completed orders to scenarioEngine
+    runtime.scenarioEngine.hydrate({ orders: completedOrders });
 
     // Build exam summary based on exam type
     let summary: string;

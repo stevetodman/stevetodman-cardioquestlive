@@ -1873,7 +1873,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                   <div className="flex items-center gap-2 text-sm text-emerald-100">
                     <span>{simState.rhythmSummary ?? "Rhythm available"}</span>
                     <span className="px-2 py-0.5 rounded-full border border-emerald-500/40 text-[10px] text-emerald-200">
-                      {simState.telemetryHistory?.slice(-1)[0]?.rhythm ?? "Live"}
+                      Live
                     </span>
                     {rhythmAlert && (
                       <span className="px-2 py-0.5 rounded-full border border-amber-500/60 text-[10px] text-amber-200">

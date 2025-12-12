@@ -217,11 +217,12 @@ export function parseOrderRequest(utterance: string): OrderRequest | null {
     return { type: "imaging" };
   }
 
-  // IV access request - "start an IV", "place an IV", "get IV access", "start a line"
+  // IV access request - "start an IV", "place an IV", "get IV access", "start a line", "second IV", "another IV"
   if (/(start|place|get|put in|establish)\s*(a\s*)?(an\s*)?(iv|i\.v\.|line|peripheral\s*access|iv\s*access)/.test(text) ||
       /(iv|i\.v\.)\s*(access|line)/.test(text) ||
       /^(iv|i\.v\.|line)$/.test(text) ||
-      /(need|want|let'?s\s*get)\s*(a\s*)?(an\s*)?(iv|line)/.test(text)) {
+      /(need|want|let'?s\s*get)\s*(a\s*)?(an\s*)?(iv|line)/.test(text) ||
+      /(second|another|one more|additional)\s*(iv|i\.v\.|line)/.test(text)) {
     return { type: "iv_access" };
   }
 
