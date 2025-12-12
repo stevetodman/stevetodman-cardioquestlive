@@ -256,7 +256,7 @@ export function AutonomousSimPanel({
                 : "bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600"
             }`}
           >
-            Intervene
+            Patient Actions
           </button>
         </div>
       </div>
@@ -374,7 +374,7 @@ export function AutonomousSimPanel({
       {/* Info message when not showing interventions */}
       {!showInterventions && (
         <div className="text-xs text-slate-500">
-          Students interact via their phones. The AI responds automatically. Click "Intervene" to change patient state.
+          Students interact via their phones. The AI responds automatically. Click "Patient Actions" to change patient state.
         </div>
       )}
 

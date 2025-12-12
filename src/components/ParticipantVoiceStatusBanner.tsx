@@ -7,6 +7,7 @@ type Props = {
   micStatus: MicStatus;
   hasFloor: boolean;
   otherSpeaking: boolean;
+  queuePosition?: number;
   fallback?: boolean;
   throttled?: boolean;
   locked?: boolean;
@@ -33,6 +34,7 @@ export function ParticipantVoiceStatusBanner({
   micStatus,
   hasFloor,
   otherSpeaking,
+  queuePosition,
   fallback = false,
   throttled = false,
   locked = false,
@@ -82,7 +84,10 @@ export function ParticipantVoiceStatusBanner({
   } else if (otherSpeaking) {
     tone = "info";
     title = "Another resident is speaking";
-    body = "Wait for your turn to take the floor.";
+    const queueText = queuePosition && queuePosition > 0
+      ? `You're #${queuePosition} in queue.`
+      : "Wait for your turn to take the floor.";
+    body = queueText;
   }
 
   return (

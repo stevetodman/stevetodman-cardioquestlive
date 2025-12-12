@@ -46,7 +46,7 @@ Complete guide for facilitators running pediatric cardiology simulation scenario
 - Imaging - CXR, Echo
 
 **Treatments**
-- Intervene - Open medication/treatment panel
+- Patient Actions - Open medication/treatment panel
 - Code Blue - Initiate resuscitation protocol
 
 ### Presenter Events

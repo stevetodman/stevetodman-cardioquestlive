@@ -7,3 +7,6 @@ export type { CardPanelProps, StatusCardProps, SectionLabelProps } from "./CardP
 
 export { VitalsGrid } from "./VitalsGrid";
 export type { VitalsGridProps } from "./VitalsGrid";
+
+export { Toast } from "./Toast";
+export type { ToastProps, ToastVariant } from "./Toast";

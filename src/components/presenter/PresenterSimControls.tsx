@@ -173,13 +173,13 @@ export function PresenterSimControls({
                   : "bg-amber-600/20 text-amber-100 border border-amber-500/60 hover:bg-amber-600/30"
               }`}
             >
-              Intervene
+              Patient Actions
             </button>
           </div>
         </div>
 
         <div className="text-xs text-slate-400">
-          Students interact via their phones. The AI responds automatically. Click "Intervene" to change patient state.
+          Students interact via their phones. The AI responds automatically. Click "Patient Actions" to change patient state.
         </div>
 
         {/* Intervention controls */}

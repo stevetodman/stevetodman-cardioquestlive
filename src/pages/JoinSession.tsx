@@ -142,6 +142,8 @@ export default function JoinSession() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [showExam, setShowExam] = useState(false);
   const [showEkg, setShowEkg] = useState(false);
+  const [loadingExam, setLoadingExam] = useState(false);
+  const [loadingTelemetry, setLoadingTelemetry] = useState(false);
   const [toast, setToast] = useState<{ message: string; ts: number } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [questionStartTime, setQuestionStartTime] = useState<number | null>(null);
@@ -849,6 +851,7 @@ export default function JoinSession() {
         micStatus={micStatus}
         hasFloor={hasFloor}
         otherSpeaking={otherSpeaking}
+        queuePosition={undefined /* TODO: add gateway queue tracking */}
         fallback={fallbackActive}
         throttled={simState?.budget?.throttled}
         locked={voice.locked}
@@ -901,17 +904,25 @@ export default function JoinSession() {
           hasTelemetry={!!simState?.telemetry}
           hasEkg={!!latestEkg}
           showEkg={showEkg}
-          onRequestExam={() =>
-            emitCommand(sessionId!, "exam", {}, "nurse", logAndToast).then(() => {
-              setShowExam(true);
-              showToast("Exam requested");
-            })
-          }
-          onRequestTelemetry={() =>
-            emitCommand(sessionId!, "toggle_telemetry", { enabled: true }, "tech", logAndToast).then(() => {
-              showToast("Telemetry requested");
-            })
-          }
+          loadingExam={loadingExam}
+          loadingTelemetry={loadingTelemetry}
+          onRequestExam={() => {
+            setLoadingExam(true);
+            emitCommand(sessionId!, "exam", {}, "nurse", logAndToast)
+              .then(() => {
+                setShowExam(true);
+                showToast("Exam ordered - results incoming");
+              })
+              .finally(() => setLoadingExam(false));
+          }}
+          onRequestTelemetry={() => {
+            setLoadingTelemetry(true);
+            emitCommand(sessionId!, "toggle_telemetry", { enabled: true }, "tech", logAndToast)
+              .then(() => {
+                showToast("Telemetry ordered - monitor connecting");
+              })
+              .finally(() => setLoadingTelemetry(false));
+          }}
           onViewEkg={() => {
             emitCommand(sessionId!, "show_ekg", {}, "tech", logAndToast);
             setShowEkg(true);
