@@ -231,5 +231,5 @@ npm run scenario peds_myocarditis_silent_crash_v1
 - Accessibility audit for new UI components (fallback banners, debug panel)
 
 **Before Public Launch**:
-- Harden Firestore rules: lock `participants/{userId}` so clients can only write `displayName`/`inactive` (not `points`/`teamId`/`streak`); validate `responses` have valid `choiceIndex` and matching `sessionId`
+- ~~Harden Firestore rules~~: ✅ Done - participants can only write `displayName`/`inactive`
 - Refactor god components: decompose `PresenterSession.tsx` and `JoinSession.tsx` into feature modules (voice/, orders/, scoring/, chat/)
