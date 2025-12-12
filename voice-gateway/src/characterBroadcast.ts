@@ -53,7 +53,7 @@ export async function broadcastCharacterSpeak(
     character,
   });
 
-  // Generate TTS for presenter if requested
+  // Generate TTS for all participants if requested
   if (withTts) {
     const voice = CHARACTER_VOICE_MAP[character];
     log("TTS for character", character, "voice:", voice, "text:", text.slice(0, 50));
@@ -61,7 +61,8 @@ export async function broadcastCharacterSpeak(
       const audioBuffer = await synthesizePatientAudio(text, voice);
       if (audioBuffer) {
         log("TTS audio generated", character, "bytes:", audioBuffer.length);
-        sessionManager.broadcastToPresenters(sessionId, {
+        // Send audio to all session participants so students hear the patient
+        sessionManager.broadcastToSession(sessionId, {
           type: "patient_audio",
           sessionId,
           audioBase64: audioBuffer.toString("base64"),

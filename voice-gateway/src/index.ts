@@ -368,7 +368,8 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
               apiKey: realtimeApiKey,
               systemPrompt: buildSystemPrompt(runtime.scenarioEngine.getState().scenarioId as PatientScenarioId),
               onAudioOut: (buf) => {
-                sessionManager.broadcastToPresenters(simId, {
+                // Send audio to all participants so students hear the patient
+                sessionManager.broadcastToSession(simId, {
                   type: "patient_audio",
                   sessionId: simId,
                   audioBase64: buf.toString("base64"),
@@ -638,13 +639,13 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
               reason: "presenter_triggered_code_blue",
             });
           } else if (event === "vitals_change") {
-            // Direct vitals change from InjectsPalette
+            // Direct vitals change from InjectsPalette - use absolute values, not deltas
             const vitalsChange = parsed.payload?.vitalsChange as Record<string, any> | undefined;
             if (vitalsChange) {
-              runtime.scenarioEngine.applyIntent({
-                type: "intent_updateVitals",
-                delta: vitalsChange,
-                reason: "presenter_inject_vitals",
+              // Set vitals directly since injects specify absolute target values
+              runtime.scenarioEngine.setVitals({
+                ...runtime.scenarioEngine.getState().vitals,
+                ...vitalsChange,
               });
             }
           } else if (event === "equipment_failure") {
@@ -770,15 +771,15 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
       text,
       character: routedCharacter,
     });
-    // Generate TTS audio for non-patient characters (only send to presenter, not all participants)
+    // Generate TTS audio for non-patient characters
     const voice = CHARACTER_VOICE_MAP[routedCharacter];
     log("TTS for non-patient", routedCharacter, "voice:", voice, "text:", text.slice(0, 50));
     try {
       const audioBuffer = await synthesizePatientAudio(text, voice);
       if (audioBuffer) {
         log("TTS audio generated", routedCharacter, "bytes:", audioBuffer.length);
-        // Send audio only to presenter (role === "presenter")
-        sessionManager.broadcastToPresenters(sessionId, {
+        // Send audio to all participants so students hear the patient/nurse
+        sessionManager.broadcastToSession(sessionId, {
           type: "patient_audio",
           sessionId,
           audioBase64: audioBuffer.toString("base64"),
@@ -907,7 +908,8 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
       sessionId
     );
     if (audioBuffer) {
-      sessionManager.broadcastToPresenters(sessionId, {
+      // Send audio to all participants so students hear the patient
+      sessionManager.broadcastToSession(sessionId, {
         type: "patient_audio",
         sessionId,
         audioBase64: audioBuffer.toString("base64"),
@@ -1198,7 +1200,8 @@ function ensureRuntime(sessionId: string): Runtime {
       apiKey: realtimeApiKey,
       systemPrompt: buildSystemPrompt(scenarioId),
       onAudioOut: (buf) => {
-        sessionManager.broadcastToPresenters(sessionId, {
+        // Send audio to all participants so students hear the patient
+        sessionManager.broadcastToSession(sessionId, {
           type: "patient_audio",
           sessionId,
           audioBase64: buf.toString("base64"),

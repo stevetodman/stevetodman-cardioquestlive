@@ -158,7 +158,8 @@ export type OrderRequest =
   | { type: "imaging" }
   | { type: "cardiac_exam" }
   | { type: "lung_exam" }
-  | { type: "general_exam" };
+  | { type: "general_exam" }
+  | { type: "iv_access" };
 
 /**
  * Parse utterance for order requests (vitals, exams, EKG, labs, imaging)
@@ -214,6 +215,14 @@ export function parseOrderRequest(utterance: string): OrderRequest | null {
   if (/(get|order)\s*(a\s*)?(chest\s*)?(x-?ray|xray|cxr|imaging)/.test(text) ||
       /^(cxr|x-?ray|imaging)$/.test(text)) {
     return { type: "imaging" };
+  }
+
+  // IV access request - "start an IV", "place an IV", "get IV access", "start a line"
+  if (/(start|place|get|put in|establish)\s*(a\s*)?(an\s*)?(iv|i\.v\.|line|peripheral\s*access|iv\s*access)/.test(text) ||
+      /(iv|i\.v\.)\s*(access|line)/.test(text) ||
+      /^(iv|i\.v\.|line)$/.test(text) ||
+      /(need|want|let'?s\s*get)\s*(a\s*)?(an\s*)?(iv|line)/.test(text)) {
+    return { type: "iv_access" };
   }
 
   return null;

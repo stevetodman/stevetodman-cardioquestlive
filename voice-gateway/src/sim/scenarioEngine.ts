@@ -726,6 +726,14 @@ export class ScenarioEngine {
     this.state = { ...this.state, interventions };
   }
 
+  /**
+   * Set vitals to absolute values (not deltas).
+   * Used by presenter injects that specify target vitals directly.
+   */
+  setVitals(vitals: Vitals) {
+    this.state = { ...this.state, vitals };
+  }
+
   updateIntervention<K extends keyof Interventions>(key: K, value: Interventions[K]) {
     this.state = {
       ...this.state,

@@ -69,13 +69,16 @@ function Home() {
                  <form onSubmit={handleJoin} className="space-y-2">
                     <label htmlFor="join-code" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Student Join</label>
                     <div className="flex gap-2">
-                        <input 
+                        <input
                             id="join-code"
-                            type="text" 
+                            type="text"
                             value={joinCode}
                             onChange={(e) => handleChange(e.target.value)}
                             placeholder="CODE"
                             aria-describedby="join-code-help"
+                            enterKeyHint="go"
+                            autoComplete="off"
+                            autoCapitalize="characters"
                             className={`flex-1 bg-slate-950 border rounded-lg px-4 py-3 text-center font-mono text-lg tracking-widest uppercase focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all placeholder:text-slate-700 ${
                               isComplete ? "border-emerald-500 shadow-[0_0_0_1px_rgba(16,185,129,0.4)]" : "border-slate-700"
                             } ${shake ? "animate-shake" : ""}`}

@@ -25,7 +25,6 @@ import { VoiceCharacterTile } from "../components/VoiceCharacterTile";
 import { VitalsMonitor } from "../components/VitalsMonitor";
 import { CodeBluePanel } from "../components/CodeBluePanel";
 import { PatientStatusOutline, Interventions } from "../components/PatientStatusOutline";
-import { InjectsPalette, Inject } from "../components/InjectsPalette";
 import { voiceGatewayClient } from "../services/VoiceGatewayClient";
 import {
   PatientState,
@@ -53,7 +52,7 @@ import { GamificationControls, ScenarioSnapshotCard, PresenterHeader } from "../
 import { VoiceDebugPanel } from "../components/presenter/VoiceDebugPanel";
 import { SectionLabel } from "../components/ui";
 
-/** Small elapsed timer that updates every second. */
+/** Elapsed timer that updates every second with clock icon. */
 function ElapsedTimer({ startTime }: { startTime: number }) {
   const [elapsed, setElapsed] = useState(0);
 
@@ -73,7 +72,11 @@ function ElapsedTimer({ startTime }: { startTime: number }) {
   const display = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 
   return (
-    <span className="px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-800 font-mono text-[11px] text-slate-300">
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900/80 border border-emerald-700/50 font-mono text-sm text-emerald-200 shadow-sm shadow-emerald-900/30">
+      <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
       {display}
     </span>
   );
@@ -1763,7 +1766,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
       : "idle";
 
   return (
-    <div className="h-screen bg-slate-950 text-slate-50 overflow-hidden relative flex flex-col">
+    <div className="h-screen-safe bg-slate-950 text-slate-50 overflow-hidden relative flex flex-col">
       {presenterHeader}
       {copyToast && (
         <div className="fixed top-4 right-4 bg-slate-900 border border-slate-700 text-slate-100 px-3 py-2 rounded-lg shadow-lg text-sm z-50">
@@ -1945,17 +1948,6 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                 compact
               />
               <CodeBluePanel rhythmSummary={simState.rhythmSummary} />
-              <InjectsPalette
-                onInject={(inject) => {
-                  voiceGatewayClient.sendVoiceCommand("scenario_event", {
-                    event: inject.payload.eventType,
-                    ...inject.payload,
-                  });
-                  setCopyToast(`Inject sent: ${inject.label}`);
-                }}
-                disabled={gatewayStatus.state !== "ready"}
-                compact
-              />
               {simState.telemetry && (
                 <div className="flex items-center gap-2">
                   <button
@@ -2529,34 +2521,6 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                             ? `HR ${o.result.hr ?? "—"} BP ${o.result.bp ?? "—"} SpO₂ ${o.result.spo2 ?? "—"}`
                             : "In progress")}
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-            {/* Transcript */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-slate-100 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-slate-200">Transcript</div>
-                <div className="text-[10px] text-slate-500">Recent conversation</div>
-              </div>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {transcriptTurns.length === 0 ? (
-                  <div className="text-xs text-slate-500">No conversation yet...</div>
-                ) : (
-                  transcriptTurns.slice(-10).map((t) => (
-                    <div
-                      key={t.id}
-                      className={`rounded-lg px-3 py-2 text-sm ${
-                        t.role === "doctor"
-                          ? "bg-slate-800/70 text-amber-100 border-l-2 border-amber-500"
-                          : "bg-emerald-900/30 text-emerald-100 border-l-2 border-emerald-500"
-                      }`}
-                    >
-                      <div className="text-[10px] uppercase mb-1 opacity-70">
-                        {t.character ?? t.role}
-                      </div>
-                      <div>{t.text}</div>
                     </div>
                   ))
                 )}
