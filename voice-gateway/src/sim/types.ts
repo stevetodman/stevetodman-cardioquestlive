@@ -242,7 +242,7 @@ export type SimStateBase = {
   stageIds?: string[];
   orders?: {
     id: string;
-    type: "vitals" | "ekg" | "labs" | "imaging" | "cardiac_exam" | "lung_exam" | "general_exam";
+    type: "vitals" | "ekg" | "labs" | "imaging" | "cardiac_exam" | "lung_exam" | "general_exam" | "iv_access";
     status: "pending" | "complete";
     result?: import("../messageTypes").OrderResult;
     completedAt?: number;

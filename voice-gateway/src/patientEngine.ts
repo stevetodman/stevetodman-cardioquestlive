@@ -36,7 +36,7 @@ export function setScenarioForSession(sessionId: string, scenarioId: PatientScen
 }
 
 export function getScenarioForSession(sessionId: string): PatientScenarioId {
-  return sessionScenarios.get(sessionId) ?? "exertional_chest_pain";
+  return sessionScenarios.get(sessionId) ?? "teen_svt_complex_v1";
 }
 
 export function getOrCreatePatientEngine(sessionId: string) {

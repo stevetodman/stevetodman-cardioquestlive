@@ -953,6 +953,11 @@ function handleScenarioChange(sessionId: string, scenarioId: PatientScenarioId) 
     "exertional_syncope_hcm",
     "ductal_shock",
     "cyanotic_spell",
+    "kawasaki",
+    "coarctation_shock",
+    "arrhythmogenic_syncope",
+    "teen_svt_complex_v1",
+    "peds_myocarditis_silent_crash_v1",
   ];
   if (!allowed.includes(scenarioId)) {
     log("Ignoring invalid scenarioId", scenarioId);
@@ -1433,10 +1438,37 @@ function tickSVTPhase(sessionId: string, runtime: Runtime, ext: SVTExtendedState
         exam: svtOnsetPhase.examFindings,
         rhythmSummary: svtOnsetPhase.rhythmSummary,
       });
-      sessionManager.broadcastToPresenters(sessionId, {
+      // Announce SVT onset to all participants with TTS
+      const svtOnsetText = "It's happening again! My heart is going so fast... I can feel it in my throat!";
+      sessionManager.broadcastToSession(sessionId, {
+        type: "patient_state",
+        sessionId,
+        state: "speaking",
+        character: "patient",
+      });
+      sessionManager.broadcastToSession(sessionId, {
         type: "patient_transcript_delta",
         sessionId,
-        text: "Alex suddenly clutches her chest: 'It's happening again! My heart is going so fast!'",
+        text: svtOnsetText,
+        character: "patient",
+      });
+      // Generate TTS audio for patient
+      synthesizePatientAudio(svtOnsetText, "alloy")
+        .then((audioBuffer) => {
+          if (audioBuffer) {
+            sessionManager.broadcastToSession(sessionId, {
+              type: "patient_audio",
+              sessionId,
+              audioBase64: audioBuffer.toString("base64"),
+              character: "patient",
+            });
+          }
+        })
+        .catch((err) => logError("TTS failed for SVT onset", err));
+      sessionManager.broadcastToSession(sessionId, {
+        type: "patient_state",
+        sessionId,
+        state: "idle",
         character: "patient",
       });
       log("[svt] Phase transition: presentation → svt_onset", sessionId);

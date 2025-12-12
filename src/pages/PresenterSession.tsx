@@ -228,7 +228,7 @@ const [voiceGuideOpen, setVoiceGuideOpen] = useState<boolean>(false);
 const [autoForceReply, setAutoForceReply] = useState(false);
 const [targetCharacter, setTargetCharacter] = useState<CharacterId>("patient");
 const [selectedScenario, setSelectedScenario] =
-  useState<PatientScenarioId>("exertional_chest_pain");
+  useState<PatientScenarioId>("teen_svt_complex_v1");
 const [isAnalyzing, setIsAnalyzing] = useState(false);
 const [debriefResult, setDebriefResult] = useState<AnalysisResult | null>(null);
 const [complexDebriefResult, setComplexDebriefResult] = useState<ComplexDebriefResult | null>(null);
