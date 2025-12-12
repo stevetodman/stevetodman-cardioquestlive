@@ -995,6 +995,14 @@ async function handleDoctorAudio(
       void transcribeDoctorAudio(audioBuffer, contentType)
         .then((text) => {
           if (text && text.trim().length > 0) {
+            // Check if utterance is for non-patient (order or explicit character routing)
+            // If so, cancel the realtime patient response to avoid "echo" effect
+            const orderRequest = parseOrderRequest(text);
+            const routedCharacter = character ?? chooseCharacter(text);
+            if (orderRequest || routedCharacter !== "patient") {
+              log("Canceling realtime patient response for non-patient utterance", sessionId, orderRequest?.type ?? routedCharacter);
+              runtime.realtime?.cancelResponse();
+            }
             broadcastDoctorUtterance(sessionId, userId, text, character);
           }
         })

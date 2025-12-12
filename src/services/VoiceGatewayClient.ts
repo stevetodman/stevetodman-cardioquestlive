@@ -36,6 +36,8 @@ type SimStateListener = (state: {
   orders?: any[];
   ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
   telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
+  treatmentHistory?: { ts: number; treatmentType: string }[];
+  scenarioStartedAt?: number;
 }) => void;
 type VoiceErrorListener = (error: {
   error: "tts_failed" | "stt_failed" | "openai_failed";
@@ -654,6 +656,8 @@ class VoiceGatewayClient {
             orders: anyMsg.orders,
             ekgHistory: anyMsg.ekgHistory,
             telemetryHistory: anyMsg.telemetryHistory,
+            treatmentHistory: anyMsg.treatmentHistory,
+            scenarioStartedAt: anyMsg.scenarioStartedAt,
           })
         );
         break;

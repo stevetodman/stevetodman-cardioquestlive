@@ -94,6 +94,16 @@ export class RealtimePatientClient {
     this.send({ type: "response.create" });
   }
 
+  /**
+   * Cancel the current response. Useful when we detect the utterance
+   * is directed at a non-patient character (nurse, tech, etc.).
+   */
+  cancelResponse() {
+    if (!this.ws || !this.connected) return;
+    log("[realtime] canceling response", this.opts.simId);
+    this.send({ type: "response.cancel" });
+  }
+
   close() {
     if (this.ws) {
       try {
