@@ -1152,11 +1152,15 @@ function maybeAutoForceReply(sessionId: string, text: string, explicitCharacter?
       handleExamRequest(sessionId, examType);
     } else {
       // For voice-ordered requests, we only have userId (no displayName available)
+      // Pass IV location if present
+      const ivParams = orderRequest.type === "iv_access" && orderRequest.location
+        ? { location: orderRequest.location }
+        : undefined;
       handleOrder(sessionId, orderRequest.type, userId ? {
         id: userId,
         name: "Voice Order",
         role: "participant",
-      } : undefined);
+      } : undefined, ivParams);
     }
     return;
   }

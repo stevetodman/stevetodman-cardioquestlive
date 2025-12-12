@@ -10,12 +10,13 @@ import { synthesizePatientAudio } from "./ttsClient";
 import { log, logError } from "./logger";
 
 // Voice mapping for TTS (matches characterBroadcast.ts)
+// Valid OpenAI TTS voices: alloy, echo, fable, onyx, nova, shimmer
 const CHARACTER_VOICE_MAP: Record<CharacterId, string | undefined> = {
-  patient: "coral",
+  patient: "alloy",
   parent: "nova",
-  nurse: "sage",
-  tech: "verse",
-  consultant: "ballad",
+  nurse: "echo",
+  tech: "fable",
+  consultant: "onyx",
   imaging: "shimmer",
 };
 

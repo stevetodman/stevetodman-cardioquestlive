@@ -159,7 +159,33 @@ export type OrderRequest =
   | { type: "cardiac_exam" }
   | { type: "lung_exam" }
   | { type: "general_exam" }
-  | { type: "iv_access" };
+  | { type: "iv_access"; location?: string };
+
+/**
+ * Parse IV location from utterance
+ */
+function parseIVLocation(text: string): string | undefined {
+  // Check for left/right
+  const isLeft = /\bleft\b/.test(text);
+  const isRight = /\bright\b/.test(text);
+
+  // Check for specific sites
+  if (/\b(ac|antecubital|anticubital)\b/.test(text)) {
+    return isLeft ? "left_ac" : isRight ? "right_ac" : "right_ac";
+  }
+  if (/\bhand\b/.test(text)) {
+    return isLeft ? "left_hand" : isRight ? "right_hand" : "right_hand";
+  }
+  if (/\b(forearm|arm)\b/.test(text)) {
+    return isLeft ? "left_ac" : isRight ? "right_ac" : undefined;
+  }
+
+  // Just left/right without site
+  if (isLeft) return "left_ac";
+  if (isRight) return "right_ac";
+
+  return undefined;
+}
 
 /**
  * Parse utterance for order requests (vitals, exams, EKG, labs, imaging)
@@ -223,7 +249,8 @@ export function parseOrderRequest(utterance: string): OrderRequest | null {
       /^(iv|i\.v\.|line)$/.test(text) ||
       /(need|want|let'?s\s*get)\s*(a\s*)?(an\s*)?(iv|line)/.test(text) ||
       /(second|another|one more|additional)\s*(iv|i\.v\.|line)/.test(text)) {
-    return { type: "iv_access" };
+    const location = parseIVLocation(text);
+    return { type: "iv_access", location };
   }
 
   return null;

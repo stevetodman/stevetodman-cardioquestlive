@@ -13,7 +13,7 @@ Interactive pediatric cardiology teaching with presenter + student modes, Gemini
 - **Facilitator guide**: `docs/FACILITATOR_GUIDE.md` - Complete scenario documentation with clinical details
 - Admin deck editing: `docs/ADMIN_SLIDE_EDITING.md`
 - Ops/deploy: `DEPLOY.md`, `RUNBOOK.md`
-- Voice/virtual patient: `docs/virtual-patient-status.md`, `docs/voice-sim-state-and-harnesses.md`
+- Voice/virtual patient: `docs/voice-sim-state-and-harnesses.md`
 - Testing matrix: `docs/TESTING_MATRIX.md`
 
 ## Overview

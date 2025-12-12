@@ -1,8 +1,8 @@
-## Voice Sim State & Harnesses
+# Voice Gateway & Simulation
 
-Real-time simulation state management and testing harnesses for the voice gateway.
+Real-time pediatric cardiology simulation with AI-powered patient/NPC interactions.
 
-### Architecture
+## Architecture
 
 ```
 ┌─────────────────┐     ┌───────────────────┐     ┌──────────────────┐
@@ -18,218 +18,137 @@ Real-time simulation state management and testing harnesses for the voice gatewa
                     └─────────────────────┘
 ```
 
-### What's Implemented
+## Characters
 
-**Core Engine** (`voice-gateway/src/sim/scenarioEngine.ts`):
-- ScenarioEngine with stage-based state machine
-- PALS-accurate age-dependent HR thresholds (neonate → adolescent)
-- Dynamic rhythm generation (`getDynamicRhythm()`)
-- Vitals drift over time
-- ToolGate for intent validation and rate limits
+| Character | Role | TTS Voice |
+|-----------|------|-----------|
+| Patient | Primary interviewee, age-appropriate responses | alloy |
+| Parent | Birth/family history, scenario-specific concerns | nova |
+| Nurse | Order executor, confirms doses (mg/kg), reports changes | echo |
+| Tech | EKG/monitor tech, rhythm descriptions | fable |
+| Consultant | Brief recommendations, next steps | onyx |
+| Imaging | CXR/echo summaries | shimmer |
 
-**State Broadcasting** (`voice-gateway/src/index.ts`):
-- `sim_state` WebSocket message with full simulation data
-- **Presenter view**: All vitals, orders, telemetry, exam findings, interventions
-- **Participant view**: Only ordered data (vitals, EKG, exam audio after request)
-- Telemetry waveform generation
-- Auscultation audio clips (scenario-specific)
-- Interventions tracking (IV, oxygen, defib pads, monitor, NG tube, foley, ETT)
+Characters can interject during scenarios (e.g., nurse: "Doctor, sats are dropping").
 
-**Frontend**:
-- Presenter: Stage/vitals chips, freeze/unfreeze, force reply, skip stage, live captions
-- Participant: Status banner, PTT (disabled in fallback), exam audio playback
-- Safari mic fix: `requestPermission()` triggers actual getUserMedia prompt (Permissions API unsupported)
+## State Visibility
 
-**Characters** (`voice-gateway/src/patientPersona.ts`):
-- Patient, Parent, Nurse, Tech, Consultant—each with sim-context-aware prompts
-- Real-time vitals/scenario injection into character responses
+**Presenters** see full state: vitals, telemetry, rhythm, all orders, interventions, extended state
 
-### Running Harnesses
+**Participants** see only ordered data:
+- Vitals: After ordering vitals or enabling telemetry
+- Rhythm/EKG: After ordering EKG or enabling telemetry
+- Exam findings: After performing physical exam
 
-```bash
-cd voice-gateway
+Both roles see interventions (IV, oxygen, defib pads, monitor, NG tube, foley, ETT).
 
-# Build first
-npm run build
+## Scenarios
 
-# Unit tests (28 rhythm generation tests)
-npm test
+| ID | Age | Weight | Description |
+|----|-----|--------|-------------|
+| `syncope` | 15yo | 55kg | Exertional syncope |
+| `exertional_chest_pain` | 16yo | 62kg | Chest pain with exertion |
+| `palpitations_svt` | 14yo | 50kg | Recurrent SVT episodes |
+| `myocarditis` | 11yo | 38kg | Post-viral myocarditis |
+| `exertional_syncope_hcm` | 17yo | 70kg | HCM with family hx sudden death |
+| `ductal_shock` | 1mo | 3.5kg | Ductal-dependent lesion |
+| `cyanotic_spell` | 2yo | 12kg | Tet spell, cyanotic CHD |
+| `kawasaki` | 4yo | 16kg | Kawasaki disease |
+| `coarctation_shock` | 2mo | 4.5kg | Coarctation with shock |
+| `arrhythmogenic_syncope` | 15yo | 58kg | ARVC/CPVT with VT |
+| `teen_svt_complex_v1` | 14yo | 50kg | Complex SVT with PALS algorithm |
+| `peds_myocarditis_silent_crash_v1` | 10yo | 32kg | Fulminant myocarditis |
 
-# Exercise ScenarioEngine + ToolGate
-npm run sim:harness
+## Age-Based HR Thresholds (PALS)
 
-# WS flow test (gateway must be running)
-GW_URL=ws://localhost:8081/ws/voice npm run ws:harness
-```
+| Age Group | NSR Range | Tachycardia | Bradycardia | SVT |
+|-----------|-----------|-------------|-------------|-----|
+| Neonate (<1mo) | 100-180 | >180 | <100 | >220 |
+| Infant (1-12mo) | 100-160 | >160 | <100 | >220 |
+| Toddler (1-3yr) | 90-150 | >150 | <90 | >220 |
+| Preschool (3-6yr) | 80-120 | >120 | <80 | >220 |
+| School-age (6-12yr) | 70-110 | >110 | <70 | >220 |
+| Adolescent (>12yr) | 60-100 | >100 | <60 | >220 |
 
-### Authentication
+## Weight-Based Medication Dosing (PALS)
 
-**Production mode** (default): The voice WebSocket requires a valid Firebase ID token in the `join` message.
-- Client sends `{ type: "join", authToken: "<Firebase ID token>", ... }`
-- Gateway verifies token via `firebase-admin` and checks `uid` matches `userId`
-- On invalid/expired token: server sends `{ type: "error", message: "unauthorized_token" }` and closes connection
-- Client receives `unauthorized_token`, refreshes token once, and retries
-- If retry fails, client sets status to `error/unauthorized` and shows "Sign back in to use voice"
+| Medication | Dose | Max | Notes |
+|------------|------|-----|-------|
+| Adenosine | 0.1 mg/kg rapid push | 6mg (1st), 12mg (2nd) | Flush with 5 mL NS |
+| Amiodarone | 5 mg/kg over 20 min | 300mg | VF/pVT refractory |
+| Epinephrine | 0.01 mg/kg (10 mcg/kg) | — | 1:10,000 IV |
+| Atropine | 0.02 mg/kg | 0.5mg child, 1mg teen | Min 0.1mg |
+| Cardioversion | 0.5-1 J/kg | 2 J/kg | Synchronized |
+| Defibrillation | 2-4 J/kg | — | Asynchronous |
 
-**Development mode**: Set `ALLOW_INSECURE_VOICE_WS=true` in voice-gateway `.env`:
-```bash
-# voice-gateway/.env
-ALLOW_INSECURE_VOICE_WS=true
-```
-- Tokens are not verified; any `join` succeeds
-- UI shows "⚠️ Insecure voice WS (dev only)" warning
-- Useful for local dev with emulators or tunnels
+Nurse confirms exact dose with mg/kg calculation before administration.
 
-**Environment variables**:
-- `VITE_VOICE_GATEWAY_URL` (frontend): WebSocket URL override for tunnels, e.g. `wss://my-tunnel.trycloudflare.com/ws/voice`
-- `ALLOW_INSECURE_VOICE_WS` (gateway): Set to `true` for insecure local dev
+## Complex Scenario Scoring
 
-### Manual Testing
+Both complex scenarios use deterministic scoring with AI-powered debrief.
 
-1. Start gateway: `cd voice-gateway && npm start`
-2. Start frontend: `npm run dev` (root)
-3. Open presenter + participant views
-4. Verify:
-   - Presenter sees full vitals/rhythm/orders/interventions
-   - Participant only sees data after ordering it (exam, EKG, etc.)
-   - Exam audio plays on participant device (AirPods)
-   - Stage transitions update rhythm appropriately
-   - IV and other interventions appear on patient figure after order completes
-   - In dev mode with `ALLOW_INSECURE_VOICE_WS=true`, see insecure warning banner
+**Formula**: Base 50 + Checklist (10 pts × 5) + Bonuses - Penalties
+**Pass**: 4/5 checklist items required
+**Grades**: A (90+), B (80-89), C (70-79), D (60-69), F (<60 or failed)
 
-### Interventions Flow
-
-Interventions (IV, oxygen, defib pads, etc.) follow a unified flow:
-
-```
-Order placed → orders.ts processes → updateIntervention() called
-    → state.interventions updated → broadcastSimState()
-    → VoiceGatewayClient receives sim_state with interventions
-    → PatientStatusOutline renders intervention indicators
-```
-
-**Supported interventions**:
-- `iv`: IV access with location, gauge, fluid type
-- `oxygen`: O2 delivery (nasal cannula, mask, etc.) with flow rate
-- `defibPads`: Defibrillation pads placement
-- `monitor`: Cardiac monitor leads
-- `ngTube`: Nasogastric tube
-- `foley`: Urinary catheter
-- `ett`: Endotracheal tube (size, depth) - auto-mapped from extended airway state
-
-All interventions are shared between presenter and participant views.
-
-### Age-Based HR Thresholds (PALS)
-
-| Age Group | NSR Range | Tachy Threshold | Brady Threshold | SVT |
-|-----------|-----------|-----------------|-----------------|-----|
-| Neonate (<1mo) | 100-180 | 180 | 100 | >220 |
-| Infant (1-12mo) | 100-160 | 160 | 100 | >220 |
-| Toddler (1-3y) | 90-150 | 150 | 90 | >220 |
-| Preschool (3-5y) | 80-140 | 140 | 80 | >220 |
-| School (5-12y) | 70-120 | 120 | 70 | >220 |
-| Adolescent (>12y) | 60-100 | 100 | 60 | >220 |
-
-### Event Logging & Persistence
-
-**Sim State Persistence** (`voice-gateway/src/persistence.ts`):
-- `persistSimState()`: Writes sim state to Firestore `sessions/{simId}` with change detection
-- `loadSimState()`: Restores state for session recovery
-- `logSimEvent()`: Appends events to `sessions/{simId}/events` subcollection
-- Zod schema validation prevents corrupt state from breaking replay
-
-**Event Log Architecture** (`voice-gateway/src/sim/eventLog.ts`):
-```
-┌─────────────────────────────────────────────────────────┐
-│              CompositeEventLog (prod)                   │
-│  ┌─────────────────────┐  ┌──────────────────────────┐  │
-│  │  InMemoryEventLog   │  │    FirestoreEventLog     │  │
-│  │  (debug/getRecent)  │  │  (replay/persistence)    │  │
-│  └─────────────────────┘  └──────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-```
-- `InMemoryEventLog`: Bounded buffer (5000 events) for dev debugging
-- `FirestoreEventLog`: Fire-and-forget writes to Firestore for production replay
-- `CompositeEventLog`: Combines both; used in prod when `FIREBASE_SERVICE_ACCOUNT` is set
-- `createEventLog()`: Factory that selects appropriate logger based on environment
-
-**Voice Event Logger** (`src/services/voiceEventLogger.ts`):
-- Client-side logging for voice_error, voice_fallback, voice_recovered events
-- Spike detection: alerts when >5 errors in 1-minute window
-- Redacted sink: POSTs to `VITE_VOICE_LOG_SINK_URL` in production (or console.warn fallback)
-- In-memory buffer (50 events) with subscriber pattern for UI debugging
-
-### Complex Scenarios & Scoring
-
-Two advanced scenarios with full scoring and AI-powered debrief:
-
-**Available Scenarios**:
-- `teen_svt_complex_v1`: 14-year-old with SVT, PALS algorithm (vagal → adenosine → cardioversion)
-- `peds_myocarditis_silent_crash_v1`: 10-year-old with fulminant myocarditis, cardiogenic shock management
-
-**Running Scenarios Locally**:
-```bash
-cd voice-gateway && npm run build
-npm run scenario teen_svt_complex_v1
-npm run scenario peds_myocarditis_silent_crash_v1
-```
-
-**Scoring System**:
-| Component | Points |
-|-----------|--------|
-| Base score | 50 |
-| Checklist items (5) | +10 each (max 50) |
-| Bonuses | +5 to +20 each |
-| Penalties | -10 to -20 each |
-| **Pass threshold** | 4/5 checklist items |
-
-**Grading**:
-| Points | Grade |
-|--------|-------|
-| 90-100 | A |
-| 80-89 | B |
-| 70-79 | C |
-| 60-69 | D |
-| <60 or failed | F |
-
-**SVT Checklist** (need 4/5):
+### SVT Checklist
 1. Ordered 12-lead ECG
 2. Attempted vagal maneuvers before adenosine
 3. Adenosine dosed correctly (0.1 mg/kg ±10%)
 4. Patient on monitor during treatment
 5. Reassured patient/parent
 
-**Myocarditis Checklist** (need 4/5):
+### Myocarditis Checklist
 1. Recognized cardiac etiology (troponin/BNP/ECG)
 2. Avoided fluid overload (≤40 mL/kg)
 3. Called PICU within 10 min of decompensation
 4. Safe intubation (ketamine + pressor ready)
 5. Consulted cardiology
 
-**Debrief System** (`voice-gateway/src/debriefAnalyzer.ts`):
-- AI-powered analysis of transcript + scoring data
-- Generates: summary, strengths, opportunities, teaching points
-- Timeline with positive/negative event classification
-- Full report exportable via "Copy Report" button
-- Early debrief guard: requires 3+ turns or timeline events before analysis
+## Running Locally
 
-**UI Components**:
-- `ComplexDebriefPanel.tsx`: Modal with grade, checklist, bonuses/penalties, timeline
-- Grade badge with color coding (A=emerald, B=green, C=yellow, D=orange, F=red)
+```bash
+# Voice gateway
+cd voice-gateway && npm install && npm run build && npm start
 
-### Remaining Work
+# Run scenario without WebSocket
+npm run scenario teen_svt_complex_v1
+npm run scenario peds_myocarditis_silent_crash_v1
 
-**High Priority**:
-- Live OPENAI_API_KEY smoke testing
-- Set `VITE_VOICE_LOG_SINK_URL` in production (see README for Slack/PagerDuty examples)
+# Tests
+npm run test:gateway
+```
 
-**Medium Priority**:
-- Budget guardrail live testing (soft/hard thresholds)
+## Authentication
 
-**Low Priority**:
-- Jest Firestore emulator integration
-- Accessibility audit for new UI components (fallback banners, debug panel)
+**Production** (default): Voice WebSocket requires valid Firebase ID token in `join` message.
+- On invalid/expired token: server sends `{ type: "error", message: "unauthorized_token" }` and closes
+- Client refreshes token once and retries; on failure shows "Sign back in to use voice"
 
-**Before Public Launch**:
-- ~~Harden Firestore rules~~: ✅ Done - participants can only write `displayName`/`inactive`
-- Refactor god components: decompose `PresenterSession.tsx` and `JoinSession.tsx` into feature modules (voice/, orders/, scoring/, chat/)
+**Development**: Set `ALLOW_INSECURE_VOICE_WS=true` in `voice-gateway/.env`:
+- Tokens not verified; any `join` succeeds
+- UI shows "⚠️ Insecure voice WS (dev only)" warning
+
+## Interventions
+
+Interventions follow unified flow:
+```
+Order placed → orders.ts processes → updateIntervention()
+    → state.interventions updated → broadcastSimState()
+    → VoiceGatewayClient receives sim_state
+    → PatientStatusOutline renders indicators
+```
+
+**Supported**: iv, oxygen, defibPads, monitor, ngTube, foley, ett
+
+## Event Logging
+
+**Sim State Persistence** (`persistence.ts`):
+- `persistSimState()`: Writes to Firestore with change detection
+- `loadSimState()`: Restores state for session recovery
+- `logSimEvent()`: Appends to events subcollection
+
+**Voice Event Logger** (`voiceEventLogger.ts`):
+- Client-side logging for errors, fallbacks, recoveries
+- Spike detection: alerts on >5 errors in 1-minute window
+- Posts to `VITE_VOICE_LOG_SINK_URL` or console.warn fallback

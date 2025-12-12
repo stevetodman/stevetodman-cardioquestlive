@@ -1115,12 +1115,6 @@ export default function JoinSession() {
           />
         </div>
       )}
-      <div className="mt-2 text-[12px] text-slate-400 bg-slate-900/60 border border-slate-800 rounded-lg p-3 space-y-1">
-        <SectionLabel>Scoring</SectionLabel>
-        <div>Base: 100 points per correct answer.</div>
-        <div>Difficulty: easy x1.0 · medium x1.3 · hard x1.6.</div>
-        <div>Streak bonus: +10% for 2 in a row, +20% for 3, +50% for 4+.</div>
-      </div>
     </CollapsibleVoicePanel>
   ) : (
     <section className="bg-slate-900/50 rounded-xl p-4 border border-slate-800/50">
@@ -1304,7 +1298,7 @@ export default function JoinSession() {
           rr: simState.vitals.rr as number | undefined,
         } : undefined}
         rhythmSummary={simState?.rhythmSummary}
-        showVitals={Boolean(simState?.vitals && (simState.telemetry || simState.orders?.some(o => o.type === "vitals" && o.status === "complete")))}
+        showVitals={Boolean(simState?.vitals?.hr && (simState.telemetry || simState.orders?.some(o => o.type === "vitals" && o.status === "complete")))}
         showVitalsPanel={showVitalsPanel}
         onToggleVitalsPanel={() => setShowVitalsPanel(v => !v)}
         onCloseVitalsPanel={() => setShowVitalsPanel(false)}

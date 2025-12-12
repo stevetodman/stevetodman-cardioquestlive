@@ -21,7 +21,7 @@ Use this page as the on-ramp to the project. It links the right docs by role and
 |------|------------|
 | **Build/ship engineers** | `README.md` → `docs/ARCHITECTURE.md` |
 | **Deck/content editors** | `docs/ADMIN_SLIDE_EDITING.md` |
-| **Voice gateway owners** | `docs/voice-sim-state-and-harnesses.md`, `docs/virtual-patient-status.md` |
+| **Voice gateway owners** | `docs/voice-sim-state-and-harnesses.md` |
 | **AI Studio/Gemini** | `docs/GOOGLE_AI_STUDIO.md` |
 | **Testing** | `docs/TESTING_MATRIX.md` |
 
@@ -45,7 +45,6 @@ Key routes: Presenter `/#/create-demo` → `/#/presenter/:sessionId`; Student `/
 |----------|---------|
 | `docs/ARCHITECTURE.md` | App layout and data model |
 | `docs/ADMIN_SLIDE_EDITING.md` | Slide editing UX |
-| `docs/virtual-patient-status.md` | Clinical scenarios and PALS guidelines |
-| `docs/voice-sim-state-and-harnesses.md` | Voice gateway architecture |
+| `docs/voice-sim-state-and-harnesses.md` | Voice gateway, scenarios, PALS guidelines |
 | `docs/TESTING_MATRIX.md` | Test commands by change type |
 | `docs/GOOGLE_AI_STUDIO.md` | AI Studio integration |
