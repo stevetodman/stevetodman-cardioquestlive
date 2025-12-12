@@ -2140,31 +2140,11 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
                 >
                   {gatewayStatus.state}
                 </div>
-                {voiceInsecureMode && (
-                  <div className="text-[10px] text-amber-400 bg-amber-900/40 border border-amber-700/50 rounded px-2 py-0.5">
-                    ⚠️ Insecure WS
-                  </div>
-                )}
                 {simState?.voiceFallback && (
                   <div className="text-[10px] text-red-400 bg-red-900/40 border border-red-700/50 rounded px-2 py-0.5">
                     Voice degraded
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setShowDebugPanel(true)}
-                  className="text-[10px] text-slate-400 hover:text-slate-200 px-1.5 py-0.5 rounded border border-slate-700 hover:border-slate-600"
-                  title="Show voice debug panel"
-                >
-                  Debug
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleVoice}
-                  className="px-2.5 py-1 rounded-lg border border-slate-700 text-[11px] font-semibold bg-slate-900 hover:border-slate-600"
-                >
-                  {voice.enabled ? "Turn off" : "Turn on"}
-                </button>
                 {voice.enabled && voice.floorHolderId && (
                   <button
                     type="button"

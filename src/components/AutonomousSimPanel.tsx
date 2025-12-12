@@ -6,32 +6,8 @@ import { sendVoiceCommand } from "../services/voiceCommands";
 import { voiceGatewayClient } from "../services/VoiceGatewayClient";
 import { TranscriptLogTurn } from "./SessionTranscriptPanel";
 
-/** Scenario events the presenter can trigger */
-type ScenarioEvent = {
-  id: string;
-  label: string;
-  description: string;
-  category: "vitals" | "rhythm" | "clinical";
-  payload: Record<string, unknown>;
-};
-
-const SCENARIO_EVENTS: ScenarioEvent[] = [
-  // Vitals changes
-  { id: "hypoxia", label: "Hypoxia", description: "SpO2 drops to 80%", category: "vitals", payload: { event: "hypoxia", spo2: 80 } },
-  { id: "tachycardia", label: "Tachycardia", description: "HR increases to 180", category: "vitals", payload: { event: "tachycardia", hr: 180 } },
-  { id: "hypotension", label: "Hypotension", description: "BP drops to 70/40", category: "vitals", payload: { event: "hypotension", bp: "70/40" } },
-  { id: "fever", label: "Fever", description: "Temp spikes to 39.5°C", category: "vitals", payload: { event: "fever", temp: 39.5 } },
-  { id: "stabilize", label: "Stabilize", description: "Return vitals to normal", category: "vitals", payload: { event: "stabilize" } },
-  // Rhythm changes
-  { id: "vtach", label: "V-Tach", description: "Ventricular tachycardia", category: "rhythm", payload: { event: "rhythm_change", rhythm: "vtach" } },
-  { id: "svt", label: "SVT", description: "Supraventricular tachycardia", category: "rhythm", payload: { event: "rhythm_change", rhythm: "svt" } },
-  { id: "afib", label: "A-Fib", description: "Atrial fibrillation", category: "rhythm", payload: { event: "rhythm_change", rhythm: "afib" } },
-  { id: "sinus", label: "Sinus", description: "Return to sinus rhythm", category: "rhythm", payload: { event: "rhythm_change", rhythm: "sinus" } },
-  // Clinical events
-  { id: "deteriorate", label: "Deteriorate", description: "Patient worsens", category: "clinical", payload: { event: "deteriorate" } },
-  { id: "improve", label: "Improve", description: "Patient improves", category: "clinical", payload: { event: "improve" } },
-  { id: "code", label: "Code Blue", description: "Cardiac arrest", category: "clinical", payload: { event: "code_blue" } },
-];
+/** Complex scenarios that have their own phase progression - don't show manual override controls */
+const COMPLEX_SCENARIO_IDS = ["teen_svt_complex_v1", "peds_myocarditis_silent_crash_v1"];
 
 interface AutonomousSimPanelProps {
   sessionId: string;
@@ -87,14 +63,22 @@ export function AutonomousSimPanel({
   onScenarioChange,
 }: AutonomousSimPanelProps) {
   const [isPaused, setIsPaused] = useState(false);
-  const [showInterventions, setShowInterventions] = useState(false);
-  const [quickMessage, setQuickMessage] = useState("");
-  const [selectedCharacter, setSelectedCharacter] = useState<CharacterId>("patient");
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
 
   const isConnected = connectionStatus.state === "ready" || connectionStatus.state === "connecting";
   const isActive = connectionStatus.state === "ready" && voice.enabled;
+  const isComplexScenario = COMPLEX_SCENARIO_IDS.includes(scenarioId);
+
+  // Stop any playing audio
+  const handleStopAudio = () => {
+    // Stop all audio elements on the page
+    document.querySelectorAll("audio").forEach((audio) => {
+      audio.pause();
+      audio.currentTime = 0;
+    });
+    setFeedbackMsg("Audio stopped");
+  };
 
   // Get base timestamp for relative time display
   const baseTimestamp = useMemo(
@@ -136,18 +120,6 @@ export function AutonomousSimPanel({
       setIsPaused(true);
       setFeedbackMsg("Paused simulation");
     }
-  };
-
-  const handleScenarioEvent = (event: ScenarioEvent) => {
-    emitCommand(sessionId, "scenario_event", event.payload);
-    setFeedbackMsg(`Triggered: ${event.label}`);
-  };
-
-  const handleSendMessage = () => {
-    if (!quickMessage.trim()) return;
-    emitCommand(sessionId, "force_reply", { doctorUtterance: quickMessage.trim() }, selectedCharacter);
-    setFeedbackMsg(`Sent to ${selectedCharacter}`);
-    setQuickMessage("");
   };
 
   return (
@@ -246,17 +218,13 @@ export function AutonomousSimPanel({
             </button>
           )}
 
-          {/* Interventions toggle - always available */}
+          {/* Stop Audio button - always available */}
           <button
             type="button"
-            onClick={() => setShowInterventions(!showInterventions)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-              showInterventions
-                ? "bg-indigo-600/20 border-indigo-500/60 text-indigo-100"
-                : "bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600"
-            }`}
+            onClick={handleStopAudio}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-rose-600/20 border-rose-500/60 text-rose-100 hover:bg-rose-600/30"
           >
-            Patient Actions
+            Stop Audio
           </button>
         </div>
       </div>
@@ -268,115 +236,12 @@ export function AutonomousSimPanel({
         </div>
       )}
 
-      {/* Intervention controls - always available when toggled */}
-      {showInterventions && (
-        <div className="flex flex-col gap-3 bg-slate-950/50 rounded-lg border border-slate-800 p-3">
-          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
-            Presenter Controls
-          </div>
-
-          {/* Quick message to character */}
-          <div className="flex gap-2">
-            <select
-              value={selectedCharacter}
-              onChange={(e) => setSelectedCharacter(e.target.value as CharacterId)}
-              className="text-xs bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100"
-            >
-              <option value="patient">Patient</option>
-              <option value="parent">Parent</option>
-              <option value="nurse">Nurse</option>
-              <option value="tech">Tech</option>
-              <option value="consultant">Consultant</option>
-            </select>
-            <input
-              type="text"
-              value={quickMessage}
-              onChange={(e) => setQuickMessage(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-              placeholder={`Instruct ${selectedCharacter}...`}
-              className="flex-1 text-xs bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 placeholder:text-slate-500"
-            />
-            <button
-              type="button"
-              onClick={handleSendMessage}
-              disabled={!quickMessage.trim()}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600/20 border border-emerald-500/60 text-emerald-100 hover:bg-emerald-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Send
-            </button>
-          </div>
-
-          {/* Scenario events grid */}
-          <div className="grid grid-cols-3 gap-2">
-            {/* Vitals */}
-            <div className="space-y-1">
-              <div className="text-[10px] text-slate-500 uppercase tracking-wider">Vitals</div>
-              <div className="flex flex-wrap gap-1">
-                {SCENARIO_EVENTS.filter((e) => e.category === "vitals").map((event) => (
-                  <button
-                    key={event.id}
-                    type="button"
-                    onClick={() => handleScenarioEvent(event)}
-                    title={event.description}
-                    className="px-2 py-1 rounded text-[11px] font-semibold bg-slate-800 border border-slate-700 text-slate-200 hover:border-slate-600 hover:bg-slate-700"
-                  >
-                    {event.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Rhythm */}
-            <div className="space-y-1">
-              <div className="text-[10px] text-slate-500 uppercase tracking-wider">Rhythm</div>
-              <div className="flex flex-wrap gap-1">
-                {SCENARIO_EVENTS.filter((e) => e.category === "rhythm").map((event) => (
-                  <button
-                    key={event.id}
-                    type="button"
-                    onClick={() => handleScenarioEvent(event)}
-                    title={event.description}
-                    className="px-2 py-1 rounded text-[11px] font-semibold bg-slate-800 border border-slate-700 text-slate-200 hover:border-slate-600 hover:bg-slate-700"
-                  >
-                    {event.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Clinical */}
-            <div className="space-y-1">
-              <div className="text-[10px] text-slate-500 uppercase tracking-wider">Clinical</div>
-              <div className="flex flex-wrap gap-1">
-                {SCENARIO_EVENTS.filter((e) => e.category === "clinical").map((event) => (
-                  <button
-                    key={event.id}
-                    type="button"
-                    onClick={() => handleScenarioEvent(event)}
-                    title={event.description}
-                    className={`px-2 py-1 rounded text-[11px] font-semibold border hover:opacity-80 ${
-                      event.id === "code"
-                        ? "bg-rose-600/20 border-rose-500/60 text-rose-200"
-                        : event.id === "improve"
-                        ? "bg-emerald-600/20 border-emerald-500/60 text-emerald-200"
-                        : "bg-slate-800 border-slate-700 text-slate-200"
-                    }`}
-                  >
-                    {event.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Info message when not showing interventions */}
-      {!showInterventions && (
-        <div className="text-xs text-slate-500">
-          Students interact via their phones. The AI responds automatically. Click "Patient Actions" to change patient state.
-        </div>
-      )}
+      {/* Info message */}
+      <div className="text-xs text-slate-500">
+        {isComplexScenario
+          ? "Complex scenario with automatic phase progression. Use Stop Audio if needed."
+          : "Students interact via their phones. The AI responds automatically."}
+      </div>
 
       {/* Live transcript */}
       {isActive && (
