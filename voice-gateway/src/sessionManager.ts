@@ -10,6 +10,12 @@ type SessionSockets = {
 
 export class SessionManager {
   private sessions: Map<string, SessionSockets> = new Map();
+  private onSessionEmptyCallback?: (sessionId: string) => void;
+
+  /** Register callback to be notified when a session has no more clients */
+  onSessionEmpty(callback: (sessionId: string) => void) {
+    this.onSessionEmptyCallback = callback;
+  }
 
   private ensureSession(sessionId: string): SessionSockets {
     if (!this.sessions.has(sessionId)) {
@@ -42,6 +48,7 @@ export class SessionManager {
     }
     if (session.presenters.size === 0 && session.participants.size === 0) {
       this.sessions.delete(sessionId);
+      this.onSessionEmptyCallback?.(sessionId);
     }
   }
 

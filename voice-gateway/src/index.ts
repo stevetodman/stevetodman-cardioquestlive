@@ -96,6 +96,26 @@ const sessionCorrelationIds: Map<string, string> = new Map();
 // Sessions where voice has fallen back to text-only
 const voiceFallbackSessions: Set<string> = new Set();
 
+// Clean up per-session state when all clients disconnect (prevents memory leaks)
+sessionManager.onSessionEmpty((sessionId) => {
+  const runtime = runtimes.get(sessionId);
+  if (runtime?.realtime) {
+    try { runtime.realtime.close(); } catch { /* ignore */ }
+  }
+  runtimes.delete(sessionId);
+  scenarioTimers.get(sessionId) && clearInterval(scenarioTimers.get(sessionId)!);
+  scenarioTimers.delete(sessionId);
+  hydratedSessions.delete(sessionId);
+  sessionCorrelationIds.delete(sessionId);
+  voiceFallbackSessions.delete(sessionId);
+  lastCommandAt.delete(sessionId);
+  lastAutoReplyAt.delete(sessionId);
+  lastDoctorUtterance.delete(sessionId);
+  lastTreatmentAt.delete(sessionId);
+  alarmSeenAt.delete(sessionId);
+  log("Session cleaned up", { sessionId });
+});
+
 function generateCorrelationId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
