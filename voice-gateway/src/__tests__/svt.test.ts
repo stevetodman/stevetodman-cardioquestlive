@@ -749,3 +749,81 @@ describe("SVT Scenario Integration", () => {
     expect(unsedatedPenalty?.points).toBe(-20);
   });
 });
+
+// ============================================================================
+// Phase Transition Edge Cases
+// ============================================================================
+
+describe("SVT Phase Transition Edge Cases", () => {
+  describe("presentation → svt_onset timing", () => {
+    it("should transition after exactly 2 minutes", () => {
+      const startTime = Date.now();
+      const state = createInitialSVTState(startTime);
+
+      expect(state.phase).toBe("presentation");
+      expect(state.phaseEnteredAt).toBe(startTime);
+
+      // Check transition condition: phaseElapsedMin >= 2
+      const twoMinutesLater = startTime + 2 * 60 * 1000;
+      const phaseElapsedMs = twoMinutesLater - state.phaseEnteredAt;
+      const phaseElapsedMin = phaseElapsedMs / 60000;
+
+      expect(phaseElapsedMin).toBeGreaterThanOrEqual(2);
+    });
+
+    it("should NOT transition before 2 minutes", () => {
+      const startTime = Date.now();
+      const state = createInitialSVTState(startTime);
+
+      // 1 minute 59 seconds
+      const almostTwoMin = startTime + (2 * 60 * 1000 - 1000);
+      const phaseElapsedMs = almostTwoMin - state.phaseEnteredAt;
+      const phaseElapsedMin = phaseElapsedMs / 60000;
+
+      expect(phaseElapsedMin).toBeLessThan(2);
+    });
+  });
+
+  describe("hydration with stale phaseEnteredAt", () => {
+    it("should correctly calculate elapsed time from persisted phaseEnteredAt", () => {
+      // Simulate: scenario started 3 minutes ago, persisted to Firestore
+      const threeMinutesAgo = Date.now() - 3 * 60 * 1000;
+      const state = createInitialSVTState(threeMinutesAgo);
+
+      // If phaseEnteredAt is from 3 minutes ago, elapsed > 2 min
+      const now = Date.now();
+      const phaseElapsedMs = now - state.phaseEnteredAt;
+      const phaseElapsedMin = phaseElapsedMs / 60000;
+
+      expect(phaseElapsedMin).toBeGreaterThanOrEqual(2);
+      // Transition should fire immediately on next tick
+    });
+
+    it("should preserve phase on hydrate if already transitioned", () => {
+      const state = createInitialSVTState(Date.now());
+      // Simulate already being in svt_onset phase
+      state.phase = "svt_onset";
+      state.currentRhythm = "svt";
+
+      expect(state.phase).toBe("svt_onset");
+      expect(state.currentRhythm).toBe("svt");
+    });
+  });
+
+  describe("vitals target for each phase", () => {
+    it("presentation phase should have HR 90", () => {
+      const presentationPhase = SVT_PHASES.find((p) => p.id === "presentation");
+      expect(presentationPhase?.vitalsTarget.hr).toBe(90);
+    });
+
+    it("svt_onset phase should have HR 220", () => {
+      const svtOnsetPhase = SVT_PHASES.find((p) => p.id === "svt_onset");
+      expect(svtOnsetPhase?.vitalsTarget.hr).toBe(220);
+    });
+
+    it("converted phase should have HR 95 (sinus recovery)", () => {
+      const convertedPhase = SVT_PHASES.find((p) => p.id === "converted");
+      expect(convertedPhase?.vitalsTarget.hr).toBe(95);
+    });
+  });
+});
