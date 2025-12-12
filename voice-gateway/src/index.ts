@@ -1044,6 +1044,15 @@ async function handleAnalyzeTranscript(sessionId: string, turns: DebriefTurn[]) 
     });
   } catch (err) {
     logError("Debrief analysis error", err);
+    // Send fallback error response so presenter doesn't wait forever
+    sessionManager.broadcastToPresenters(sessionId, {
+      type: "analysis_result",
+      sessionId,
+      summary: "Debrief analysis failed. Please try again.",
+      strengths: [],
+      opportunities: [],
+      teachingPoints: [],
+    });
   }
 }
 
