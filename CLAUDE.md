@@ -74,18 +74,20 @@ When `analyze_transcript` is called for SVT or myocarditis scenarios:
 
 ### Orders System
 - **Order types**: vitals, ekg, labs, imaging, cardiac_exam, lung_exam, general_exam, iv_access
-- **Timing**: EKG 90-120s delay, CXR 180-240s delay, exams instant
-- **Tech acknowledgment**: NPC confirms order receipt
+- **Timing**: EKG 90-120s delay, CXR 180-240s delay, IV 45-75s, exams instant
+- **Tech acknowledgment**: NPC confirms order receipt with TTS audio
 - **Duplicate detection**: "Still working on current EKG"
 - **Viewers**: EkgViewer (Muse-like), CxrViewer (PACS-like)
 - **Interventions**: IV orders update `state.interventions`, rendered on patient figure
+- **Persistence**: Orders stored in scenarioEngine via `hydrate()` for state consistency
 
 ### Voice Gateway
 - WebSocket at `/ws/voice`
 - Heartbeat ping 30s, reconnect with exponential backoff
-- Characters: patient, parent, nurse, tech, consultant
+- Characters: patient, parent, nurse, tech, consultant, imaging
 - Safari mic: `requestPermission()` in VoicePatientService triggers getUserMedia prompt
 - Early debrief guard: requires 3+ turns/events before complex scenario analysis
+- **Realtime routing**: Non-patient utterances (orders, nurse commands) cancel patient response via `response.cancel`
 
 ### State Visibility
 - **Presenter**: Full state (vitals, rhythm, all orders, interventions)
@@ -124,7 +126,8 @@ When `analyze_transcript` is called for SVT or myocarditis scenarios:
 | `src/hooks/useIndividualScores.ts` | Individual leaderboard with inactive status |
 | `voice-gateway/src/index.ts` | WebSocket server |
 | `voice-gateway/src/sim/scenarioEngine.ts` | Scenario state machine |
-| `voice-gateway/src/orders.ts` | Order timers, duplicate detection, interventions |
+| `voice-gateway/src/orders.ts` | Order timers, duplicate detection, TTS, interventions |
+| `voice-gateway/src/sim/realtimePatientClient.ts` | OpenAI Realtime API wrapper (patient voice) |
 | `voice-gateway/src/validators.ts` | Zod schemas for sim_state, interventions |
 | `voice-gateway/src/messageTypes.ts` | OrderType, ClientToServerMessage types |
 | `voice-gateway/src/debriefAnalyzer.ts` | Complex scenario debrief (SVT/myocarditis scoring + AI) |
