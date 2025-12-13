@@ -252,6 +252,32 @@ const summaries: Record<PatientScenarioId, ScenarioSnapshot> = {
       { name: "Post-conversion ECG", status: "pending", summary: "Look for delta wave (WPW) after conversion." },
     ],
   },
+  peds_myocarditis_silent_crash_v1: {
+    chiefComplaint: "Respiratory distress and lethargy after viral illness",
+    hpi: [
+      "8-year-old with 5-day history of viral URI symptoms now with worsening fatigue.",
+      "Progressive lethargy and poor appetite over 24 hours.",
+      "Mild chest discomfort, shortness of breath at rest.",
+      "Parents note child 'just doesn't look right' - pale and sweaty.",
+    ],
+    exam: [
+      "Ill-appearing child, pale, diaphoretic, mottled extremities.",
+      "Tachycardia with gallop rhythm; weak pulses, cool extremities.",
+      "Hepatomegaly 3cm below costal margin; JVD present.",
+      "Crackles at lung bases; capillary refill 4-5 seconds.",
+    ],
+    labs: [
+      { name: "Troponin", status: "result", summary: "Markedly elevated - myocardial injury." },
+      { name: "BNP/NT-proBNP", status: "result", summary: "Significantly elevated - heart failure." },
+      { name: "Blood gas/lactate", status: "result", summary: "Metabolic acidosis with elevated lactate." },
+      { name: "Electrolytes", status: "pending", summary: "Monitor for arrhythmia risk." },
+    ],
+    imaging: [
+      { name: "ECG", status: "result", summary: "Sinus tachycardia, low voltage, diffuse ST-T changes, possible PVCs." },
+      { name: "CXR", status: "result", summary: "Cardiomegaly with pulmonary edema." },
+      { name: "Echo", status: "result", summary: "Severely depressed LV function, EF 15-20%." },
+    ],
+  },
 };
 
 export function getScenarioSnapshot(scenarioId: PatientScenarioId | null | undefined): ScenarioSnapshot | null {

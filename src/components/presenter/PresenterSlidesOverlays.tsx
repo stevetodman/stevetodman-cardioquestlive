@@ -17,6 +17,7 @@ export interface TeamScore {
   teamId: string;
   teamName: string;
   points: number;
+  memberCount: number;
 }
 
 export interface IndividualScore {
