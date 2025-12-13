@@ -51,6 +51,9 @@ import { usePresenterMode } from "../hooks/usePresenterMode";
 import { GamificationControls, ScenarioSnapshotCard, PresenterHeader } from "../components/presenter";
 import { VoiceDebugPanel } from "../components/presenter/VoiceDebugPanel";
 import { SectionLabel } from "../components/ui";
+import { useTranscriptManager } from "../hooks/useTranscriptManager";
+import { useTimelineBuilder } from "../hooks/useTimelineBuilder";
+import { useScoringState } from "../hooks/useScoringState";
 
 /** Elapsed timer that updates every second with clock icon. */
 function ElapsedTimer({ startTime }: { startTime: number }) {
