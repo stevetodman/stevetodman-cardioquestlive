@@ -864,7 +864,7 @@ export class ScenarioEngine {
 
     // Sinus tachycardia (age-dependent threshold)
     if (hr > thresholds.tachyThreshold) {
-      let base = `Sinus tachycardia ${hr} bpm`;
+      const base = `Sinus tachycardia ${hr} bpm`;
       // Add scenario-specific findings
       if (scenarioId === "myocarditis") return `${base}, low voltage QRS, diffuse ST-T changes`;
       if (scenarioId === "cyanotic_spell") return `${base}, RVH pattern, right axis`;
@@ -884,7 +884,7 @@ export class ScenarioEngine {
     }
 
     // Normal sinus rhythm (within age-appropriate range)
-    let nsr = `Normal sinus rhythm ${hr} bpm`;
+    const nsr = `Normal sinus rhythm ${hr} bpm`;
 
     // Add scenario-specific baseline findings
     if (scenarioId === "syncope") return `${nsr}, normal intervals, no preexcitation`;

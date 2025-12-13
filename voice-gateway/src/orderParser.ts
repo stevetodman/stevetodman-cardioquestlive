@@ -633,7 +633,7 @@ export function parseClarificationResponse(
   const text = response.toLowerCase();
 
   switch (pendingOrderType) {
-    case "fluids":
+    case "fluids": {
       // Check for volume
       const volumeMatch = text.match(/(\d+)\s*(?:ml|cc|per|\/)/i);
       if (volumeMatch) {
@@ -643,8 +643,9 @@ export function parseClarificationResponse(
       if (/push|fast|rapid|wide/i.test(text)) return { rate: "push" };
       if (/slow|over|twenty|20/i.test(text)) return { rate: "over_20_min" };
       break;
+    }
 
-    case "epi_drip":
+    case "epi_drip": {
       // Check for dose
       const epiMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:mcg|mic|point)/i);
       if (epiMatch) return { doseMcgKgMin: parseFloat(epiMatch[1]) };
@@ -652,6 +653,7 @@ export function parseClarificationResponse(
       if (/0?\s*\.?\s*1|point\s*one/i.test(text)) return { doseMcgKgMin: 0.1 };
       if (/0?\s*\.?\s*2|point\s*two/i.test(text)) return { doseMcgKgMin: 0.2 };
       break;
+    }
 
     case "intubation":
       if (/ketamine/i.test(text)) return { inductionAgent: "ketamine" };
@@ -659,12 +661,13 @@ export function parseClarificationResponse(
       if (/etomidate/i.test(text)) return { inductionAgent: "etomidate" };
       break;
 
-    case "oxygen":
+    case "oxygen": {
       const flowMatch = text.match(/(\d+)\s*(?:l|liters?)/i);
       if (flowMatch) return { flowLpm: parseInt(flowMatch[1]) };
       if (/nc|nasal/i.test(text)) return { delivery: "nasal_cannula" };
       if (/nrb|non-?rebreather|mask/i.test(text)) return { delivery: "non_rebreather" };
       break;
+    }
   }
 
   return null;

@@ -676,6 +676,17 @@ export default function JoinSession() {
     };
   }, [sessionId, userId]);
 
+  // Scroll to question section when question becomes active
+  useEffect(() => {
+    if (!session?.currentQuestionId) return;
+    const section = document.getElementById("question-section");
+    if (!section) return;
+    if (typeof section.scrollIntoView !== "function") return;
+    const prefersReduced =
+      typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    section.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "start" });
+  }, [session?.currentQuestionId]);
+
   // Team chat hook
   const teamChat = useTeamChat({
     sessionId,
@@ -1126,16 +1137,6 @@ export default function JoinSession() {
   );
 
   if (!joinCode) return <div className="p-8 text-center text-slate-400">No join code provided.</div>;
-
-  useEffect(() => {
-    if (!session?.currentQuestionId) return;
-    const section = document.getElementById("question-section");
-    if (!section) return;
-    if (typeof section.scrollIntoView !== "function") return;
-    const prefersReduced =
-      typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    section.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "start" });
-  }, [session?.currentQuestionId]);
 
   if (loading && !session) {
     return (

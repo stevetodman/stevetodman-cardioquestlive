@@ -9,7 +9,7 @@ const QRPolynomial = function (num: number[], shift: number) {
   this.num = new Array(num.length - offset + shift);
   for (let i = 0; i < num.length - offset; i++) this.num[i] = num[i + offset];
 };
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 QRPolynomial.prototype = {
   get: function (index: number) {
     return this.num[index];

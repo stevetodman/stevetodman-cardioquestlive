@@ -122,7 +122,8 @@ sessionManager.onSessionEmpty((sessionId) => {
     try { runtime.realtime.close(); } catch { /* ignore */ }
   }
   runtimes.delete(sessionId);
-  scenarioTimers.get(sessionId) && clearInterval(scenarioTimers.get(sessionId)!);
+  const timer = scenarioTimers.get(sessionId);
+  if (timer) clearInterval(timer);
   scenarioTimers.delete(sessionId);
   hydratedSessions.delete(sessionId);
   sessionCorrelationIds.delete(sessionId);
