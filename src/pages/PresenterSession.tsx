@@ -180,7 +180,7 @@ const [voiceGuideOpen, setVoiceGuideOpen] = useState<boolean>(false);
   const [questionStats, setQuestionStats] = useState<
     { questionId: string; questionIndex: number; correctCount: number; totalCount: number; accuracyPct: number }[]
   >([]);
-  const [transcriptTurns, setTranscriptTurns] = useState<TranscriptTurn[]>([]);
+  // transcriptTurns now comes from useTranscriptManager hook
   const [patientState, setPatientState] = useState<PatientState>("idle");
   const [gatewayStatus, setGatewayStatus] = useState<VoiceConnectionStatus>({
     state: "disconnected",
@@ -205,8 +205,7 @@ const [voiceGuideOpen, setVoiceGuideOpen] = useState<boolean>(false);
     stageIds?: string[];
     orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending" | "complete"; result?: any; completedAt?: number }[];
   } | null>(null);
-  const [transcriptLog, setTranscriptLog] = useState<TranscriptLogTurn[]>([]);
-  const [patientAudioUrl, setPatientAudioUrl] = useState<string | null>(null);
+  // transcriptLog, patientAudioUrl now come from useTranscriptManager hook
   const [freezeStatus, setFreezeStatus] = useState<"live" | "frozen">("live");
   const [showInterventions, setShowInterventions] = useState(false);
   const [showEkg, setShowEkg] = useState(false);
@@ -225,7 +224,7 @@ const [voiceGuideOpen, setVoiceGuideOpen] = useState<boolean>(false);
   } | null>(null);
   const [availableStages, setAvailableStages] = useState<string[]>([]);
   const [selectedStage, setSelectedStage] = useState<string>("");
-  const [doctorQuestionText, setDoctorQuestionText] = useState<string>("");
+  // doctorQuestionText now comes from useTranscriptManager hook
   const [budgetAlert, setBudgetAlert] = useState<{ level: "soft" | "hard"; message: string } | null>(null);
   const [alarmNotice, setAlarmNotice] = useState<string | null>(null);
 const [autoForceReply, setAutoForceReply] = useState(false);
@@ -240,7 +239,7 @@ const [timelineFilter, setTimelineFilter] = useState<string>("all");
 const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 const [timelineSearch, setTimelineSearch] = useState<string>("");
-const [timelineExtras, setTimelineExtras] = useState<{ id: string; ts: number; label: string; detail: string }[]>([]);
+// timelineExtras now comes from useTranscriptManager hook
 const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exported" | "error">("idle");
 const [voiceLocked, setVoiceLocked] = useState(false);
 const [activeCharacter, setActiveCharacter] = useState<{ character: CharacterId; state: PatientState } | null>(null);
@@ -261,6 +260,32 @@ const [showQr, setShowQr] = useState(false);
 const [copyToast, setCopyToast] = useState<string | null>(null);
   const summaryRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  // Extracted hook for transcript management
+  const {
+    transcriptTurns,
+    transcriptLog,
+    timelineExtras,
+    patientAudioUrl,
+    doctorQuestionText,
+    setTranscriptTurns,
+    setTranscriptLog,
+    setTimelineExtras,
+    setPatientAudioUrl,
+    setDoctorQuestionText,
+    makeTurnId,
+    logDoctorQuestion,
+    clearTranscript,
+    resetTranscriptState,
+    refs: {
+      currentTurnIdRef,
+      currentTurnCharacterRef,
+      lastDoctorTurnIdRef,
+      lastAutoForcedRef,
+      loggedOrderIdsRef,
+    },
+    // Note: transcriptText from hook not used - local version includes more data
+  } = useTranscriptManager();
 
   // Extracted hooks for scoring and timeline (must be called before useMemos that depend on them)
   const { scoringSummary, scoringTrend } = useScoringState({
@@ -769,11 +794,8 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
     return "px-2 py-0.5 rounded border border-slate-700 text-[10px] uppercase tracking-[0.14em] text-slate-200";
   }, []);
   const slideRef = useRef<HTMLDivElement>(null);
-  const currentTurnIdRef = useRef<string | null>(null);
-  const currentTurnCharacterRef = useRef<string | undefined>("patient");
-  const lastDoctorTurnIdRef = useRef<string | null>(null);
-  const lastAutoForcedRef = useRef<string | null>(null);
-  const loggedOrderIdsRef = useRef<Set<string>>(new Set());
+  // currentTurnIdRef, currentTurnCharacterRef, lastDoctorTurnIdRef, lastAutoForcedRef, loggedOrderIdsRef
+  // now come from useTranscriptManager hook
   const characterAudioRef = useRef<HTMLAudioElement | null>(null);
   const teams = useTeamScores(sessionId);
   const players = useIndividualScores(sessionId);
@@ -786,10 +808,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
     }
   }, [presenterMode, sessionId, voice.enabled]);
 
-  const makeTurnId = useCallback(
-    () => `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    []
-  );
+  // makeTurnId now comes from useTranscriptManager hook
   const scenarioOptions: { id: PatientScenarioId; label: string }[] = [
     { id: "exertional_chest_pain", label: "Exertional chest pain & palpitations (Taylor)" },
     { id: "syncope", label: "Syncope during exercise" },
@@ -966,26 +985,8 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
     setIsAnalyzing(false);
   }, []);
 
-  const handleClearTranscript = useCallback(() => {
-    currentTurnIdRef.current = null;
-    setTranscriptTurns([]);
-  }, []);
-
-  const logDoctorQuestion = useCallback(
-    (text?: string) => {
-      const questionText = text?.trim();
-      if (!questionText) return;
-      const id = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      lastDoctorTurnIdRef.current = id;
-      setTranscriptLog((prev) => [
-        ...prev,
-        { id, role: "doctor", timestamp: Date.now(), text: questionText },
-      ]);
-      // also keep question text synced
-      setDoctorQuestionText(questionText);
-    },
-    []
-  );
+  // handleClearTranscript replaced by clearTranscript from useTranscriptManager
+  // logDoctorQuestion now comes from useTranscriptManager hook
 
   const forceReplyWithQuestion = useCallback(
     (text?: string) => {
