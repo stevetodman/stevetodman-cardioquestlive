@@ -254,13 +254,27 @@ const [lastContextStage, setLastContextStage] = useState<string | null>(null);
 const [assessmentDifferential, setAssessmentDifferential] = useState<string[]>([]);
 const [assessmentPlan, setAssessmentPlan] = useState<string[]>([]);
 const [npcCooldowns, setNpcCooldowns] = useState<Record<string, number>>({});
-const [scoringTrend, setScoringTrend] = useState<{ current: number; delta: number }>({ current: 0, delta: 0 });
+// scoringTrend now comes from useScoringState hook
 const lastRhythmRef = useRef<string | null>(null);
 const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
 const [showQr, setShowQr] = useState(false);
 const [copyToast, setCopyToast] = useState<string | null>(null);
   const summaryRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  // Extracted hooks for scoring and timeline (must be called before useMemos that depend on them)
+  const { scoringSummary, scoringTrend } = useScoringState({
+    simState: simState as any,
+  });
+
+  const { timelineItems, filteredTimeline, timelineText } = useTimelineBuilder({
+    transcriptLog,
+    simState: simState as any,
+    timelineExtras,
+    timelineFilter,
+    timelineSearch,
+  });
+
   const snapshot = useMemo(
     () => getScenarioSnapshot(simState?.scenarioId ?? selectedScenario),
     [selectedScenario, simState?.scenarioId]
@@ -479,174 +493,8 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
     const ekgs = (simState?.orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
     return ekgs.slice(-3).reverse();
   }, [simState?.orders, (simState as any)?.ekgHistory]);
-  const timelineItems = useMemo(() => {
-    const items: { id: string; ts: number; label: string; detail: string }[] = [];
-    transcriptLog.forEach((t) => {
-      items.push({
-        id: `turn-${t.id}`,
-        ts: t.timestamp,
-        label: t.character ? t.character : t.role === "doctor" ? "Doctor" : "Patient",
-        detail: t.text,
-      });
-    });
-    (simState?.telemetryHistory ?? []).forEach((h, idx) => {
-      items.push({
-        id: `telemetry-${idx}-${h.ts ?? Date.now()}`,
-        ts: h.ts ?? Date.now(),
-        label: "Telemetry",
-        detail: h.rhythm ?? "Rhythm update",
-      });
-    });
-    (ekgHistory ?? []).forEach((ekg, idx) => {
-      items.push({
-        id: `ekg-${idx}-${ekg.ts ?? Date.now()}`,
-        ts: ekg.ts ?? Date.now(),
-        label: "EKG",
-        detail: ekg.summary ?? "EKG",
-      });
-    });
-    (simState?.orders ?? [])
-      .filter((o) => o.status === "complete")
-      .forEach((o) => {
-        items.push({
-          id: `order-${o.id}`,
-          ts: o.completedAt ?? Date.now(),
-          label: o.type.toUpperCase(),
-          detail:
-            o.result?.type === "vitals"
-              ? `HR ${o.result.hr ?? "—"} BP ${o.result.bp ?? "—"} SpO₂ ${o.result.spo2 ?? "—"}`
-              : o.result?.summary ?? "Result ready",
-        });
-      });
-    (simState?.treatmentHistory ?? []).forEach((th, idx) => {
-      items.push({
-        id: `treatment-${idx}-${th.ts ?? Date.now()}`,
-        ts: th.ts ?? Date.now(),
-        label: "Treatment",
-        detail: `${th.treatmentType}${th.note ? `: ${th.note}` : ""}`,
-      });
-    });
-    if (simState?.exam && Object.values(simState.exam).some(v => v)) {
-      items.push({
-        id: `exam-${simState.stageId}-${Date.now()}`,
-        ts: Date.now(),
-        label: "Exam",
-        detail: [
-          simState.exam.general && `General: ${simState.exam.general}`,
-          simState.exam.cardio && `CV: ${simState.exam.cardio}`,
-          simState.exam.lungs && `Lungs: ${simState.exam.lungs}`,
-          simState.exam.perfusion && `Perfusion: ${simState.exam.perfusion}`,
-          simState.exam.neuro && `Neuro: ${simState.exam.neuro}`,
-        ]
-          .filter(Boolean)
-          .join(" | "),
-      });
-    }
-    timelineExtras.forEach((extra) => items.push(extra));
-    return items
-      .sort((a, b) => a.ts - b.ts)
-      .filter((item, idx, arr) => arr.findIndex((it) => it.id === item.id) === idx)
-      .slice(-20);
-  }, [transcriptLog, simState?.orders, timelineExtras]);
-  const filteredTimeline = useMemo(
-    () =>
-      (timelineFilter === "all"
-        ? timelineItems
-        : timelineItems.filter((item) => item.label.toLowerCase() === timelineFilter)
-      ).filter((item) => (timelineSearch ? `${item.label} ${item.detail}`.toLowerCase().includes(timelineSearch.toLowerCase()) : true)),
-    [timelineItems, timelineFilter, timelineSearch]
-  );
-  const timelineText = useMemo(() => {
-    return timelineItems
-      .map((item) => {
-        const ts = new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-        return `${ts} ${item.label}: ${item.detail}`;
-      })
-      .join("\n");
-  }, [timelineItems]);
-  const scoringSummary = useMemo(() => {
-    const stageStart = (simState as any)?.stageEnteredAt as number | undefined;
-    const secsSinceStart = (ts?: number) =>
-      ts && stageStart ? Math.max(0, Math.round((ts - stageStart) / 1000)) : null;
-    const describeTiming = (label: string, ts?: number) => {
-      const delta = secsSinceStart(ts);
-      return delta === null ? `${label}: not recorded` : `${label}: ${delta}s`;
-    };
-
-    const ordersComplete = (simState?.orders ?? []).filter((o) => o.status === "complete");
-    const treatments = simState?.treatmentHistory ?? [];
-
-    const ekgDone = ordersComplete.some((o) => o.type === "ekg");
-    const labsDone = ordersComplete.some((o) => o.type === "labs");
-    const imagingDone = ordersComplete.some((o) => o.type === "imaging");
-    const vitalsOrders = ordersComplete.filter((o) => o.type === "vitals").length;
-
-    const oxygenGiven = treatments.some((t) => t.treatmentType.toLowerCase().includes("oxygen"));
-    const fluidsGiven = treatments.some((t) => t.treatmentType.toLowerCase().includes("fluid") || t.treatmentType.toLowerCase().includes("bolus"));
-    const rateControl = treatments.some((t) => t.treatmentType.toLowerCase().includes("rate"));
-    const kneeChest = treatments.some((t) => t.treatmentType.toLowerCase().includes("knee") || t.treatmentType.toLowerCase().includes("position"));
-
-    const firstVitals = ordersComplete.find((o) => o.type === "vitals")?.completedAt;
-    const firstOxygen = treatments.find((t) => t.treatmentType.toLowerCase().includes("oxygen"))?.ts;
-    const firstFluids = treatments.find((t) => t.treatmentType.toLowerCase().includes("fluid") || t.treatmentType.toLowerCase().includes("bolus"))?.ts;
-    const firstRate = treatments.find((t) => t.treatmentType.toLowerCase().includes("rate"))?.ts;
-
-    let score = 100;
-    const items: string[] = [];
-
-    if (!firstVitals) {
-      score -= 10;
-      items.push("Vitals refresh not recorded");
-    } else {
-      const delta = secsSinceStart(firstVitals);
-      if (delta !== null && delta > 120) score -= 5;
-      items.push(describeTiming("Vitals refreshed", firstVitals));
-    }
-
-    if (!oxygenGiven) {
-      score -= 15;
-      items.push("Oxygen not given");
-    } else {
-      const delta = secsSinceStart(firstOxygen);
-      if (delta !== null && delta > 180) score -= 5;
-      items.push(describeTiming("Oxygen given", firstOxygen));
-    }
-
-    if (!fluidsGiven) {
-      score -= 10;
-      items.push("Fluids/bolus not given");
-    } else {
-      items.push(describeTiming("Fluids given", firstFluids));
-    }
-
-    if (!rateControl) {
-      items.push("Rate control not given");
-    } else {
-      items.push(describeTiming("Rate control given", firstRate));
-    }
-
-    if (kneeChest) items.push("Positioning/knee-chest applied");
-
-    if (ekgDone) {
-      items.push("EKG completed");
-    } else {
-      score -= 5;
-      items.push("EKG pending");
-    }
-    if (labsDone) items.push("Labs completed");
-    if (imagingDone) items.push("Imaging completed");
-    if (vitalsOrders > 1) items.push(`Vitals refreshed x${vitalsOrders}`);
-
-    score = Math.max(0, Math.min(100, score));
-    return { score, items };
-  }, [simState?.orders, simState?.treatmentHistory, (simState as any)?.stageEnteredAt]);
-
-  useEffect(() => {
-    setScoringTrend((prev) => ({
-      current: scoringSummary.score,
-      delta: scoringSummary.score - (prev.current ?? scoringSummary.score),
-    }));
-  }, [scoringSummary.score]);
+  // timelineItems, filteredTimeline, timelineText now come from useTimelineBuilder hook
+  // scoringSummary and scoringTrend now come from useScoringState hook
   useEffect(() => {
     const rhythm = simState?.rhythmSummary ?? null;
     if (rhythm && rhythm !== lastRhythmRef.current) {
