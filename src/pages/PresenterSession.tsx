@@ -2089,7 +2089,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
             </div>
         </div>
       </div>
-      <div className="flex-1 flex flex-col items-center px-4 md:px-6 pb-2 gap-2">
+      <div className="flex-1 flex flex-col items-center px-4 md:px-6 pb-2 gap-2 overflow-x-hidden">
         <div className={`w-full max-w-[1800px] grid grid-cols-1 gap-3 items-start ${presenterMode === "sim" ? "xl:grid-cols-[1.7fr_1fr]" : ""}`}>
           <div className="flex flex-col gap-3">
             <div className="relative flex-1 min-h-[62vh] max-h-[78vh]">
@@ -2216,9 +2216,9 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
             )}
           </div>
           {presenterMode === "sim" && (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 self-start sticky top-4">
             {/* Simplified Sim Controls */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 text-slate-100 space-y-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 text-slate-100 space-y-4 overflow-hidden">
               {/* Case selector and status */}
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-3">
@@ -2268,7 +2268,7 @@ const [copyToast, setCopyToast] = useState<string | null>(null);
               </div>
               {/* Intervention controls */}
               {showInterventions && (
-                <div className="border-t border-slate-800 pt-4 space-y-3">
+                <div className="border-t border-slate-800 pt-4 space-y-3 animate-fade-in">
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"

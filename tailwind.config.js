@@ -18,8 +18,13 @@ export default {
         "select-pop": "select-pop 0.2s ease-out 1",
         "vital-highlight": "vital-highlight 2s ease-out",
         "rhythm-flash": "rhythm-flash 1.5s ease-out",
+        "fade-in": "fade-in 0.15s ease-out",
       },
       keyframes: {
+        "fade-in": {
+          "0%": { opacity: "0", transform: "translateY(-4px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
         shake: {
           "0%, 100%": { transform: "translateX(0)" },
           "20%": { transform: "translateX(-6px)" },
