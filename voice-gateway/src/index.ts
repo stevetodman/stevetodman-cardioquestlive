@@ -29,6 +29,9 @@ import { createOrderHandler } from "./orders";
 import { shouldAutoReply } from "./autoReplyGuard";
 import { createTransport, send, ClientContext } from "./transport";
 import { getAuscultationClips } from "./data/auscultation";
+import { createTreatmentHandler } from "./treatmentHandler";
+import { createExamHandler } from "./examHandler";
+import { tickSVTPhase as tickSVTPhaseHandler } from "./svtPhaseHandler";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
@@ -58,6 +61,22 @@ const handleOrder = createOrderHandler({
   sessionManager,
   broadcastSimState,
 });
+
+// Create modular handlers
+const handleTreatmentModule = createTreatmentHandler({
+  sessionManager,
+  ensureRuntime,
+  broadcastSimState,
+  handleOrder,
+  lastTreatmentAt,
+});
+
+const examHandlers = createExamHandler({
+  sessionManager,
+  ensureRuntime,
+  broadcastSimState,
+});
+
 // Default to secure WebSocket auth; only allow insecure for local dev/tunnels when explicitly set.
 const allowInsecureWs = process.env.ALLOW_INSECURE_VOICE_WS === "true";
 if (allowInsecureWs && process.env.NODE_ENV === "production") {
@@ -306,21 +325,21 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
         }
         case "exam": {
           const examType = typeof parsed.payload?.examType === "string" ? parsed.payload.examType : undefined;
-          handleExamRequest(simId, examType);
+          examHandlers.handleExamRequest(simId, examType);
           break;
         }
         case "toggle_telemetry": {
           const enabled = parsed.payload?.enabled === true;
-          handleTelemetryToggle(simId, enabled);
+          examHandlers.handleTelemetryToggle(simId, enabled);
           break;
         }
         case "treatment": {
           const treatmentType = typeof parsed.payload?.treatmentType === "string" ? parsed.payload.treatmentType : undefined;
-          handleTreatment(simId, treatmentType, parsed.payload);
+          handleTreatmentModule(simId, treatmentType, parsed.payload);
           break;
         }
         case "show_ekg": {
-          handleShowEkg(simId);
+          examHandlers.handleShowEkg(simId);
           break;
         }
         case "pause_ai":
@@ -1154,7 +1173,7 @@ function maybeAutoForceReply(sessionId: string, text: string, explicitCharacter?
       const examType = orderRequest.type === "cardiac_exam" ? "cardiac"
         : orderRequest.type === "lung_exam" ? "lungs"
         : undefined;
-      handleExamRequest(sessionId, examType);
+      examHandlers.handleExamRequest(sessionId, examType);
     } else {
       // For voice-ordered requests, we only have userId (no displayName available)
       // Pass IV location if present
@@ -1405,139 +1424,7 @@ function handleBudgetHardLimit(sessionId: string) {
   }
 }
 
-/**
- * Handle SVT phase transitions based on time and state.
- * Auto-advances from presentation → svt_onset after 2 minutes,
- * and handles deterioration if untreated.
- */
-function tickSVTPhase(sessionId: string, runtime: Runtime, ext: SVTExtendedState) {
-  const now = Date.now();
-  const phaseElapsedMs = now - ext.phaseEnteredAt;
-  const phaseElapsedMin = phaseElapsedMs / 60000;
-  const phaseDef = SVT_PHASES.find((p) => p.id === ext.phase);
-
-  // Don't transition if already converted
-  if (ext.converted || ext.phase === "converted") return;
-
-  // Phase: presentation → svt_onset (after 2 min)
-  if (ext.phase === "presentation" && phaseElapsedMin >= 2) {
-    const svtOnsetPhase = SVT_PHASES.find((p) => p.id === "svt_onset");
-    if (svtOnsetPhase) {
-      runtime.scenarioEngine.updateExtended({
-        ...ext,
-        phase: "svt_onset",
-        phaseEnteredAt: now,
-        currentRhythm: "svt",
-        timelineEvents: [
-          ...ext.timelineEvents,
-          { ts: now, type: "phase_change", description: "SVT episode started - HR 220" },
-        ],
-      });
-      runtime.scenarioEngine.hydrate({
-        vitals: svtOnsetPhase.vitalsTarget,
-        exam: svtOnsetPhase.examFindings,
-        rhythmSummary: svtOnsetPhase.rhythmSummary,
-      });
-      // Announce SVT onset to all participants with TTS
-      const svtOnsetText = "It's happening again! My heart is going so fast... I can feel it in my throat!";
-      sessionManager.broadcastToSession(sessionId, {
-        type: "patient_state",
-        sessionId,
-        state: "speaking",
-        character: "patient",
-      });
-      sessionManager.broadcastToSession(sessionId, {
-        type: "patient_transcript_delta",
-        sessionId,
-        text: svtOnsetText,
-        character: "patient",
-      });
-      // Generate TTS audio for patient
-      synthesizePatientAudio(svtOnsetText, "alloy")
-        .then((audioBuffer) => {
-          if (audioBuffer) {
-            sessionManager.broadcastToSession(sessionId, {
-              type: "patient_audio",
-              sessionId,
-              audioBase64: audioBuffer.toString("base64"),
-              character: "patient",
-            });
-          }
-        })
-        .catch((err) => logError("TTS failed for SVT onset", err));
-      sessionManager.broadcastToSession(sessionId, {
-        type: "patient_state",
-        sessionId,
-        state: "idle",
-        character: "patient",
-      });
-      log("[svt] Phase transition: presentation → svt_onset", sessionId);
-    }
-  }
-
-  // Phase: svt_onset → treatment_window (when any treatment attempted)
-  // This is handled in the treatment handlers
-
-  // Phase: svt_onset → decompensating (after 4 min without treatment)
-  if (ext.phase === "svt_onset" && phaseElapsedMin >= 4 && ext.vagalAttempts === 0 && ext.adenosineDoses.length === 0) {
-    const decompPhase = SVT_PHASES.find((p) => p.id === "decompensating");
-    if (decompPhase) {
-      runtime.scenarioEngine.updateExtended({
-        ...ext,
-        phase: "decompensating",
-        phaseEnteredAt: now,
-        stabilityLevel: 3,
-        penaltiesIncurred: ext.penaltiesIncurred.includes("treatment_delayed")
-          ? ext.penaltiesIncurred
-          : [...ext.penaltiesIncurred, "treatment_delayed", "patient_decompensated"],
-        timelineEvents: [
-          ...ext.timelineEvents,
-          { ts: now, type: "phase_change", description: "Patient decompensating - no treatment given" },
-        ],
-      });
-      runtime.scenarioEngine.hydrate({
-        vitals: decompPhase.vitalsTarget,
-        exam: decompPhase.examFindings,
-        rhythmSummary: decompPhase.rhythmSummary,
-      });
-      sessionManager.broadcastToPresenters(sessionId, {
-        type: "patient_transcript_delta",
-        sessionId,
-        text: "Nurse Martinez: 'She's getting worse! BP dropping, she's looking pale. We need to do something NOW!'",
-        character: "nurse",
-      });
-      log("[svt] Phase transition: svt_onset → decompensating (untreated)", sessionId);
-    }
-  }
-
-  // Phase: treatment_window → cardioversion_decision (after adenosine failed twice)
-  // This is handled in the adenosine treatment handler
-
-  // Apply drift for current phase if defined
-  if (phaseDef?.drift && !ext.converted) {
-    const driftPerTick = scenarioHeartbeatMs / 60000; // Convert to per-minute
-    const currentVitals = runtime.scenarioEngine.getState().vitals;
-    const newVitals = { ...currentVitals };
-
-    if (phaseDef.drift.hrPerMin) {
-      newVitals.hr = Math.round((currentVitals.hr ?? 90) + phaseDef.drift.hrPerMin * driftPerTick);
-    }
-    if (phaseDef.drift.spo2PerMin) {
-      newVitals.spo2 = Math.max(80, Math.min(100, Math.round((currentVitals.spo2 ?? 99) + phaseDef.drift.spo2PerMin * driftPerTick)));
-    }
-    if (phaseDef.drift.sbpPerMin) {
-      const [sbp, dbp] = (currentVitals.bp ?? "100/60").split("/").map(Number);
-      const newSbp = Math.max(60, Math.round(sbp + phaseDef.drift.sbpPerMin * driftPerTick));
-      const newDbp = Math.max(40, Math.round(dbp + (phaseDef.drift.dbpPerMin ?? 0) * driftPerTick));
-      newVitals.bp = `${newSbp}/${newDbp}`;
-    }
-
-    runtime.scenarioEngine.applyVitalsAdjustment({
-      hr: (newVitals.hr ?? 0) - (currentVitals.hr ?? 0),
-      spo2: (newVitals.spo2 ?? 0) - (currentVitals.spo2 ?? 0),
-    });
-  }
-}
+// tickSVTPhase moved to svtPhaseHandler.ts
 
 function startScenarioHeartbeat(sessionId: string) {
   if (scenarioTimers.has(sessionId)) return;
@@ -1548,7 +1435,10 @@ function startScenarioHeartbeat(sessionId: string) {
     // Handle SVT phase transitions
     const state = runtime.scenarioEngine.getState();
     if (hasSVTExtended(state)) {
-      tickSVTPhase(sessionId, runtime, state.extended);
+      tickSVTPhaseHandler(sessionId, runtime, state.extended, {
+        sessionManager,
+        scenarioHeartbeatMs,
+      });
     }
 
     const result = runtime.scenarioEngine.tick(Date.now());
@@ -1765,185 +1655,12 @@ function buildSystemPrompt(scenario: PatientScenarioId): string {
 
 main();
 
-type ExamOrderType = "cardiac_exam" | "lung_exam" | "general_exam";
-
-function handleExamRequest(sessionId: string, examType?: string) {
-  const runtime = ensureRuntime(sessionId);
-  const state = runtime.scenarioEngine.getState();
-  const exam = state.exam ?? {};
-  const maneuver = examType ?? (runtime as any).lastManeuver as string | undefined;
-
-  // Determine which exam order type to create based on the maneuver/request
-  let orderType: ExamOrderType = "general_exam";
-  if (maneuver === "cardiac" || maneuver === "auscultation" || maneuver === "heart" || maneuver === "cardiovascular") {
-    orderType = "cardiac_exam";
-  } else if (maneuver === "pulmonary" || maneuver === "lungs" || maneuver === "respiratory" || maneuver === "breath") {
-    orderType = "lung_exam";
-  }
-
-  // Create exam order
-  const currentOrders = state.orders ?? [];
-  const newOrder = {
-    id: `order-${orderType}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    type: orderType,
-    status: "pending" as const,
-  };
-  const nextOrders = [...currentOrders, newOrder];
-
-  // Persist orders to scenarioEngine so subsequent broadcasts include them
-  runtime.scenarioEngine.hydrate({ orders: nextOrders });
-
-  // Broadcast pending state
-  broadcastSimState(sessionId, {
-    ...runtime.scenarioEngine.getState(),
-    stageIds: runtime.scenarioEngine.getStageIds(),
-    orders: nextOrders,
-  });
-
-  // After brief delay, complete the exam order and announce results
-  setTimeout(() => {
-    // Get current orders from scenarioEngine (may have been updated since)
-    const currentState = runtime.scenarioEngine.getState();
-    const currentOrders = currentState.orders ?? nextOrders;
-    const completedOrders = currentOrders.map((o: any) =>
-      o.id === newOrder.id ? { ...o, status: "complete" as const, completedAt: Date.now() } : o
-    );
-
-    // Persist completed orders to scenarioEngine
-    runtime.scenarioEngine.hydrate({ orders: completedOrders });
-
-    // Build exam summary based on exam type
-    let summary: string;
-    if (orderType === "cardiac_exam") {
-      summary = exam.cardio ? `CV exam: ${exam.cardio}` : "Cardiac exam: Normal heart sounds, regular rate and rhythm.";
-    } else if (orderType === "lung_exam") {
-      summary = exam.lungs ? `Lung exam: ${exam.lungs}` : "Lung exam: Clear to auscultation bilaterally.";
-    } else {
-      // general exam - show all
-      summary = [
-        exam.general && `General: ${exam.general}`,
-        exam.cardio && `CV: ${exam.cardio}`,
-        exam.lungs && `Lungs: ${exam.lungs}`,
-        exam.perfusion && `Perfusion: ${exam.perfusion}`,
-        exam.neuro && `Neuro: ${exam.neuro}`,
-      ]
-        .filter(Boolean)
-        .join(" | ") || "Exam: Appears well, no acute distress.";
-    }
-
-    // Nurse reports exam findings
-    sessionManager.broadcastToSession(sessionId, {
-      type: "patient_state",
-      sessionId,
-      state: "speaking",
-      character: "nurse",
-    });
-    sessionManager.broadcastToSession(sessionId, {
-      type: "patient_transcript_delta",
-      sessionId,
-      text: summary,
-      character: "nurse",
-    });
-
-    // If cardiac exam, prompt about heart sounds
-    if (orderType === "cardiac_exam" && exam.heartAudioUrl) {
-      sessionManager.broadcastToSession(sessionId, {
-        type: "patient_transcript_delta",
-        sessionId,
-        text: "Heart sounds available - use your headphones to listen.",
-        character: "nurse",
-      });
-    }
-    // If lung exam, prompt about breath sounds
-    if (orderType === "lung_exam" && exam.lungAudioUrl) {
-      sessionManager.broadcastToSession(sessionId, {
-        type: "patient_transcript_delta",
-        sessionId,
-        text: "Breath sounds available - use your headphones to listen.",
-        character: "nurse",
-      });
-    }
-
-    sessionManager.broadcastToSession(sessionId, {
-      type: "patient_state",
-      sessionId,
-      state: "idle",
-      character: "nurse",
-    });
-
-    // Broadcast updated state with completed order
-    broadcastSimState(sessionId, {
-      ...runtime.scenarioEngine.getState(),
-      stageIds: runtime.scenarioEngine.getStageIds(),
-      orders: completedOrders,
-    });
-
-    logSimEvent(sessionId, { type: `exam.${orderType}.complete`, payload: { summary } }).catch(() => {});
-  }, 1500);
-
-  logSimEvent(sessionId, { type: "exam.requested", payload: { maneuver: maneuver ?? "standard", orderType } }).catch(() => {});
-}
-
-function handleTelemetryToggle(sessionId: string, enabled: boolean) {
-  const runtime = ensureRuntime(sessionId);
-  runtime.scenarioEngine.setTelemetry(enabled, runtime.scenarioEngine.getState().rhythmSummary);
-  const telemetryWaveform = enabled ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90) : [];
-  const telemetryHistory = runtime.scenarioEngine.getState().telemetryHistory ?? [];
-  broadcastSimState(sessionId, {
-    ...runtime.scenarioEngine.getState(),
-    stageIds: runtime.scenarioEngine.getStageIds(),
-    telemetry: enabled,
-    telemetryWaveform,
-    telemetryHistory,
-  });
-  if (enabled) {
-    sessionManager.broadcastToSession(sessionId, {
-      type: "patient_transcript_delta",
-      sessionId,
-      text: "Telemetry leads on. Live rhythm streaming.",
-      character: "tech",
-    });
-  }
-  logSimEvent(sessionId, { type: "telemetry.toggle", payload: { enabled } }).catch(() => {});
-}
-
-function handleShowEkg(sessionId: string) {
-  const runtime = ensureRuntime(sessionId);
-  const ekgs = (runtime.scenarioEngine.getState().orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
-  const latest = ekgs.length ? ekgs[ekgs.length - 1] : null;
-  const summary = latest?.result?.summary ?? runtime.scenarioEngine.getState().rhythmSummary ?? "Latest EKG ready to view.";
-  const imageUrl = (latest?.result as any)?.imageUrl;
-  const telemetryWaveform = runtime.scenarioEngine.getState().telemetry
-    ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
-    : undefined;
-  sessionManager.broadcastToSession(sessionId, {
-    type: "patient_transcript_delta",
-    sessionId,
-    text: `EKG: ${summary}`,
-    character: "tech",
-  });
-  if (imageUrl) {
-    sessionManager.broadcastToSession(sessionId, {
-      type: "patient_transcript_delta",
-      sessionId,
-      text: `EKG image: ${imageUrl}`,
-      character: "tech",
-    });
-  }
-  // Keep a rolling archive of last 3 ekg ids/urls on runtime
-  const archive = (runtime as any).ekgArchive ?? [];
-    const entry = { ts: Date.now(), summary, imageUrl };
-    const updatedArchive = [...(runtime.scenarioEngine.getState().ekgHistory ?? []), entry].slice(-3);
-    runtime.scenarioEngine.setEkgHistory(updatedArchive);
-  broadcastSimState(sessionId, {
-    ...runtime.scenarioEngine.getState(),
-    stageIds: runtime.scenarioEngine.getStageIds(),
-    telemetryWaveform,
-  });
-  logSimEvent(sessionId, { type: "ekg.viewed", payload: { summary, imageUrl } }).catch(() => {});
-}
+// Exam handlers moved to examHandler.ts
+// Treatment handler moved to treatmentHandler.ts
 
 /**
+ * Legacy treatment handler - now delegates to treatmentHandler.ts
+ * Kept for reference during transition.
  * Enhanced treatment handler supporting:
  * - Weight-based medication dosing (mg/kg)
  * - Specific routes (IV, IO, IM, etc.)
