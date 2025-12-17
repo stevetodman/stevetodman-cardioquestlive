@@ -38,6 +38,10 @@ export {
   type ExtendedState,
   type TranscriptLogTurn,
   type ActiveCharacterState,
+  type TreatmentHistoryEntry,
+  type TelemetryHistoryEntry,
+  type EkgHistoryEntry,
+  type VitalsHistoryEntry,
 } from "./SimulationContext";
 
 export {

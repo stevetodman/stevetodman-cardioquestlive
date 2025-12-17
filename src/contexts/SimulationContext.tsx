@@ -45,6 +45,35 @@ export interface ExtendedState {
   [key: string]: unknown;
 }
 
+/** Treatment history entry */
+export interface TreatmentHistoryEntry {
+  treatmentType: string;
+  ts?: number;
+  note?: string;
+}
+
+/** Telemetry history entry */
+export interface TelemetryHistoryEntry {
+  rhythm?: string;
+  ts?: number;
+  note?: string;
+}
+
+/** EKG history entry */
+export interface EkgHistoryEntry {
+  summary?: string;
+  ts?: number;
+  imageUrl?: string;
+}
+
+/** Vitals history entry */
+export interface VitalsHistoryEntry {
+  hr?: number;
+  bp?: string;
+  spo2?: number;
+  ts?: number;
+}
+
 /** Core simulation state */
 export interface SimState {
   stageId: string;
@@ -66,6 +95,10 @@ export interface SimState {
   scenarioStartedAt?: number;
   extended?: ExtendedState;
   elapsedSeconds?: number;
+  treatmentHistory?: TreatmentHistoryEntry[];
+  telemetryHistory?: TelemetryHistoryEntry[];
+  ekgHistory?: EkgHistoryEntry[];
+  vitalsHistory?: VitalsHistoryEntry[];
 }
 
 /** Transcript log entry */
@@ -74,7 +107,9 @@ export interface TranscriptLogTurn {
   timestamp: number;
   text: string;
   character: CharacterId | "doctor" | "system";
+  role?: "patient" | "doctor" | string;
   audioUrl?: string;
+  relatedTurnId?: string;
 }
 
 /** Active character state */
