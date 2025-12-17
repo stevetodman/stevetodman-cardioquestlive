@@ -26,7 +26,7 @@ src/
 ├── pages/           # JoinSession (participant), PresenterSession (presenter)
 ├── components/      # presenter/, participant/, ui/
 ├── contexts/        # SimulationContext, UIStateContext, DebriefContext
-├── hooks/           # useVoiceState, useTeamChat, useTeamLead
+├── hooks/           # usePresenterVoice, usePresenterTimeline, usePresenterScoring, useVoiceState, useTeamChat
 ├── services/        # VoiceGatewayClient (WebSocket)
 └── styles/          # constants.ts (Tailwind compositions)
 
@@ -123,6 +123,15 @@ Complex scenarios (SVT, myocarditis) use validated extended state:
 - Automatic reconnection with exponential backoff (3 attempts: 2s, 4s, 8s)
 - `fallback` flag set during disconnect, cleared on successful reconnect
 - Clients notified via broadcast on recovery
+
+### Presenter Custom Hooks
+Extracted from PresenterSession to reduce component complexity:
+
+| Hook | Purpose |
+|------|---------|
+| `usePresenterVoice` | Voice gateway subscriptions, refs, makeTurnId |
+| `usePresenterTimeline` | Timeline computation, filtering, Firestore saves |
+| `usePresenterScoring` | Scoring summary computation, trend updates |
 
 ## File Reference
 
