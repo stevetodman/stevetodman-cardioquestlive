@@ -28,7 +28,7 @@ import { Runtime } from "./typesRuntime";
 import { createOrderHandler } from "./orders";
 import { shouldAutoReply } from "./autoReplyGuard";
 import { createTransport, send, ClientContext } from "./transport";
-import { createDoctorAudioHandler, createAnalysisHandler, createTreatmentHandler } from "./handlers";
+import { createAnalysisHandler, createTreatmentHandler } from "./handlers";
 import { createBroadcastUtils } from "./state";
 import { getAuscultationClips } from "./data/auscultation";
 import { withStateLock, tryWithStateLock } from "./stateLock";

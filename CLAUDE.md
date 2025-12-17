@@ -31,14 +31,12 @@ src/
 └── styles/          # constants.ts (Tailwind compositions)
 
 voice-gateway/src/
-├── index.ts                    # WebSocket server entry
+├── index.ts                    # WebSocket server entry (~1,950 lines)
 ├── handlers/                   # Extracted message handlers
-│   ├── doctorAudio.ts          # Audio processing, transcription
-│   └── analysisRequests.ts     # Debrief analysis (wired up)
-├── runtime/                    # Session runtime management
-│   └── runtimeManager.ts       # Runtime lifecycle, hydration
+│   ├── analysisRequests.ts     # Debrief analysis (wired)
+│   └── treatmentHandler.ts     # All medications, cardioversion (wired, ~800 lines)
 ├── state/                      # State utilities
-│   └── broadcastUtils.ts       # Sim state broadcasting
+│   └── broadcastUtils.ts       # Sim state broadcasting (wired)
 ├── orders.ts                   # Order system with TTS, timers, interventions
 ├── validators.ts               # Zod schemas (all 12 scenario IDs)
 ├── voiceConfig.ts              # Unified character voice mapping
