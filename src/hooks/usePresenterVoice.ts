@@ -14,7 +14,8 @@ interface UsePresenterVoiceOptions {
   setTranscriptTurns: React.Dispatch<React.SetStateAction<TranscriptTurn[]>>;
   setDoctorQuestionText: React.Dispatch<React.SetStateAction<string>>;
   setVoiceInsecureMode: React.Dispatch<React.SetStateAction<boolean>>;
-  forceReplyWithQuestion: (text?: string) => void;
+  /** Ref to callback - allows calling component to update after hook initialization */
+  forceReplyWithQuestionRef: React.MutableRefObject<((text?: string) => void) | undefined>;
 }
 
 interface UsePresenterVoiceReturn {
@@ -33,7 +34,7 @@ export function usePresenterVoice({
   setTranscriptTurns,
   setDoctorQuestionText,
   setVoiceInsecureMode,
-  forceReplyWithQuestion,
+  forceReplyWithQuestionRef,
 }: UsePresenterVoiceOptions): UsePresenterVoiceReturn {
   // Get context values
   const {
@@ -48,6 +49,7 @@ export function usePresenterVoice({
     setAlarmNotice,
     setPatientAudioUrl,
     setTranscriptLog,
+    setSelectedScenario,
   } = useSimulation();
 
   const {
@@ -200,7 +202,7 @@ export function usePresenterVoice({
         const trimmed = text.trim();
         if (trimmed && lastAutoForcedRef.current !== trimmed) {
           lastAutoForcedRef.current = trimmed;
-          forceReplyWithQuestion(trimmed);
+          forceReplyWithQuestionRef.current?.(trimmed);
         }
       }
     });
@@ -214,6 +216,19 @@ export function usePresenterVoice({
       const audio = new Audio(url);
       characterAudioRef.current = audio;
       audio.play().catch((err) => console.warn("Audio play blocked", err));
+    });
+
+    const unsubScenario = voiceGatewayClient.onScenarioChanged((scenarioId) => {
+      setSelectedScenario(scenarioId);
+      setTranscriptTurns([]);
+      setTranscriptLog([]);
+      setPatientAudioUrl(null);
+      setDoctorQuestionText("");
+      lastDoctorTurnIdRef.current = null;
+      currentTurnIdRef.current = null;
+      lastAutoForcedRef.current = null;
+      setDebriefResult(null);
+      setIsAnalyzing(false);
     });
 
     const unsubAnalysis = voiceGatewayClient.onAnalysisResult((result) => {
@@ -232,6 +247,7 @@ export function usePresenterVoice({
       unsubTranscript();
       unsubDoctor();
       unsubAudio();
+      unsubScenario();
       unsubAnalysis();
       unsubComplexDebrief();
     };
@@ -240,10 +256,10 @@ export function usePresenterVoice({
     autoForceReply,
     selectedStage,
     makeTurnId,
-    forceReplyWithQuestion,
     setTranscriptTurns,
     setDoctorQuestionText,
     setVoiceInsecureMode,
+    // forceReplyWithQuestionRef is stable (ref identity never changes)
   ]);
 
   return {

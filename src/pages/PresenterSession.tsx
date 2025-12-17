@@ -57,6 +57,7 @@ import { PresenterModeTabs } from "../components/PresenterModeTabs";
 import { usePresenterMode } from "../hooks/usePresenterMode";
 import { usePresenterTimeline } from "../hooks/usePresenterTimeline";
 import { usePresenterScoring } from "../hooks/usePresenterScoring";
+import { usePresenterVoice } from "../hooks/usePresenterVoice";
 import { GamificationControls, ScenarioSnapshotCard, PresenterHeader } from "../components/presenter";
 import { VoiceDebugPanel } from "../components/presenter/VoiceDebugPanel";
 import { SectionLabel } from "../components/ui";
@@ -185,6 +186,27 @@ export default function PresenterSession() {
   const [assessmentPlan, setAssessmentPlan] = useState<string[]>([]);
   const [npcCooldowns, setNpcCooldowns] = useState<Record<string, number>>({});
   const lastRhythmRef = useRef<string | null>(null);
+
+  // Ref for forceReplyWithQuestion callback (used by voice hook before callback is defined)
+  const forceReplyWithQuestionRef = useRef<((text?: string) => void) | undefined>(undefined);
+
+  // Voice gateway subscriptions and refs (extracted to hook)
+  const {
+    currentTurnIdRef,
+    currentTurnCharacterRef,
+    lastDoctorTurnIdRef,
+    lastAutoForcedRef,
+    loggedOrderIdsRef,
+    characterAudioRef,
+    makeTurnId,
+  } = usePresenterVoice({
+    sessionId,
+    autoForceReply,
+    setTranscriptTurns,
+    setDoctorQuestionText,
+    setVoiceInsecureMode,
+    forceReplyWithQuestionRef,
+  });
 
   // Test hook: allow Playwright/local to supply a mock session without Firestore.
   const mockSessionParam = useMemo(() => {
@@ -690,13 +712,9 @@ export default function PresenterSession() {
     return `${colors.text} ${colors.border}`;
   }, []);
   // timelineBadge now from usePresenterTimeline hook
+  // currentTurnIdRef, currentTurnCharacterRef, lastDoctorTurnIdRef, lastAutoForcedRef,
+  // loggedOrderIdsRef, characterAudioRef, makeTurnId now from usePresenterVoice hook
   const slideRef = useRef<HTMLDivElement>(null);
-  const currentTurnIdRef = useRef<string | null>(null);
-  const currentTurnCharacterRef = useRef<string | undefined>("patient");
-  const lastDoctorTurnIdRef = useRef<string | null>(null);
-  const lastAutoForcedRef = useRef<string | null>(null);
-  const loggedOrderIdsRef = useRef<Set<string>>(new Set());
-  const characterAudioRef = useRef<HTMLAudioElement | null>(null);
   const teams = useTeamScores(sessionId);
   const players = useIndividualScores(sessionId);
   const voice = useVoiceState(sessionId ?? undefined);
@@ -708,10 +726,6 @@ export default function PresenterSession() {
     }
   }, [presenterMode, sessionId, voice.enabled]);
 
-  const makeTurnId = useCallback(
-    () => `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    []
-  );
   const scenarioOptions: { id: PatientScenarioId; label: string }[] = [
     { id: "exertional_chest_pain", label: "Exertional chest pain & palpitations (Taylor)" },
     { id: "syncope", label: "Syncope during exercise" },
@@ -930,6 +944,11 @@ export default function PresenterSession() {
     [logDoctorQuestion, sessionId, targetCharacter]
   );
 
+  // Update ref so voice hook can use this callback
+  useEffect(() => {
+    forceReplyWithQuestionRef.current = forceReplyWithQuestion;
+  }, [forceReplyWithQuestion]);
+
   const handleScenarioChange = useCallback(
     (id: PatientScenarioId) => {
       setSelectedScenario(id);
@@ -986,184 +1005,7 @@ export default function PresenterSession() {
     return () => window.removeEventListener("keydown", handler);
   }, [session, goToSlide, voice]);
 
-  // Voice gateway wiring for presenter
-  useEffect(() => {
-    const unsubStatus = voiceGatewayClient.onStatus((status) => {
-      setGatewayStatus(status);
-      if (status.state === "ready") {
-        setVoiceInsecureMode(voiceGatewayClient.isInsecureMode());
-      }
-    });
-    const unsubSim = voiceGatewayClient.onSimState((state) => {
-      setSimState(state);
-      setAvailableStages(state.stageIds ?? []);
-      if (!selectedStage && state.stageIds && state.stageIds.length > 0) {
-        setSelectedStage(state.stageIds[0]);
-      }
-      if (state.budget?.throttled) {
-        setBudgetAlert({ level: "soft", message: "AI usage near limit; responses may slow." });
-      } else if (state.budget?.fallback) {
-        setBudgetAlert({ level: "hard", message: "AI paused due to budget cap. Resume when ready." });
-      } else {
-        setBudgetAlert(null);
-      }
-      const alarmFinding = (state.findings ?? []).find((f: string) => typeof f === "string" && f.startsWith("ALARM:"));
-      setAlarmNotice(alarmFinding || null);
-      // Log newly completed orders into transcript for debrief/visibility
-      const completed = (state.orders ?? []).filter((o) => o.status === "complete");
-      const seen = loggedOrderIdsRef.current;
-      const newOnes = completed.filter((o) => !seen.has(o.id));
-      if (newOnes.length > 0) {
-        const entries: TranscriptLogTurn[] = newOnes.map((o) => {
-          let text = `${o.type.toUpperCase()} result ready`;
-          if (o.result?.type === "vitals") {
-            text = `Vitals: HR ${o.result.hr ?? "—"} BP ${o.result.bp ?? "—"} SpO₂ ${o.result.spo2 ?? "—"}`;
-          } else if (o.result?.summary) {
-            text = `${o.type.toUpperCase()}: ${o.result.summary}`;
-          }
-          return {
-            id: `order-${o.id}`,
-            role: "patient",
-            character: o.type,
-            text,
-            timestamp: Date.now(),
-          };
-        });
-        entries.forEach((e) => seen.add(e.id));
-        setTranscriptLog((prev) => [...prev, ...entries]);
-      }
-    });
-    const unsubPatient = voiceGatewayClient.onPatientState((state, character?: string) => {
-      setPatientState(state);
-      if (character) {
-        setActiveCharacter({ character: character as CharacterId, state });
-        if (state !== "speaking") {
-          setTimeout(() => setActiveCharacter((prev) => (prev?.state === "speaking" ? prev : null)), 1200);
-        }
-      }
-
-      if (state === "speaking") {
-        currentTurnCharacterRef.current = character ?? "patient";
-        setTranscriptTurns((prev) => {
-          const currentId = currentTurnIdRef.current;
-          if (currentId) {
-            const existing = prev.find((t) => t.id === currentId);
-            if (existing && !existing.isComplete) {
-              return prev;
-            }
-          }
-          const newId = makeTurnId();
-          currentTurnIdRef.current = newId;
-          return [...prev, { id: newId, role: "patient", character: character ?? "patient", text: "", isComplete: false }];
-        });
-      } else if (state === "idle" || state === "listening" || state === "error") {
-        const currentId = currentTurnIdRef.current;
-        if (currentId) {
-          let finalText = "";
-          setTranscriptTurns((prev) => {
-            const next = prev.map((t) => {
-              if (t.id === currentId) {
-                finalText = t.text;
-                return { ...t, isComplete: true };
-              }
-              return t;
-            });
-            return next;
-          });
-          if (finalText) {
-            const logId = `patient-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-            const related = lastDoctorTurnIdRef.current ?? undefined;
-            setTranscriptLog((prev) => [
-              ...prev,
-              {
-                id: logId,
-                role: "patient",
-                timestamp: Date.now(),
-                text: finalText,
-                relatedTurnId: related,
-                character: currentTurnCharacterRef.current ?? "patient",
-              },
-            ]);
-            lastDoctorTurnIdRef.current = null;
-          }
-          currentTurnIdRef.current = null;
-          currentTurnCharacterRef.current = "patient";
-        }
-      }
-    });
-    const unsubTranscript = voiceGatewayClient.onPatientTranscriptDelta((text, character?: string) => {
-      setTranscriptTurns((prev) => {
-        let turnId = currentTurnIdRef.current;
-        const next = [...prev];
-        let idx = turnId ? next.findIndex((t) => t.id === turnId) : -1;
-        if (idx === -1) {
-          turnId = makeTurnId();
-          currentTurnIdRef.current = turnId;
-          next.push({ id: turnId, role: "patient", character: character ?? currentTurnCharacterRef.current, text: "", isComplete: false });
-          idx = next.length - 1;
-        }
-        const target = next[idx];
-        const effectiveCharacter = character ?? target.character ?? "patient";
-        currentTurnCharacterRef.current = effectiveCharacter;
-        next[idx] = { ...target, character: effectiveCharacter, text: `${target.text}${text}` };
-        return next;
-      });
-    });
-    const unsubDoctor = voiceGatewayClient.onDoctorUtterance((text, _userId, character?: string) => {
-      setDoctorQuestionText(text);
-      if (autoForceReply) {
-        const trimmed = text.trim();
-        if (trimmed && lastAutoForcedRef.current !== trimmed) {
-          lastAutoForcedRef.current = trimmed;
-          forceReplyWithQuestion(trimmed);
-        }
-      }
-      if (character && character !== "patient") {
-        const id = `doctor-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        setTranscriptLog((prev) => [
-          ...prev,
-          { id, role: "doctor", text, timestamp: Date.now(), relatedTurnId: undefined, character },
-        ]);
-      }
-    });
-    const unsubAudio = voiceGatewayClient.onPatientAudio((url) => setPatientAudioUrl(url));
-    const unsubScenario = voiceGatewayClient.onScenarioChanged((scenarioId) => {
-      setSelectedScenario(scenarioId);
-      setTranscriptTurns([]);
-      setTranscriptLog([]);
-      setPatientAudioUrl(null);
-      setDoctorQuestionText("");
-      lastDoctorTurnIdRef.current = null;
-      currentTurnIdRef.current = null;
-      lastAutoForcedRef.current = null;
-      setDebriefResult(null);
-      setIsAnalyzing(false);
-    });
-    const unsubAnalysis = voiceGatewayClient.onAnalysisResult((res) => {
-      setIsAnalyzing(false);
-      setDebriefResult({
-        summary: res.summary,
-        strengths: res.strengths ?? [],
-        opportunities: res.opportunities ?? [],
-        teachingPoints: res.teachingPoints ?? [],
-      });
-    });
-    const unsubComplexDebrief = voiceGatewayClient.onComplexDebrief((res) => {
-      setIsAnalyzing(false);
-      setComplexDebriefResult(res);
-    });
-    return () => {
-      unsubStatus();
-      unsubSim();
-      unsubPatient();
-      unsubTranscript();
-      unsubDoctor();
-      unsubAudio();
-      unsubScenario();
-      unsubAnalysis();
-      unsubComplexDebrief();
-    };
-  }, [makeTurnId, autoForceReply, forceReplyWithQuestion]);
+  // Voice gateway wiring now handled by usePresenterVoice hook
 
   // Refresh auth token before reconnects so secure gateways accept joins after token expiry
   useEffect(() => {
@@ -1178,27 +1020,7 @@ export default function PresenterSession() {
     });
   }, []);
 
-  // Auto-play character audio when new audio URL arrives
-  useEffect(() => {
-    if (!patientAudioUrl) return;
-    // Stop any currently playing audio
-    if (characterAudioRef.current) {
-      characterAudioRef.current.pause();
-      characterAudioRef.current = null;
-    }
-    // Create and play new audio
-    const audio = new Audio(patientAudioUrl);
-    characterAudioRef.current = audio;
-    audio.play().catch((err) => {
-      console.error("Failed to auto-play character audio", err);
-    });
-    return () => {
-      if (characterAudioRef.current) {
-        characterAudioRef.current.pause();
-        characterAudioRef.current = null;
-      }
-    };
-  }, [patientAudioUrl]);
+  // Auto-play character audio now handled by usePresenterVoice hook
 
   useEffect(() => {
     if (!sessionId) return;
