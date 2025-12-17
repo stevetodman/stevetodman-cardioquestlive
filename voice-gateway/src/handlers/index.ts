@@ -5,3 +5,4 @@
 
 export { createAnalysisHandler, type AnalysisDeps, type AnalysisHandlers } from "./analysisRequests";
 export { createTreatmentHandler, type TreatmentHandlerDeps, type TreatmentHandlers } from "./treatmentHandler";
+export { createScenarioOperationsHandler, type ScenarioOperationsDeps, type ScenarioOperationsHandlers } from "./scenarioOperations";
