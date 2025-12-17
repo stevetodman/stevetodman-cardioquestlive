@@ -28,7 +28,7 @@ import { Runtime } from "./typesRuntime";
 import { createOrderHandler } from "./orders";
 import { shouldAutoReply } from "./autoReplyGuard";
 import { createTransport, send, ClientContext } from "./transport";
-import { createAnalysisHandler, createTreatmentHandler, createScenarioOperationsHandler } from "./handlers";
+import { createAnalysisHandler, createTreatmentHandler, createScenarioOperationsHandler, createDoctorAudioHandler } from "./handlers";
 import { createBroadcastUtils } from "./state";
 import { getAuscultationClips } from "./data/auscultation";
 import { withStateLock, tryWithStateLock } from "./stateLock";
@@ -197,6 +197,22 @@ const scenarioOperationsHandler = createScenarioOperationsHandler({
   synthesizePatientAudio,
 });
 
+// Initialize doctor audio handler (depends on handleOrder, handleExamRequest, handleForceReply)
+const doctorAudioHandler = createDoctorAudioHandler({
+  sessionManager,
+  ensureRuntime,
+  handleOrder,
+  handleExamRequest,
+  handleForceReply,
+  withRetry,
+  timed,
+  sendDegradedNotice,
+  commandCooldownMs,
+  lastAutoReplyAt,
+  lastAutoReplyByUser,
+  lastDoctorUtterance,
+});
+
 function emitVoiceError(
   sessionId: string,
   error: "tts_failed" | "stt_failed" | "openai_failed",
@@ -324,7 +340,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
       break;
     }
     case "doctor_audio": {
-      handleDoctorAudio(simId, parsed.userId, parsed.audioBase64, parsed.contentType, parsed.character as CharacterId | undefined);
+      doctorAudioHandler.handleDoctorAudio(simId, parsed.userId, parsed.audioBase64, parsed.contentType, parsed.character as CharacterId | undefined);
       break;
     }
     case "set_scenario": {
@@ -1009,136 +1025,6 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
 }
 
 
-async function handleDoctorAudio(
-  sessionId: string,
-  userId: string,
-  audioBase64: string,
-  contentType: string,
-  character?: CharacterId
-) {
-  try {
-    const audioBuffer = Buffer.from(audioBase64, "base64");
-    log("Doctor audio received", sessionId, "bytes:", audioBuffer.length, "character:", character ?? "patient");
-    if (sessionManager.isFallback(sessionId)) {
-      log("Session in fallback; routing legacy STT only", sessionId);
-      await handleDoctorAudioLegacy(sessionId, userId, audioBuffer, contentType, character);
-      return;
-    }
-    const runtime = ensureRuntime(sessionId);
-    const floorHolder = sessionManager.getFloorHolder(sessionId);
-    if (floorHolder && floorHolder !== userId) {
-      log("Ignoring doctor_audio; user does not hold floor", sessionId, userId);
-      return;
-    }
-    if (runtime.realtime) {
-      runtime.realtime.sendAudioChunk(audioBuffer);
-      runtime.realtime.commitAudio();
-      void transcribeDoctorAudio(audioBuffer, contentType)
-        .then((text) => {
-          if (text && text.trim().length > 0) {
-            // Check if utterance is for non-patient (order or explicit character routing)
-            // If so, cancel the realtime patient response to avoid "echo" effect
-            const orderRequest = parseOrderRequest(text);
-            const routedCharacter = character ?? chooseCharacter(text);
-            if (orderRequest || routedCharacter !== "patient") {
-              log("Canceling realtime patient response for non-patient utterance", sessionId, orderRequest?.type ?? routedCharacter);
-              runtime.realtime?.cancelResponse();
-            }
-            broadcastDoctorUtterance(sessionId, userId, text, character);
-          }
-        })
-        .catch((err) => logError("Realtime doctor STT failed", err));
-      return;
-    }
-    await handleDoctorAudioLegacy(sessionId, userId, audioBuffer, contentType, character);
-  } catch (err) {
-    logError("doctor_audio handling failed", err);
-  }
-}
-
-async function handleDoctorAudioLegacy(
-  sessionId: string,
-  userId: string,
-  audioBuffer: Buffer,
-  contentType: string,
-  character?: CharacterId
-) {
-  const text = await withRetry(
-    () => timed("stt.transcribe", () => transcribeDoctorAudio(audioBuffer, contentType)),
-    { label: "stt", attempts: 2, delayMs: 150 },
-    sessionId
-  );
-  if (text && text.trim().length > 0) {
-    log("STT transcript", sessionId, text.slice(0, 120));
-    broadcastDoctorUtterance(sessionId, userId, text, character);
-  } else {
-    sendDegradedNotice(sessionId, "Transcription unavailable; please repeat or use manual reply.");
-  }
-}
-
-function maybeAutoForceReply(sessionId: string, text: string, explicitCharacter?: CharacterId, userId?: string) {
-  const trimmed = text.trim();
-  if (!trimmed) return;
-  if (isUnsafeUtterance(trimmed)) {
-    log("auto-reply blocked for safety", sessionId);
-    sessionManager.broadcastToPresenters(sessionId, {
-      type: "patient_transcript_delta",
-      sessionId,
-      text: "NPC reply held for review (content flagged). Use manual reply if appropriate.",
-      character: "nurse",
-    });
-    return;
-  }
-
-  // Check if this is an order request (vitals, exam, EKG, labs, imaging)
-  const orderRequest = parseOrderRequest(trimmed);
-  if (orderRequest) {
-    log("Order request detected from speech", sessionId, orderRequest.type);
-    // Handle exam orders via handleExamRequest, other orders via handleOrder
-    if (orderRequest.type === "cardiac_exam" || orderRequest.type === "lung_exam" || orderRequest.type === "general_exam") {
-      const examType = orderRequest.type === "cardiac_exam" ? "cardiac"
-        : orderRequest.type === "lung_exam" ? "lungs"
-        : undefined;
-      handleExamRequest(sessionId, examType);
-    } else {
-      // For voice-ordered requests, we only have userId (no displayName available)
-      // Pass IV location if present
-      const ivParams = orderRequest.type === "iv_access" && orderRequest.location
-        ? { location: orderRequest.location }
-        : undefined;
-      handleOrder(sessionId, orderRequest.type, userId ? {
-        id: userId,
-        name: "Voice Order",
-        role: "participant",
-      } : undefined, ivParams);
-    }
-    return;
-  }
-
-  const allow = shouldAutoReply({
-    sessionId,
-    userId,
-    text: trimmed,
-    explicitCharacter,
-    floorHolder: sessionManager.getFloorHolder(sessionId),
-    commandCooldownMs,
-    maps: { lastAutoReplyAt, lastAutoReplyByUser, lastDoctorUtterance },
-  });
-  if (!allow) return;
-  const routed = explicitCharacter ?? chooseCharacter(trimmed);
-  handleForceReply(sessionId, "auto", trimmed, routed);
-}
-
-function broadcastDoctorUtterance(sessionId: string, userId: string, text: string, character?: CharacterId) {
-  sessionManager.broadcastToPresenters(sessionId, {
-    type: "doctor_utterance",
-    sessionId,
-    userId,
-    text,
-    character,
-  });
-  maybeAutoForceReply(sessionId, text, character, userId);
-}
 
 /**
  * Attempt to reconnect the realtime client with exponential backoff.
