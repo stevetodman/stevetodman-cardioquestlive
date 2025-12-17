@@ -3,6 +3,18 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import PresenterSession from "../PresenterSession";
+import { SimulationProvider, UIStateProvider, DebriefProvider } from "../../contexts";
+
+// Wrapper component with context providers
+function TestWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <SimulationProvider>
+      <UIStateProvider>
+        <DebriefProvider>{children}</DebriefProvider>
+      </UIStateProvider>
+    </SimulationProvider>
+  );
+}
 
 // Mock VoicePatientOverlay to avoid import.meta.env issues in Jest
 jest.mock("../../components/VoicePatientOverlay", () => ({
@@ -111,9 +123,11 @@ describe("PresenterSession summary toggle", () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/presenter/session1"]}>
-        <Routes>
-          <Route path="/presenter/:sessionId" element={<PresenterSession />} />
-        </Routes>
+        <TestWrapper>
+          <Routes>
+            <Route path="/presenter/:sessionId" element={<PresenterSession />} />
+          </Routes>
+        </TestWrapper>
       </MemoryRouter>
     );
 

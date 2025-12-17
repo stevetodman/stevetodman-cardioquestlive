@@ -37,8 +37,15 @@ import {
   ROLE_COLORS,
 } from "../types/voiceGateway";
 import { getScenarioSnapshot } from "../data/scenarioSummaries";
-import { SessionTranscriptPanel, TranscriptLogTurn } from "../components/SessionTranscriptPanel";
+import { SessionTranscriptPanel } from "../components/SessionTranscriptPanel";
 import { sendVoiceCommand } from "../services/voiceCommands";
+import {
+  useSimulation,
+  useUIState,
+  useDebrief,
+  type TranscriptLogTurn,
+  type SimState,
+} from "../contexts";
 import { DebriefPanel } from "../components/DebriefPanel";
 import { ComplexDebriefPanel } from "../components/ComplexDebriefPanel";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
@@ -85,6 +92,84 @@ function ElapsedTimer({ startTime }: { startTime: number }) {
 export default function PresenterSession() {
   const { sessionId } = useParams();
   const [presenterMode, setPresenterMode] = usePresenterMode();
+
+  // === Context hooks - state from providers ===
+  const {
+    simState, setSimState,
+    patientState, setPatientState,
+    gatewayStatus, setGatewayStatus,
+    activeCharacter, setActiveCharacter,
+    voiceLocked, setVoiceLocked,
+    selectedScenario, setSelectedScenario,
+    availableStages, setAvailableStages,
+    selectedStage, setSelectedStage,
+    transcriptLog, setTranscriptLog,
+    patientAudioUrl, setPatientAudioUrl,
+    budgetAlert, setBudgetAlert,
+    alarmNotice, setAlarmNotice,
+    rhythmAlert, setRhythmAlert,
+    freezeStatus, setFreezeStatus,
+    targetCharacter, setTargetCharacter,
+    scoringTrend, setScoringTrend,
+    isConnected,
+    isComplexScenario,
+  } = useSimulation();
+
+  const {
+    showTeamScores, setShowTeamScores,
+    showIndividualScores, setShowIndividualScores,
+    showSummary, setShowSummary,
+    showDebugPanel, setShowDebugPanel,
+    showInterventions, setShowInterventions,
+    showEkg, setShowEkg,
+    showTelemetryPopout, setShowTelemetryPopout,
+    showQr, setShowQr,
+    voiceGuideOpen, setVoiceGuideOpen,
+    viewingEkgOrder, setViewingEkgOrder,
+    viewingCxrOrder, setViewingCxrOrder,
+    copyToast, setCopyToast,
+    loading, setLoading,
+  } = useUIState();
+
+  const {
+    isAnalyzing, setIsAnalyzing,
+    debriefResult, setDebriefResult,
+    complexDebriefResult, setComplexDebriefResult,
+    timelineCopyStatus, setTimelineCopyStatus,
+    timelineFilter, setTimelineFilter,
+    timelineSaveStatus, setTimelineSaveStatus,
+    transcriptSaveStatus, setTranscriptSaveStatus,
+    timelineSearch, setTimelineSearch,
+    timelineExtras, setTimelineExtras,
+    exportStatus, setExportStatus,
+  } = useDebrief();
+
+  // === Local state - session/Firestore specific ===
+  const [session, setSession] = useState<SessionData | null>(null);
+  const [mockQuestionOpen, setMockQuestionOpen] = useState(false);
+  const [mockShowResults, setMockShowResults] = useState(false);
+  const [responseTotal, setResponseTotal] = useState(0);
+  const [participantCount, setParticipantCount] = useState<number>(0);
+  const [overallAccuracy, setOverallAccuracy] = useState<number>(0);
+  const [questionsAnsweredCount, setQuestionsAnsweredCount] = useState<number>(0);
+  const [totalResponses, setTotalResponses] = useState<number>(0);
+  const [questionStats, setQuestionStats] = useState<
+    { questionId: string; questionIndex: number; correctCount: number; totalCount: number; accuracyPct: number }[]
+  >([]);
+  const [transcriptTurns, setTranscriptTurns] = useState<TranscriptTurn[]>([]);
+  const [voiceInsecureMode, setVoiceInsecureMode] = useState(false);
+  const [doctorQuestionText, setDoctorQuestionText] = useState<string>("");
+  const [autoForceReply, setAutoForceReply] = useState(false);
+  const [assessmentEnabled, setAssessmentEnabled] = useState(true);
+  const [lastAssessmentAt, setLastAssessmentAt] = useState<number>(Date.now());
+  const [lastNpcInterjectAt, setLastNpcInterjectAt] = useState<number>(0);
+  const [assessmentResponse, setAssessmentResponse] = useState<string>("");
+  const [assessmentPromptOpen, setAssessmentPromptOpen] = useState(false);
+  const [lastContextStage, setLastContextStage] = useState<string | null>(null);
+  const [assessmentDifferential, setAssessmentDifferential] = useState<string[]>([]);
+  const [assessmentPlan, setAssessmentPlan] = useState<string[]>([]);
+  const [npcCooldowns, setNpcCooldowns] = useState<Record<string, number>>({});
+  const lastRhythmRef = useRef<string | null>(null);
 
   // Test hook: allow Playwright/local to supply a mock session without Firestore.
   const mockSessionParam = useMemo(() => {
@@ -161,101 +246,6 @@ export default function PresenterSession() {
       isQuestionSlide: true,
     };
   }, [mockSessionParam, mockSessionStored]);
-  const [session, setSession] = useState<SessionData | null>(null);
-  const [mockQuestionOpen, setMockQuestionOpen] = useState(false);
-  const [mockShowResults, setMockShowResults] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [responseTotal, setResponseTotal] = useState(0);
-  const [showTeamScores, setShowTeamScores] = useState(true);
-  const [showIndividualScores, setShowIndividualScores] = useState(false);
-  const [showSummary, setShowSummary] = useState(false);
-const [participantCount, setParticipantCount] = useState<number>(0);
-const [voiceGuideOpen, setVoiceGuideOpen] = useState<boolean>(false);
-  const [overallAccuracy, setOverallAccuracy] = useState<number>(0);
-  const [questionsAnsweredCount, setQuestionsAnsweredCount] = useState<number>(0);
-  const [totalResponses, setTotalResponses] = useState<number>(0);
-  const [questionStats, setQuestionStats] = useState<
-    { questionId: string; questionIndex: number; correctCount: number; totalCount: number; accuracyPct: number }[]
-  >([]);
-  const [transcriptTurns, setTranscriptTurns] = useState<TranscriptTurn[]>([]);
-  const [patientState, setPatientState] = useState<PatientState>("idle");
-  const [gatewayStatus, setGatewayStatus] = useState<VoiceConnectionStatus>({
-    state: "disconnected",
-    lastChangedAt: Date.now(),
-  });
-  const [voiceInsecureMode, setVoiceInsecureMode] = useState(false);
-  const [showDebugPanel, setShowDebugPanel] = useState(false);
-  const [simState, setSimState] = useState<{
-    stageId: string;
-    vitals: Record<string, unknown>;
-    exam?: Record<string, string | undefined>;
-    interventions?: Interventions;
-    telemetry?: boolean;
-    rhythmSummary?: string;
-    telemetryWaveform?: number[];
-    fallback: boolean;
-    voiceFallback?: boolean;
-    correlationId?: string;
-    findings?: string[];
-    budget?: { usdEstimate?: number; voiceSeconds?: number; throttled?: boolean; fallback?: boolean };
-    scenarioId?: PatientScenarioId;
-    stageIds?: string[];
-    orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging"; status: "pending" | "complete"; result?: any; completedAt?: number }[];
-  } | null>(null);
-  const [transcriptLog, setTranscriptLog] = useState<TranscriptLogTurn[]>([]);
-  const [patientAudioUrl, setPatientAudioUrl] = useState<string | null>(null);
-  const [freezeStatus, setFreezeStatus] = useState<"live" | "frozen">("live");
-  const [showInterventions, setShowInterventions] = useState(false);
-  const [showEkg, setShowEkg] = useState(false);
-  const [viewingEkgOrder, setViewingEkgOrder] = useState<{
-    imageUrl?: string;
-    summary?: string;
-    timestamp?: number;
-    orderedBy?: { name: string };
-  } | null>(null);
-  const [viewingCxrOrder, setViewingCxrOrder] = useState<{
-    imageUrl?: string;
-    summary?: string;
-    timestamp?: number;
-    orderedBy?: { name: string };
-    viewType?: "PA" | "AP" | "Lateral";
-  } | null>(null);
-  const [availableStages, setAvailableStages] = useState<string[]>([]);
-  const [selectedStage, setSelectedStage] = useState<string>("");
-  const [doctorQuestionText, setDoctorQuestionText] = useState<string>("");
-  const [budgetAlert, setBudgetAlert] = useState<{ level: "soft" | "hard"; message: string } | null>(null);
-  const [alarmNotice, setAlarmNotice] = useState<string | null>(null);
-const [autoForceReply, setAutoForceReply] = useState(false);
-const [targetCharacter, setTargetCharacter] = useState<CharacterId>("patient");
-const [selectedScenario, setSelectedScenario] =
-  useState<PatientScenarioId>("teen_svt_complex_v1");
-const [isAnalyzing, setIsAnalyzing] = useState(false);
-const [debriefResult, setDebriefResult] = useState<AnalysisResult | null>(null);
-const [complexDebriefResult, setComplexDebriefResult] = useState<ComplexDebriefResult | null>(null);
-const [timelineCopyStatus, setTimelineCopyStatus] = useState<"idle" | "copied" | "error">("idle");
-const [timelineFilter, setTimelineFilter] = useState<string>("all");
-const [timelineSaveStatus, setTimelineSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-const [timelineSearch, setTimelineSearch] = useState<string>("");
-const [timelineExtras, setTimelineExtras] = useState<{ id: string; ts: number; label: string; detail: string }[]>([]);
-const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "exported" | "error">("idle");
-const [voiceLocked, setVoiceLocked] = useState(false);
-const [activeCharacter, setActiveCharacter] = useState<{ character: CharacterId; state: PatientState } | null>(null);
-const [assessmentEnabled, setAssessmentEnabled] = useState(true);
-const [lastAssessmentAt, setLastAssessmentAt] = useState<number>(Date.now());
-const [lastNpcInterjectAt, setLastNpcInterjectAt] = useState<number>(0);
-const [showTelemetryPopout, setShowTelemetryPopout] = useState(false);
-const [assessmentResponse, setAssessmentResponse] = useState<string>("");
-const [assessmentPromptOpen, setAssessmentPromptOpen] = useState(false);
-const [lastContextStage, setLastContextStage] = useState<string | null>(null);
-const [assessmentDifferential, setAssessmentDifferential] = useState<string[]>([]);
-const [assessmentPlan, setAssessmentPlan] = useState<string[]>([]);
-const [npcCooldowns, setNpcCooldowns] = useState<Record<string, number>>({});
-const [scoringTrend, setScoringTrend] = useState<{ current: number; delta: number }>({ current: 0, delta: 0 });
-const lastRhythmRef = useRef<string | null>(null);
-const [rhythmAlert, setRhythmAlert] = useState<string | null>(null);
-const [showQr, setShowQr] = useState(false);
-const [copyToast, setCopyToast] = useState<string | null>(null);
   const summaryRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const snapshot = useMemo(

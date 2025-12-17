@@ -1,13 +1,28 @@
 import React, { useEffect, useState, Suspense, lazy } from "react";
-import { HashRouter, Routes, Route, Link, useNavigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Link, useNavigate, useParams } from "react-router-dom";
 import { ensureSignedIn, isConfigured } from "./firebase";
 import { SessionSkeleton } from "./components/SessionSkeleton";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { SimulationProvider, UIStateProvider, DebriefProvider } from "./contexts";
 
 const CreateDemoSession = lazy(() => import("./pages/CreateDemoSession"));
 const PresenterSession = lazy(() => import("./pages/PresenterSession"));
 const JoinSession = lazy(() => import("./pages/JoinSession"));
 const AdminDeckEditor = lazy(() => import("./pages/AdminDeckEditor"));
+
+/** Wrapper that provides context providers for PresenterSession */
+function PresenterWithProviders() {
+  const { sessionId } = useParams<{ sessionId: string }>();
+  return (
+    <SimulationProvider sessionId={sessionId}>
+      <UIStateProvider>
+        <DebriefProvider>
+          <PresenterSession />
+        </DebriefProvider>
+      </UIStateProvider>
+    </SimulationProvider>
+  );
+}
 
 function Home() {
     const [joinCode, setJoinCode] = useState("");
@@ -167,7 +182,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/create-demo" element={<CreateDemoSession />} />
-            <Route path="/presenter/:sessionId" element={<PresenterSession />} />
+            <Route path="/presenter/:sessionId" element={<PresenterWithProviders />} />
             <Route path="/join/:joinCode" element={<JoinSession />} />
             <Route path="/admin" element={<AdminDeckEditor />} />
           </Routes>
