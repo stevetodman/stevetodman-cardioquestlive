@@ -12,13 +12,22 @@ export class CostController {
   private hardTriggered = false;
   private readonly onSoft?: () => void;
   private readonly onHard?: () => void;
+  private readonly onSoftReset?: () => void;
 
-  constructor(opts?: { usdPerToken?: number; softUsd?: number; hardUsd?: number; onSoftLimit?: () => void; onHardLimit?: () => void }) {
+  constructor(opts?: {
+    usdPerToken?: number;
+    softUsd?: number;
+    hardUsd?: number;
+    onSoftLimit?: () => void;
+    onHardLimit?: () => void;
+    onSoftReset?: () => void;
+  }) {
     this.usdPerToken = opts?.usdPerToken ?? 0.0000003;
     this.softUsd = opts?.softUsd ?? 3.5;
     this.hardUsd = opts?.hardUsd ?? 4.5;
     this.onSoft = opts?.onSoftLimit;
     this.onHard = opts?.onHardLimit;
+    this.onSoftReset = opts?.onSoftReset;
   }
 
   addUsage(usage: { inputTokens?: number; outputTokens?: number }) {
@@ -35,6 +44,45 @@ export class CostController {
       this.fallback = true;
       this.onHard?.();
     }
+  }
+
+  /**
+   * Reset soft limit throttling. Call when presenter wants to continue despite cost.
+   * Does NOT reset hard limit (that requires full session reset for safety).
+   */
+  resetSoftLimit(): void {
+    if (this.softTriggered && !this.hardTriggered) {
+      this.softTriggered = false;
+      this.throttled = false;
+      this.onSoftReset?.();
+    }
+  }
+
+  /**
+   * Full reset of cost tracking. Use when rehydrating or starting fresh.
+   * Does NOT reset hard limit fallback - that's a safety measure.
+   */
+  reset(): void {
+    this.inputTokens = 0;
+    this.outputTokens = 0;
+    this.softTriggered = false;
+    this.throttled = false;
+    // Note: hard limit and fallback are NOT reset for safety
+    // A full session restart is needed to clear those
+  }
+
+  /**
+   * Check if soft limit was hit but can be reset by presenter action.
+   */
+  canResetSoftLimit(): boolean {
+    return this.softTriggered && !this.hardTriggered;
+  }
+
+  /**
+   * Check if hard limit was hit (session should end or switch to fallback).
+   */
+  isHardLimitHit(): boolean {
+    return this.hardTriggered;
   }
 
   getState(): CostSnapshot & { throttled: boolean; fallback: boolean } {

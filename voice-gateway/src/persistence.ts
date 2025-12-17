@@ -2,6 +2,8 @@ import { getFirestore } from "./firebaseAdmin";
 import admin from "firebase-admin";
 import { SimState } from "./sim/types";
 import { z } from "zod";
+import { validateExtendedState } from "./extendedStateValidators";
+import { log, logError } from "./logger";
 
 type BudgetState = {
   usdEstimate?: number;
@@ -95,6 +97,15 @@ export async function persistSimState(simId: string, state: SimState & { budget?
     payload.treatmentHistory = state.treatmentHistory;
   }
   if (state.extended) {
+    // Validate extended state before persistence
+    const validation = validateExtendedState(state.scenarioId, state.extended);
+    if (!validation.valid) {
+      logError(`[persistSimState] Invalid extended state for ${simId}:`, validation.errors);
+      // Still persist but log the error - don't lose data
+    }
+    if (validation.warnings.length > 0) {
+      log(`[persistSimState] Extended state warnings for ${simId}:`, validation.warnings);
+    }
     payload.extended = state.extended;
   }
   await docRef.set(payload, { merge: true });
@@ -174,7 +185,7 @@ const persistedStateSchema = z
       .array(
         z.object({
           id: z.string(),
-          type: z.enum(["vitals", "ekg", "labs", "imaging"]),
+          type: z.enum(["vitals", "ekg", "labs", "imaging", "cardiac_exam", "lung_exam", "general_exam", "iv_access"]),
           status: z.enum(["pending", "complete"]),
           result: z.record(z.any()).optional(),
           completedAt: z.number().optional(),
@@ -201,10 +212,120 @@ const persistedStateSchema = z
   })
   .passthrough();
 
+/** Validate hydration consistency and log warnings (doesn't fail hydration) */
+function validateHydrationConsistency(data: z.infer<typeof persistedStateSchema>): void {
+  const warnings: string[] = [];
+
+  // Check order completion timestamps are reasonable
+  if (data.orders) {
+    for (const order of data.orders) {
+      if (order.completedAt !== undefined) {
+        // completedAt should be a positive timestamp (after Unix epoch)
+        if (order.completedAt < 0) {
+          warnings.push(`Order ${order.id}: negative completedAt (${order.completedAt})`);
+        }
+        // completedAt should be in the past (not more than 1 minute in the future)
+        if (order.completedAt > Date.now() + 60_000) {
+          warnings.push(`Order ${order.id}: completedAt in far future (${new Date(order.completedAt).toISOString()})`);
+        }
+      }
+      // completed status should have completedAt
+      if (order.status === "complete" && order.completedAt === undefined) {
+        warnings.push(`Order ${order.id}: status 'complete' but no completedAt`);
+      }
+    }
+  }
+
+  // Check timeline event monotonicity (if extended state has timelineEvents)
+  if (data.extended?.timelineEvents && Array.isArray(data.extended.timelineEvents)) {
+    const events = data.extended.timelineEvents as Array<{ ts: number; type: string }>;
+    let lastTs = 0;
+    for (let i = 0; i < events.length; i++) {
+      const event = events[i];
+      if (typeof event.ts === "number") {
+        if (event.ts < lastTs) {
+          warnings.push(`Timeline event ${i} (${event.type}): timestamp ${event.ts} < previous ${lastTs}`);
+        }
+        lastTs = event.ts;
+      }
+    }
+  }
+
+  // Check scenario clock consistency (if extended state has clock fields)
+  if (data.extended) {
+    const ext = data.extended as Record<string, unknown>;
+    const scenarioStartedAt = ext.scenarioStartedAt as number | undefined;
+    const totalPausedMs = ext.totalPausedMs as number | undefined;
+
+    if (scenarioStartedAt !== undefined && scenarioStartedAt > Date.now() + 60_000) {
+      warnings.push(`scenarioStartedAt in far future: ${new Date(scenarioStartedAt).toISOString()}`);
+    }
+
+    if (totalPausedMs !== undefined && totalPausedMs < 0) {
+      warnings.push(`totalPausedMs is negative: ${totalPausedMs}`);
+    }
+
+    // Check phase entered timestamps make sense
+    const phaseEnteredAt = ext.phaseEnteredAt as number | undefined;
+    if (phaseEnteredAt !== undefined && scenarioStartedAt !== undefined) {
+      if (phaseEnteredAt < scenarioStartedAt) {
+        warnings.push(`phaseEnteredAt (${phaseEnteredAt}) < scenarioStartedAt (${scenarioStartedAt})`);
+      }
+    }
+  }
+
+  // Check telemetry/EKG/treatment history timestamps
+  const historyChecks = [
+    { name: "telemetryHistory", data: data.telemetryHistory },
+    { name: "ekgHistory", data: data.ekgHistory },
+    { name: "treatmentHistory", data: data.treatmentHistory },
+  ];
+
+  for (const { name, data: historyData } of historyChecks) {
+    if (historyData && Array.isArray(historyData)) {
+      let lastTs = 0;
+      for (let i = 0; i < historyData.length; i++) {
+        const entry = historyData[i] as { ts?: number };
+        if (typeof entry.ts === "number") {
+          if (entry.ts < lastTs) {
+            warnings.push(`${name}[${i}]: timestamp ${entry.ts} < previous ${lastTs}`);
+          }
+          lastTs = entry.ts;
+        }
+      }
+    }
+  }
+
+  // Log all warnings (don't fail hydration - graceful degradation)
+  if (warnings.length > 0) {
+    log(`[validateHydrationConsistency] ${warnings.length} consistency warnings:`, warnings);
+  }
+}
+
 export function sanitizePersistedState(raw: any, updatedAtMs: number): Partial<SimState> {
   const parsed = persistedStateSchema.safeParse(raw);
   if (!parsed.success) {
+    logError("[sanitizePersistedState] Failed to parse persisted state:", parsed.error.errors);
     return { updatedAtMs } as any;
   }
-  return { ...parsed.data, updatedAtMs } as Partial<SimState>;
+
+  const data = parsed.data;
+
+  // Run consistency checks (logs warnings but doesn't fail)
+  validateHydrationConsistency(data);
+
+  // Validate extended state if present and scenarioId is known
+  if (data.extended && data.scenarioId) {
+    const validation = validateExtendedState(data.scenarioId, data.extended);
+    if (!validation.valid) {
+      logError(`[sanitizePersistedState] Invalid extended state for scenario ${data.scenarioId}:`, validation.errors);
+      // Don't fail hydration - log error but continue with the data
+      // The debrief analyzer will need to handle potential issues gracefully
+    }
+    if (validation.warnings.length > 0) {
+      log(`[sanitizePersistedState] Extended state warnings:`, validation.warnings);
+    }
+  }
+
+  return { ...data, updatedAtMs } as Partial<SimState>;
 }

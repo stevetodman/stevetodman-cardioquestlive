@@ -11,8 +11,10 @@ Pediatric cardiology teaching platform with AI patient simulation.
 ```bash
 npm run dev:tunnel:clean   # Recommended: Cloudflare tunnel (iPhone testing)
 npm run dev:stack:local    # Local with Firebase emulators
-npm run test:gateway       # Voice gateway tests (200+ tests)
+npm run test:gateway       # Voice gateway tests (327+ tests)
 npm run build              # TypeScript + Vite build
+npm run lint               # ESLint check
+npm run typecheck          # TypeScript check (frontend + gateway)
 
 # Run scenario without WebSocket
 cd voice-gateway && npm run scenario teen_svt_complex_v1
@@ -23,19 +25,25 @@ cd voice-gateway && npm run scenario teen_svt_complex_v1
 src/
 ├── pages/           # JoinSession (participant), PresenterSession (presenter)
 ├── components/      # presenter/, participant/, ui/
+├── contexts/        # SimulationContext, UIStateContext, DebriefContext
 ├── hooks/           # useVoiceState, useTeamChat, useTeamLead
 ├── services/        # VoiceGatewayClient (WebSocket)
 └── styles/          # constants.ts (Tailwind compositions)
 
 voice-gateway/src/
-├── index.ts              # WebSocket server entry
-├── orders.ts             # Order system with TTS, timers, interventions
-├── validators.ts         # Zod schemas (all 12 scenario IDs)
-├── ttsClient.ts          # OpenAI TTS (alloy, echo, fable, onyx, nova, shimmer)
-├── debriefAnalyzer.ts    # Complex scenario scoring + AI debrief
+├── index.ts                    # WebSocket server entry
+├── orders.ts                   # Order system with TTS, timers, interventions
+├── validators.ts               # Zod schemas (all 12 scenario IDs)
+├── voiceConfig.ts              # Unified character voice mapping
+├── stateLock.ts                # Async mutex for state synchronization
+├── extendedStateValidators.ts  # Zod schemas for SVT/myocarditis extended state
+├── persistence.ts              # Firestore state persistence + hydration
+├── ttsClient.ts                # OpenAI TTS (alloy, echo, fable, onyx, nova, shimmer)
+├── debriefAnalyzer.ts          # Complex scenario scoring + AI debrief
 └── sim/
-    ├── scenarioEngine.ts # State machine
-    └── scenarios/        # teen_svt_complex, peds_myocarditis_silent_crash
+    ├── scenarioEngine.ts       # State machine
+    ├── costController.ts       # Budget tracking with soft/hard limits
+    └── scenarios/              # teen_svt_complex, peds_myocarditis_silent_crash
 ```
 
 ## Key Concepts
@@ -89,6 +97,33 @@ Two scenarios with deterministic scoring and AI debrief:
 - **Streak bonus**: 2 = 1.1×, 3 = 1.2×, 4+ = 1.5×
 - Teams auto-assigned, inactive participants marked "away"
 
+### State Management
+
+#### React Contexts
+State extracted into `src/contexts/`: SimulationContext, UIStateContext, DebriefContext.
+
+#### Extended State Validation
+Complex scenarios (SVT, myocarditis) use validated extended state:
+- `extendedStateValidators.ts`: Zod schemas for SVT/myocarditis phases, treatments
+- Validation on persist (before Firestore write) and hydrate (after Firestore read)
+- Warnings logged for consistency issues (out-of-order timestamps, etc.)
+
+#### State Synchronization
+- `stateLock.ts`: Async mutex prevents race conditions during state updates
+- SVT phase ticks and treatments are serialized per session
+- Multi-session operations run in parallel (different lock keys)
+
+#### Budget Control
+- `costController.ts`: Tracks OpenAI API costs per session
+- Soft limit: Triggers `throttled` flag (presenter can continue)
+- Hard limit: Triggers `fallback` flag (session switches to fallback mode)
+- `resetSoftLimit()`: Allows presenter to continue past soft limit
+
+#### Realtime Reconnection
+- Automatic reconnection with exponential backoff (3 attempts: 2s, 4s, 8s)
+- `fallback` flag set during disconnect, cleared on successful reconnect
+- Clients notified via broadcast on recovery
+
 ## File Reference
 
 | File | Purpose |
@@ -115,7 +150,27 @@ PORT=8081
 
 ## Testing
 ```bash
-npm run test:gateway       # 200+ gateway tests
-npm run build              # TypeScript check
+npm run test:gateway       # 327+ gateway tests
+npm run build              # TypeScript + Vite build
+npm run lint               # ESLint check
+npm run typecheck          # TypeScript check (frontend + gateway)
 firebase emulators:exec    # Firestore rules tests
 ```
+
+### Test Coverage
+| Area | Tests | Coverage |
+|------|-------|----------|
+| Gateway core | 200+ | ~60% |
+| SVT scenario | 100+ | Phase transitions, scoring, triggers |
+| Myocarditis | 50+ | Shock staging, interventions |
+| State validation | 50+ | Extended state schemas, hydration |
+| Race conditions | 12 | Concurrent operations, state locking |
+| Budget control | 8 | Soft/hard limits, reset logic |
+
+### CI Pipeline
+GitHub Actions runs on push/PR:
+- TypeScript check (frontend + gateway)
+- Build verification
+- Gateway tests with coverage
+- Firestore rules tests
+- Bundle size report

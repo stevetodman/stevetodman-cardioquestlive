@@ -2,21 +2,108 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "20"
           cache: "npm"
-      - run: npm ci
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install gateway dependencies
+        run: cd voice-gateway && npm ci
+
+      - name: TypeScript check (frontend)
+        run: npx tsc --noEmit
+
+      - name: TypeScript check (gateway)
+        run: cd voice-gateway && npx tsc --noEmit
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build gateway
+        run: cd voice-gateway && npm run build
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install gateway dependencies
+        run: cd voice-gateway && npm ci
+
       - name: Gateway tests
-        run: npm run test:gateway
+        run: npm run test:gateway -- --coverage --coverageReporters=text --coverageReporters=lcov
+
       - name: Page tests
         run: npm test -- --runInBand src/pages/__tests__/JoinSession.test.tsx src/pages/__tests__/PresenterSessionSummary.test.tsx
-      - name: Firestore rules (emulator)
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: ./voice-gateway/coverage/lcov.info
+          fail_ci_if_error: false
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  firestore:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Firebase tools
+        run: npm install -g firebase-tools
+
+      - name: Firestore rules tests
         run: npm run test:rules
+
+  bundle-size:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and report size
+        run: |
+          npm run build
+          echo "## Bundle Size Report" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          du -sh dist/* | sort -rh >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Total: $(du -sh dist | cut -f1)" >> $GITHUB_STEP_SUMMARY

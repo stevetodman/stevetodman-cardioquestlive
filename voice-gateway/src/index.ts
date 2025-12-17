@@ -29,9 +29,33 @@ import { createOrderHandler } from "./orders";
 import { shouldAutoReply } from "./autoReplyGuard";
 import { createTransport, send, ClientContext } from "./transport";
 import { getAuscultationClips } from "./data/auscultation";
+import { withStateLock, tryWithStateLock } from "./stateLock";
 
 const PORT = Number(process.env.PORT || 8081);
 const sessionManager = new SessionManager();
+
+/**
+ * Fire-and-forget async operation with proper error logging.
+ * Use instead of `.catch(() => {})` or `void promise` to ensure errors are logged.
+ */
+function fireAndForget(
+  promise: Promise<unknown>,
+  context: string,
+  sessionId?: string
+): void {
+  promise.catch((err) => {
+    logError(`[fireAndForget] ${context} failed:`, err);
+    // Optionally emit an error event for observability
+    if (sessionId) {
+      sessionManager.broadcastToPresenters(sessionId, {
+        type: "voice_error",
+        sessionId,
+        errorType: "async_operation_failed",
+        message: `${context} failed`,
+      } as any);
+    }
+  });
+}
 const eventLog = createEventLog();
 const lastCommandAt: Map<string, number> = new Map();
 const realtimeModel = process.env.OPENAI_REALTIME_MODEL || "gpt-4o-mini-realtime-preview";
@@ -146,14 +170,8 @@ function emitVoiceError(
   logEvent("voice_error", { sessionId, error, correlationId, detail });
 }
 
-// Natural-sounding voices: coral (warm), sage (calm), ballad (expressive), verse (versatile)
-const CHARACTER_VOICE_MAP: Partial<Record<CharacterId, string>> = {
-  patient: process.env.OPENAI_TTS_VOICE_PATIENT || "coral",
-  nurse: process.env.OPENAI_TTS_VOICE_NURSE || "sage",
-  tech: process.env.OPENAI_TTS_VOICE_TECH || "verse",
-  consultant: process.env.OPENAI_TTS_VOICE_CONSULTANT || "ballad",
-  imaging: process.env.OPENAI_TTS_VOICE_IMAGING || "verse",
-};
+// Character voices - imported from central config for consistency
+import { CHARACTER_VOICES } from "./voiceConfig";
 
 async function verifyAuthToken(authToken: string | undefined, claimedUserId: string): Promise<boolean> {
   if (allowInsecureWs) return true;
@@ -316,7 +334,9 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
         }
         case "treatment": {
           const treatmentType = typeof parsed.payload?.treatmentType === "string" ? parsed.payload.treatmentType : undefined;
-          handleTreatment(simId, treatmentType, parsed.payload);
+          handleTreatment(simId, treatmentType, parsed.payload).catch((err) =>
+            logError("[handleMessage] Treatment handler failed:", err)
+          );
           break;
         }
         case "show_ekg": {
@@ -346,10 +366,10 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
           const budget = runtime.cost.getState?.();
           if (budget?.usdEstimate !== undefined && budget.usdEstimate >= hardBudgetUsd) {
             log("[budget] resume blocked; hard limit reached", simId);
-            logSimEvent(simId, {
+            fireAndForget(logSimEvent(simId, {
               type: "budget.resume_blocked",
               payload: { usdEstimate: budget.usdEstimate },
-            }).catch(() => {});
+            }), "logSimEvent:budget.resume_blocked");
             broadcastSimState(simId, {
               ...runtime.scenarioEngine.getState(),
               stageIds: runtime.scenarioEngine.getStageIds(),
@@ -772,7 +792,7 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
       character: routedCharacter,
     });
     // Generate TTS audio for non-patient characters
-    const voice = CHARACTER_VOICE_MAP[routedCharacter];
+    const voice = CHARACTER_VOICES[routedCharacter];
     log("TTS for non-patient", routedCharacter, "voice:", voice, "text:", text.slice(0, 50));
     try {
       const audioBuffer = await synthesizePatientAudio(text, voice);
@@ -903,7 +923,7 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
     engine.appendPatientTurn(finalText);
 
     const audioBuffer = await withRetry(
-      () => timed("tts.synthesize", () => synthesizePatientAudio(finalText, CHARACTER_VOICE_MAP[routedCharacter])),
+      () => timed("tts.synthesize", () => synthesizePatientAudio(finalText, CHARACTER_VOICES[routedCharacter])),
       { label: "tts", attempts: 2, delayMs: 150 },
       sessionId
     );
@@ -1195,6 +1215,140 @@ function broadcastDoctorUtterance(sessionId: string, userId: string, text: strin
   maybeAutoForceReply(sessionId, text, character, userId);
 }
 
+/**
+ * Attempt to reconnect the realtime client with exponential backoff.
+ * @param attempt - Current attempt number (1-based)
+ */
+async function attemptRealtimeReconnect(
+  sessionId: string,
+  runtime: Runtime,
+  scenarioId: string,
+  attempt: number
+): Promise<void> {
+  const maxAttempts = 3;
+  const baseDelayMs = 2000; // 2, 4, 8 seconds
+
+  if (attempt > maxAttempts) {
+    log(`[realtime] Reconnection failed after ${maxAttempts} attempts`, sessionId);
+    sessionManager.broadcastToPresenters(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: "Voice connection could not be restored. Using text fallback mode.",
+      character: "nurse",
+    });
+    return;
+  }
+
+  const delay = baseDelayMs * Math.pow(2, attempt - 1);
+  log(`[realtime] Reconnection attempt ${attempt}/${maxAttempts} in ${delay}ms`, sessionId);
+
+  await new Promise((resolve) => setTimeout(resolve, delay));
+
+  // Check if session still exists
+  const currentRuntime = runtimes.get(sessionId);
+  if (!currentRuntime || currentRuntime !== runtime) {
+    log(`[realtime] Session no longer active, aborting reconnect`, sessionId);
+    return;
+  }
+
+  try {
+    // Create new realtime client
+    const newClient = new RealtimePatientClient({
+      simId: sessionId,
+      model: realtimeModel,
+      apiKey: realtimeApiKey,
+      systemPrompt: buildSystemPrompt(scenarioId as any),
+      onAudioOut: (buf) => {
+        sessionManager.broadcastToSession(sessionId, {
+          type: "patient_audio",
+          sessionId,
+          audioBase64: buf.toString("base64"),
+        });
+      },
+      onTranscriptDelta: (text, isFinal) => {
+        sessionManager.broadcastToSession(sessionId, {
+          type: "patient_transcript_delta",
+          sessionId,
+          text,
+        });
+        eventLog.append({
+          id: `${Date.now()}-${Math.random()}`,
+          ts: Date.now(),
+          simId: sessionId,
+          type: isFinal ? "scenario.state.diff" : "tool.intent.received",
+          payload: { text, final: isFinal },
+        });
+      },
+      onToolIntent: (intent) => {
+        eventLog.append({
+          id: `${Date.now()}-${Math.random()}`,
+          ts: Date.now(),
+          simId: sessionId,
+          type: "tool.intent.received",
+          payload: intent as any,
+        });
+        handleToolIntent(sessionId, intent);
+      },
+      onUsage: (usage) => {
+        runtime.cost.addUsage({
+          inputTokens: usage.inputTokens ?? 0,
+          outputTokens: usage.outputTokens ?? 0,
+        });
+        broadcastSimState(sessionId, {
+          ...runtime.scenarioEngine.getState(),
+          stageIds: runtime.scenarioEngine.getStageIds(),
+          budget: runtime.cost.getState(),
+        });
+      },
+      onDisconnect: () => {
+        runtime.fallback = true;
+        sessionManager.setFallback(sessionId, true);
+        runtime.scenarioEngine.setFallback(true);
+        broadcastSimState(sessionId, {
+          ...runtime.scenarioEngine.getState(),
+          stageIds: runtime.scenarioEngine.getStageIds(),
+        });
+        sessionManager.broadcastToPresenters(sessionId, {
+          type: "patient_state",
+          sessionId,
+          state: "error",
+        });
+        // Attempt reconnection again
+        attemptRealtimeReconnect(sessionId, runtime, scenarioId, 1);
+      },
+    });
+
+    await newClient.connect();
+
+    // Success! Replace old client and clear fallback
+    runtime.realtime = newClient;
+    runtime.fallback = false;
+    sessionManager.setFallback(sessionId, false);
+    runtime.scenarioEngine.setFallback(false);
+
+    log(`[realtime] Reconnection successful on attempt ${attempt}`, sessionId);
+    sessionManager.broadcastToPresenters(sessionId, {
+      type: "patient_state",
+      sessionId,
+      state: "idle",
+    });
+    sessionManager.broadcastToPresenters(sessionId, {
+      type: "patient_transcript_delta",
+      sessionId,
+      text: "Voice connection restored.",
+      character: "nurse",
+    });
+    broadcastSimState(sessionId, {
+      ...runtime.scenarioEngine.getState(),
+      stageIds: runtime.scenarioEngine.getStageIds(),
+    });
+  } catch (err) {
+    logError(`[realtime] Reconnection attempt ${attempt} failed`, err);
+    // Try again with next attempt
+    attemptRealtimeReconnect(sessionId, runtime, scenarioId, attempt + 1);
+  }
+}
+
 function ensureRuntime(sessionId: string): Runtime {
   const existing = runtimes.get(sessionId);
   if (existing) return existing;
@@ -1260,6 +1414,7 @@ function ensureRuntime(sessionId: string): Runtime {
         });
       },
       onDisconnect: () => {
+        // Mark as fallback temporarily
         runtime.fallback = true;
         sessionManager.setFallback(sessionId, true);
         runtime.scenarioEngine.setFallback(true);
@@ -1272,6 +1427,9 @@ function ensureRuntime(sessionId: string): Runtime {
           sessionId,
           state: "error",
         });
+
+        // Attempt reconnection with exponential backoff
+        attemptRealtimeReconnect(sessionId, runtime, scenarioId, 1);
       },
     });
     runtime.realtime.connect();
@@ -1337,10 +1495,10 @@ function handleToolIntent(sessionId: string, intent: ToolIntent) {
       type: "tool.intent.rejected",
       payload: { intent, reason: decision.reason },
     });
-    logSimEvent(sessionId, {
+    fireAndForget(logSimEvent(sessionId, {
       type: "tool.intent.rejected",
       payload: { intent, reason: decision.reason },
-    }).catch(() => {});
+    }), "logSimEvent:tool.intent.rejected");
     return;
   }
   log("[tool] approved", intent.type, "stage", stageId);
@@ -1352,7 +1510,7 @@ function handleToolIntent(sessionId: string, intent: ToolIntent) {
     type: "tool.intent.approved",
     payload: intent as any,
   });
-  logSimEvent(sessionId, { type: "tool.intent.approved", payload: intent as any }).catch(() => {});
+  fireAndForget(logSimEvent(sessionId, { type: "tool.intent.approved", payload: intent as any }), "logSimEvent:tool.intent.approved");
   result.events.forEach((evt) =>
     eventLog.append({
       id: `${Date.now()}-${Math.random()}`,
@@ -1362,7 +1520,7 @@ function handleToolIntent(sessionId: string, intent: ToolIntent) {
       payload: evt.payload,
     })
   );
-  logSimEvent(sessionId, { type: "tool.intent.applied", payload: intent as any }).catch(() => {});
+  fireAndForget(logSimEvent(sessionId, { type: "tool.intent.applied", payload: intent as any }), "logSimEvent:tool.intent.applied");
   const actionHint = (intent as any)?.action ? [(intent as any).action as string] : [];
   const transitionResult = runtime.scenarioEngine.evaluateAutomaticTransitions(actionHint);
   const nextState = transitionResult?.nextState ?? result.nextState;
@@ -1381,14 +1539,14 @@ function handleToolIntent(sessionId: string, intent: ToolIntent) {
 }
 
 function handleBudgetSoftLimit(sessionId: string) {
-  logSimEvent(sessionId, { type: "budget.soft_limit" }).catch(() => {});
+  fireAndForget(logSimEvent(sessionId, { type: "budget.soft_limit" }), "logSimEvent:budget.soft_limit");
   console.warn("[budget] soft limit reached", sessionId);
   logEvent("budget.soft_limit", { sessionId });
 }
 
 function handleBudgetHardLimit(sessionId: string) {
   const runtime = runtimes.get(sessionId);
-  logSimEvent(sessionId, { type: "budget.hard_limit" }).catch(() => {});
+  fireAndForget(logSimEvent(sessionId, { type: "budget.hard_limit" }), "logSimEvent:budget.hard_limit");
   console.warn("[budget] hard limit reached, switching to fallback", sessionId);
   logEvent("budget.hard_limit", { sessionId });
   if (runtime) {
@@ -1545,10 +1703,17 @@ function startScenarioHeartbeat(sessionId: string) {
     const runtime = runtimes.get(sessionId);
     if (!runtime) return;
 
-    // Handle SVT phase transitions
+    // Handle SVT phase transitions with state lock to prevent race conditions
+    // Uses tryWithStateLock to skip if treatment is in progress (will tick next heartbeat)
     const state = runtime.scenarioEngine.getState();
     if (hasSVTExtended(state)) {
-      tickSVTPhase(sessionId, runtime, state.extended);
+      tryWithStateLock(sessionId, "svtPhaseTick", async () => {
+        // Re-fetch state inside lock to ensure we have latest
+        const freshState = runtime.scenarioEngine.getState();
+        if (hasSVTExtended(freshState)) {
+          tickSVTPhase(sessionId, runtime, freshState.extended);
+        }
+      }).catch((err) => logError("[tick] SVT phase tick failed:", err));
     }
 
     const result = runtime.scenarioEngine.tick(Date.now());
@@ -1574,7 +1739,7 @@ function startScenarioHeartbeat(sessionId: string) {
         })
       );
       result.events?.forEach((evt) =>
-        logSimEvent(sessionId, { type: evt.type, payload: evt.payload as any }).catch(() => {})
+        fireAndForget(logSimEvent(sessionId, { type: evt.type, payload: evt.payload as any }), `logSimEvent:${evt.type}`)
       );
       broadcastSimState(sessionId, {
         ...runtime.scenarioEngine.getState(),
@@ -1740,7 +1905,7 @@ function broadcastSimState(
   };
 
   sessionManager.broadcastToParticipants(sessionId, participantState);
-  persistSimState(sessionId, state as any).catch(() => {});
+  fireAndForget(persistSimState(sessionId, state as any), "persistSimState", sessionId);
 }
 
 function buildSystemPrompt(scenario: PatientScenarioId): string {
@@ -1878,10 +2043,10 @@ function handleExamRequest(sessionId: string, examType?: string) {
       orders: completedOrders,
     });
 
-    logSimEvent(sessionId, { type: `exam.${orderType}.complete`, payload: { summary } }).catch(() => {});
+    fireAndForget(logSimEvent(sessionId, { type: `exam.${orderType}.complete`, payload: { summary } }), `logSimEvent:exam.${orderType}.complete`);
   }, 1500);
 
-  logSimEvent(sessionId, { type: "exam.requested", payload: { maneuver: maneuver ?? "standard", orderType } }).catch(() => {});
+  fireAndForget(logSimEvent(sessionId, { type: "exam.requested", payload: { maneuver: maneuver ?? "standard", orderType } }), "logSimEvent:exam.requested");
 }
 
 function handleTelemetryToggle(sessionId: string, enabled: boolean) {
@@ -1904,7 +2069,7 @@ function handleTelemetryToggle(sessionId: string, enabled: boolean) {
       character: "tech",
     });
   }
-  logSimEvent(sessionId, { type: "telemetry.toggle", payload: { enabled } }).catch(() => {});
+  fireAndForget(logSimEvent(sessionId, { type: "telemetry.toggle", payload: { enabled } }), "logSimEvent:telemetry.toggle");
 }
 
 function handleShowEkg(sessionId: string) {
@@ -1940,7 +2105,7 @@ function handleShowEkg(sessionId: string) {
     stageIds: runtime.scenarioEngine.getStageIds(),
     telemetryWaveform,
   });
-  logSimEvent(sessionId, { type: "ekg.viewed", payload: { summary, imageUrl } }).catch(() => {});
+  fireAndForget(logSimEvent(sessionId, { type: "ekg.viewed", payload: { summary, imageUrl } }), "logSimEvent:ekg.viewed");
 }
 
 /**
@@ -1950,7 +2115,7 @@ function handleShowEkg(sessionId: string) {
  * - Cardioversion/defibrillation (J/kg)
  * - Nurse confirmation of exact dose given
  */
-function handleTreatment(
+async function handleTreatment(
   sessionId: string,
   treatmentType?: string,
   payload?: Record<string, unknown>
@@ -1976,16 +2141,41 @@ function handleTreatment(
   }
   lastTreatmentAt.set(key, now);
 
+  // Check if this is an SVT scenario that needs state locking
+  const initialState = runtime.scenarioEngine.getState();
+  const needsStateLock = hasSVTExtended(initialState);
+
+  // For SVT scenarios, wrap the entire treatment in a state lock to prevent
+  // race conditions with heartbeat ticks that also modify extended state
+  if (needsStateLock) {
+    await withStateLock(sessionId, `treatment:${treatmentType}`, async () => {
+      await executeTreatmentLogic(sessionId, runtime, treatmentType, payload, weightKg, demographics);
+    });
+  } else {
+    await executeTreatmentLogic(sessionId, runtime, treatmentType, payload, weightKg, demographics);
+  }
+}
+
+/**
+ * Core treatment execution logic, extracted for state lock wrapping.
+ */
+async function executeTreatmentLogic(
+  sessionId: string,
+  runtime: Runtime,
+  treatmentType: string | undefined,
+  payload: Record<string, unknown> | undefined,
+  weightKg: number,
+  demographics: ReturnType<ScenarioEngine["getDemographics"]>
+) {
+  const doseOrdered = payload?.dose as number | undefined;
+  const routeOrdered = payload?.route as string | undefined;
+  const joules = payload?.joules as number | undefined;
+
   const delta: any = {};
   let nurseResponse = "";
   let techResponse: string | undefined;
   let decayMs = 120000;
   let decayIntent: ToolIntent | null = null;
-
-  // Extract dose/route from payload
-  const doseOrdered = payload?.dose as number | undefined;
-  const routeOrdered = payload?.route as string | undefined;
-  const joules = payload?.joules as number | undefined;
 
   switch ((treatmentType ?? "").toLowerCase()) {
     // ===== SUPPORTIVE CARE =====
@@ -2612,10 +2802,10 @@ function handleTreatment(
     }
   }
 
-  logSimEvent(sessionId, {
+  fireAndForget(logSimEvent(sessionId, {
     type: "treatment.applied",
     payload: { treatmentType, weightKg, ...payload, nurseResponse },
-  }).catch(() => {});
+  }), "logSimEvent:treatment.applied");
 
   // Schedule effect decay
   if (decayIntent) {

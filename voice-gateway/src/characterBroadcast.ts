@@ -8,15 +8,8 @@ import type { CharacterId } from "./messageTypes";
 import { synthesizePatientAudio } from "./ttsClient";
 import { log, logError } from "./logger";
 
-// Voice mapping for TTS
-export const CHARACTER_VOICE_MAP: Record<CharacterId, string | undefined> = {
-  patient: "alloy",
-  parent: "nova",
-  nurse: "echo",
-  tech: "fable",
-  consultant: "onyx",
-  imaging: "shimmer",
-};
+// Voice mapping - imported from central config
+import { CHARACTER_VOICES } from "./voiceConfig";
 
 export interface CharacterBroadcastDeps {
   sessionManager: SessionManager;
@@ -55,7 +48,7 @@ export async function broadcastCharacterSpeak(
 
   // Generate TTS for all participants if requested
   if (withTts) {
-    const voice = CHARACTER_VOICE_MAP[character];
+    const voice = CHARACTER_VOICES[character];
     log("TTS for character", character, "voice:", voice, "text:", text.slice(0, 50));
     try {
       const audioBuffer = await synthesizePatientAudio(text, voice);

@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 
 import type { Slide } from "../types";
 import { slideWrapper } from "../utils/slideWrapper";

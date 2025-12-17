@@ -8,17 +8,7 @@ import { Runtime } from "./typesRuntime";
 import { OrderResult, CharacterId } from "./messageTypes";
 import { synthesizePatientAudio } from "./ttsClient";
 import { log, logError } from "./logger";
-
-// Voice mapping for TTS (matches characterBroadcast.ts)
-// Valid OpenAI TTS voices: alloy, echo, fable, onyx, nova, shimmer
-const CHARACTER_VOICE_MAP: Record<CharacterId, string | undefined> = {
-  patient: "alloy",
-  parent: "nova",
-  nurse: "echo",
-  tech: "fable",
-  consultant: "onyx",
-  imaging: "shimmer",
-};
+import { CHARACTER_VOICES } from "./voiceConfig";
 
 // ============================================================================
 // Types
@@ -298,7 +288,7 @@ export function createOrderHandler(deps: OrderDeps) {
         character,
       });
       // Generate TTS audio for the acknowledgment
-      const voice = CHARACTER_VOICE_MAP[character];
+      const voice = CHARACTER_VOICES[character];
       synthesizePatientAudio(ackMessage, voice)
         .then((audioBuffer) => {
           if (audioBuffer) {

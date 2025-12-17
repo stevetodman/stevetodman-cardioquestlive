@@ -8,6 +8,28 @@
 import type { SVTExtendedState } from "../../types";
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Calculate the actual elapsed time from scenario start, accounting for pause time.
+ * This is critical for time-based bonuses/penalties to be accurate when the scenario
+ * has been paused.
+ *
+ * @param eventTs - The timestamp of the event (e.g., when ECG was ordered)
+ * @param scenarioStartedAt - When the scenario started
+ * @param totalPausedMs - Total time the scenario has been paused
+ * @returns Elapsed time in milliseconds, adjusted for pauses
+ */
+function getElapsedFromStart(
+  eventTs: number,
+  scenarioStartedAt: number,
+  totalPausedMs: number = 0
+): number {
+  return (eventTs - scenarioStartedAt) - totalPausedMs;
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -109,9 +131,14 @@ export const BONUS_ITEMS: BonusItem[] = [
     id: "early_ecg",
     description: "ECG ordered in first 60 seconds",
     points: 10,
-    check: (state, elapsedMs) => {
+    check: (state, _elapsedMs) => {
       if (!state.ecgOrderedTs) return false;
-      const ecgDelayMs = state.ecgOrderedTs - state.scenarioStartedAt;
+      // Use pause-adjusted elapsed time
+      const ecgDelayMs = getElapsedFromStart(
+        state.ecgOrderedTs,
+        state.scenarioStartedAt,
+        state.totalPausedMs
+      );
       return ecgDelayMs <= 60 * 1000;
     },
   },
@@ -178,6 +205,20 @@ export const PENALTY_ITEMS: PenaltyItem[] = [
     check: (state) => {
       if (state.adenosineDoses.length === 0) return false;
       return state.adenosineDoses.some((d) => d.doseMgKg < 0.05);
+    },
+  },
+  {
+    id: "adenosine_moderate_overdose",
+    description: "Adenosine dose slightly high (0.12-0.25 mg/kg) - higher than recommended",
+    points: -5,
+    check: (state) => {
+      if (state.adenosineDoses.length === 0) return false;
+      // Only penalize if moderate overdose (not severe)
+      const hasModerateOverdose = state.adenosineDoses.some(
+        (d) => d.doseMgKg > 0.11 && d.doseMgKg <= 0.25
+      );
+      const hasSevereOverdose = state.adenosineDoses.some((d) => d.doseMgKg > 0.25);
+      return hasModerateOverdose && !hasSevereOverdose;
     },
   },
   {
