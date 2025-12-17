@@ -55,6 +55,8 @@ import { CxrViewer } from "../components/CxrViewer";
 import { FLOOR_AUTO_RELEASE_MS } from "../constants";
 import { PresenterModeTabs } from "../components/PresenterModeTabs";
 import { usePresenterMode } from "../hooks/usePresenterMode";
+import { usePresenterTimeline } from "../hooks/usePresenterTimeline";
+import { usePresenterScoring } from "../hooks/usePresenterScoring";
 import { GamificationControls, ScenarioSnapshotCard, PresenterHeader } from "../components/presenter";
 import { VoiceDebugPanel } from "../components/presenter/VoiceDebugPanel";
 import { SectionLabel } from "../components/ui";
@@ -143,6 +145,19 @@ export default function PresenterSession() {
     timelineExtras, setTimelineExtras,
     exportStatus, setExportStatus,
   } = useDebrief();
+
+  // === Custom hooks for extracted logic ===
+  const {
+    timelineItems,
+    filteredTimeline,
+    timelineText,
+    timelineBadge,
+    saveTimelineToSession,
+    saveTranscriptToSession,
+    transcriptText,
+  } = usePresenterTimeline(sessionId);
+
+  const { scoringSummary } = usePresenterScoring();
 
   // === Local state - session/Firestore specific ===
   const [session, setSession] = useState<SessionData | null>(null);
@@ -461,179 +476,14 @@ export default function PresenterSession() {
       },
     ]);
   }, [simState?.vitals, lastNpcInterjectAt, simState?.stageId, npcCooldowns]);
+  // ekgHistory computed for latestEkg/latestEkgMeta (kept local since needed before hooks)
   const ekgHistory = useMemo(() => {
     if ((simState as any)?.ekgHistory) return (simState as any).ekgHistory;
     const ekgs = (simState?.orders ?? []).filter((o) => o.type === "ekg" && o.status === "complete");
     return ekgs.slice(-3).reverse();
   }, [simState?.orders, (simState as any)?.ekgHistory]);
-  const timelineItems = useMemo(() => {
-    const items: { id: string; ts: number; label: string; detail: string }[] = [];
-    transcriptLog.forEach((t) => {
-      items.push({
-        id: `turn-${t.id}`,
-        ts: t.timestamp,
-        label: t.character ? t.character : t.role === "doctor" ? "Doctor" : "Patient",
-        detail: t.text,
-      });
-    });
-    (simState?.telemetryHistory ?? []).forEach((h, idx) => {
-      items.push({
-        id: `telemetry-${idx}-${h.ts ?? Date.now()}`,
-        ts: h.ts ?? Date.now(),
-        label: "Telemetry",
-        detail: h.rhythm ?? "Rhythm update",
-      });
-    });
-    (ekgHistory ?? []).forEach((ekg, idx) => {
-      items.push({
-        id: `ekg-${idx}-${ekg.ts ?? Date.now()}`,
-        ts: ekg.ts ?? Date.now(),
-        label: "EKG",
-        detail: ekg.summary ?? "EKG",
-      });
-    });
-    (simState?.orders ?? [])
-      .filter((o) => o.status === "complete")
-      .forEach((o) => {
-        items.push({
-          id: `order-${o.id}`,
-          ts: o.completedAt ?? Date.now(),
-          label: o.type.toUpperCase(),
-          detail:
-            o.result?.type === "vitals"
-              ? `HR ${o.result.hr ?? "—"} BP ${o.result.bp ?? "—"} SpO₂ ${o.result.spo2 ?? "—"}`
-              : o.result?.summary ?? "Result ready",
-        });
-      });
-    (simState?.treatmentHistory ?? []).forEach((th, idx) => {
-      items.push({
-        id: `treatment-${idx}-${th.ts ?? Date.now()}`,
-        ts: th.ts ?? Date.now(),
-        label: "Treatment",
-        detail: `${th.treatmentType}${th.note ? `: ${th.note}` : ""}`,
-      });
-    });
-    if (simState?.exam && Object.values(simState.exam).some(v => v)) {
-      items.push({
-        id: `exam-${simState.stageId}-${Date.now()}`,
-        ts: Date.now(),
-        label: "Exam",
-        detail: [
-          simState.exam.general && `General: ${simState.exam.general}`,
-          simState.exam.cardio && `CV: ${simState.exam.cardio}`,
-          simState.exam.lungs && `Lungs: ${simState.exam.lungs}`,
-          simState.exam.perfusion && `Perfusion: ${simState.exam.perfusion}`,
-          simState.exam.neuro && `Neuro: ${simState.exam.neuro}`,
-        ]
-          .filter(Boolean)
-          .join(" | "),
-      });
-    }
-    timelineExtras.forEach((extra) => items.push(extra));
-    return items
-      .sort((a, b) => a.ts - b.ts)
-      .filter((item, idx, arr) => arr.findIndex((it) => it.id === item.id) === idx)
-      .slice(-20);
-  }, [transcriptLog, simState?.orders, timelineExtras]);
-  const filteredTimeline = useMemo(
-    () =>
-      (timelineFilter === "all"
-        ? timelineItems
-        : timelineItems.filter((item) => item.label.toLowerCase() === timelineFilter)
-      ).filter((item) => (timelineSearch ? `${item.label} ${item.detail}`.toLowerCase().includes(timelineSearch.toLowerCase()) : true)),
-    [timelineItems, timelineFilter, timelineSearch]
-  );
-  const timelineText = useMemo(() => {
-    return timelineItems
-      .map((item) => {
-        const ts = new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-        return `${ts} ${item.label}: ${item.detail}`;
-      })
-      .join("\n");
-  }, [timelineItems]);
-  const scoringSummary = useMemo(() => {
-    const stageStart = (simState as any)?.stageEnteredAt as number | undefined;
-    const secsSinceStart = (ts?: number) =>
-      ts && stageStart ? Math.max(0, Math.round((ts - stageStart) / 1000)) : null;
-    const describeTiming = (label: string, ts?: number) => {
-      const delta = secsSinceStart(ts);
-      return delta === null ? `${label}: not recorded` : `${label}: ${delta}s`;
-    };
-
-    const ordersComplete = (simState?.orders ?? []).filter((o) => o.status === "complete");
-    const treatments = simState?.treatmentHistory ?? [];
-
-    const ekgDone = ordersComplete.some((o) => o.type === "ekg");
-    const labsDone = ordersComplete.some((o) => o.type === "labs");
-    const imagingDone = ordersComplete.some((o) => o.type === "imaging");
-    const vitalsOrders = ordersComplete.filter((o) => o.type === "vitals").length;
-
-    const oxygenGiven = treatments.some((t) => t.treatmentType.toLowerCase().includes("oxygen"));
-    const fluidsGiven = treatments.some((t) => t.treatmentType.toLowerCase().includes("fluid") || t.treatmentType.toLowerCase().includes("bolus"));
-    const rateControl = treatments.some((t) => t.treatmentType.toLowerCase().includes("rate"));
-    const kneeChest = treatments.some((t) => t.treatmentType.toLowerCase().includes("knee") || t.treatmentType.toLowerCase().includes("position"));
-
-    const firstVitals = ordersComplete.find((o) => o.type === "vitals")?.completedAt;
-    const firstOxygen = treatments.find((t) => t.treatmentType.toLowerCase().includes("oxygen"))?.ts;
-    const firstFluids = treatments.find((t) => t.treatmentType.toLowerCase().includes("fluid") || t.treatmentType.toLowerCase().includes("bolus"))?.ts;
-    const firstRate = treatments.find((t) => t.treatmentType.toLowerCase().includes("rate"))?.ts;
-
-    let score = 100;
-    const items: string[] = [];
-
-    if (!firstVitals) {
-      score -= 10;
-      items.push("Vitals refresh not recorded");
-    } else {
-      const delta = secsSinceStart(firstVitals);
-      if (delta !== null && delta > 120) score -= 5;
-      items.push(describeTiming("Vitals refreshed", firstVitals));
-    }
-
-    if (!oxygenGiven) {
-      score -= 15;
-      items.push("Oxygen not given");
-    } else {
-      const delta = secsSinceStart(firstOxygen);
-      if (delta !== null && delta > 180) score -= 5;
-      items.push(describeTiming("Oxygen given", firstOxygen));
-    }
-
-    if (!fluidsGiven) {
-      score -= 10;
-      items.push("Fluids/bolus not given");
-    } else {
-      items.push(describeTiming("Fluids given", firstFluids));
-    }
-
-    if (!rateControl) {
-      items.push("Rate control not given");
-    } else {
-      items.push(describeTiming("Rate control given", firstRate));
-    }
-
-    if (kneeChest) items.push("Positioning/knee-chest applied");
-
-    if (ekgDone) {
-      items.push("EKG completed");
-    } else {
-      score -= 5;
-      items.push("EKG pending");
-    }
-    if (labsDone) items.push("Labs completed");
-    if (imagingDone) items.push("Imaging completed");
-    if (vitalsOrders > 1) items.push(`Vitals refreshed x${vitalsOrders}`);
-
-    score = Math.max(0, Math.min(100, score));
-    return { score, items };
-  }, [simState?.orders, simState?.treatmentHistory, (simState as any)?.stageEnteredAt]);
-
-  useEffect(() => {
-    setScoringTrend((prev) => ({
-      current: scoringSummary.score,
-      delta: scoringSummary.score - (prev.current ?? scoringSummary.score),
-    }));
-  }, [scoringSummary.score]);
+  // timelineItems, filteredTimeline, timelineText now from usePresenterTimeline hook
+  // scoringSummary now from usePresenterScoring hook (includes setScoringTrend effect)
   useEffect(() => {
     const rhythm = simState?.rhythmSummary ?? null;
     if (rhythm && rhythm !== lastRhythmRef.current) {
@@ -641,32 +491,7 @@ export default function PresenterSession() {
       lastRhythmRef.current = rhythm;
     }
   }, [simState?.rhythmSummary]);
-  const transcriptText = useMemo(() => {
-    const parts: string[] = [];
-    transcriptLog.forEach((t) => {
-      const ts = new Date(t.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-      const speaker = t.character ?? t.role ?? "unknown";
-      parts.push(`${ts} ${speaker}: ${t.text}`);
-    });
-    (simState?.treatmentHistory ?? []).forEach((th) => {
-      const ts = th.ts ? new Date(th.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
-      parts.push(`${ts} Treatment: ${th.treatmentType}${th.note ? ` (${th.note})` : ""}`);
-    });
-    (simState?.telemetryHistory ?? []).forEach((h) => {
-      const ts = h.ts ? new Date(h.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
-      parts.push(`${ts} Telemetry: ${h.rhythm ?? "update"}${h.note ? ` (${h.note})` : ""}`);
-    });
-    (simState?.ekgHistory ?? []).forEach((e) => {
-      const ts = e.ts ? new Date(e.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
-      parts.push(`${ts} EKG: ${e.summary ?? "strip"}`);
-    });
-    const vitalsTrend = (simState?.vitalsHistory as any[]) ?? [];
-    vitalsTrend.slice(-5).forEach((v, idx) => {
-      const ts = v.ts ? new Date(v.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : `vitals-${idx}`;
-      parts.push(`${ts} Vitals: HR ${v.hr ?? "—"} BP ${v.bp ?? "—"} SpO2 ${v.spo2 ?? "—"}`);
-    });
-    return parts.join("\n");
-  }, [transcriptLog, simState?.treatmentHistory, simState?.telemetryHistory, simState?.ekgHistory]);
+  // transcriptText now from usePresenterTimeline hook
   const handlePlayExamAudio = useCallback(
     async (type: "heart" | "lung") => {
       const url = type === "heart" ? examAudio.heart : examAudio.lung;
@@ -846,41 +671,7 @@ export default function PresenterSession() {
     return parts.join("\n\n");
   }, [debriefResult, sessionId, timelineItems.length, timelineText]);
 
-  const saveTimelineToSession = useCallback(async () => {
-    if (!sessionId || !timelineText || timelineItems.length === 0) return;
-    setTimelineSaveStatus("saving");
-    try {
-      const tlCollection = collection(db, "sessions", sessionId, "timeline");
-      await addDoc(tlCollection, {
-        createdBy: auth.currentUser?.uid ?? "unknown",
-        createdAt: new Date().toISOString(),
-        text: timelineText,
-      });
-      setTimelineSaveStatus("saved");
-      setTimeout(() => setTimelineSaveStatus("idle"), 1500);
-    } catch {
-      setTimelineSaveStatus("error");
-      setTimeout(() => setTimelineSaveStatus("idle"), 1500);
-    }
-  }, [sessionId, timelineItems.length, timelineText]);
-
-  const saveTranscriptToSession = useCallback(async () => {
-    if (!sessionId || !transcriptText || transcriptLog.length === 0) return;
-    setTranscriptSaveStatus("saving");
-    try {
-      const trCollection = collection(db, "sessions", sessionId, "transcripts");
-      await addDoc(trCollection, {
-        createdBy: auth.currentUser?.uid ?? "unknown",
-        createdAt: new Date().toISOString(),
-        text: transcriptText,
-      });
-      setTranscriptSaveStatus("saved");
-      setTimeout(() => setTranscriptSaveStatus("idle"), 1500);
-    } catch {
-      setTranscriptSaveStatus("error");
-      setTimeout(() => setTranscriptSaveStatus("idle"), 1500);
-    }
-  }, [sessionId, transcriptLog.length, transcriptText]);
+  // saveTimelineToSession, saveTranscriptToSession now from usePresenterTimeline hook
   const groupedTranscript = useMemo(() => {
     const order = ["patient", "nurse", "tech", "consultant", "doctor"];
     const buckets = new Map<string, TranscriptLogTurn[]>();
@@ -898,15 +689,7 @@ export default function PresenterSession() {
     const colors = ROLE_COLORS[role as keyof typeof ROLE_COLORS] ?? ROLE_COLORS.patient;
     return `${colors.text} ${colors.border}`;
   }, []);
-
-  const timelineBadge = useCallback((label: string) => {
-    const lowered = label.toLowerCase();
-    const colors = ROLE_COLORS[lowered as keyof typeof ROLE_COLORS];
-    if (colors) {
-      return `${colors.border} ${colors.text} px-2 py-0.5 rounded border text-[10px] uppercase tracking-[0.14em]`;
-    }
-    return "px-2 py-0.5 rounded border border-slate-700 text-[10px] uppercase tracking-[0.14em] text-slate-200";
-  }, []);
+  // timelineBadge now from usePresenterTimeline hook
   const slideRef = useRef<HTMLDivElement>(null);
   const currentTurnIdRef = useRef<string | null>(null);
   const currentTurnCharacterRef = useRef<string | undefined>("patient");
