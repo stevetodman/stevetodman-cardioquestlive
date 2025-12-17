@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 
 export type TranscriptLogTurn = {
   id: string;
-  role: "doctor" | "patient";
+  role?: "doctor" | "patient" | string;
   timestamp: number;
   text: string;
   relatedTurnId?: string;

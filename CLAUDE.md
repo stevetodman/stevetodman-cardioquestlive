@@ -32,6 +32,13 @@ src/
 
 voice-gateway/src/
 ├── index.ts                    # WebSocket server entry
+├── handlers/                   # Extracted message handlers
+│   ├── doctorAudio.ts          # Audio processing, transcription
+│   └── analysisRequests.ts     # Debrief analysis (wired up)
+├── runtime/                    # Session runtime management
+│   └── runtimeManager.ts       # Runtime lifecycle, hydration
+├── state/                      # State utilities
+│   └── broadcastUtils.ts       # Sim state broadcasting
 ├── orders.ts                   # Order system with TTS, timers, interventions
 ├── validators.ts               # Zod schemas (all 12 scenario IDs)
 ├── voiceConfig.ts              # Unified character voice mapping

@@ -252,6 +252,31 @@ const summaries: Record<PatientScenarioId, ScenarioSnapshot> = {
       { name: "Post-conversion ECG", status: "pending", summary: "Look for delta wave (WPW) after conversion." },
     ],
   },
+  peds_myocarditis_silent_crash_v1: {
+    chiefComplaint: "Fatigue and respiratory distress after viral illness",
+    hpi: [
+      "10-year-old with 5-day history of fatigue and poor appetite after URI.",
+      "Increasing shortness of breath over past 24 hours.",
+      "Vomited twice today; parents note she looks pale.",
+      "No prior cardiac history; previously healthy and active.",
+    ],
+    exam: [
+      "Tired, pale child; tachypneic at rest.",
+      "Tachycardia with gallop rhythm; weak pulses.",
+      "Cool extremities, delayed cap refill 4 seconds.",
+      "Hepatomegaly; mild crackles at lung bases.",
+    ],
+    labs: [
+      { name: "Troponin", status: "result", summary: "Elevated, consistent with myocardial injury." },
+      { name: "BNP/NT-proBNP", status: "result", summary: "Markedly elevated indicating heart failure." },
+      { name: "Lactate", status: "result", summary: "Elevated indicating poor perfusion." },
+    ],
+    imaging: [
+      { name: "ECG", status: "result", summary: "Sinus tachycardia, low voltage, ST-T changes." },
+      { name: "CXR", status: "result", summary: "Cardiomegaly with pulmonary edema." },
+      { name: "Echo", status: "pending", summary: "Severely depressed LV function expected." },
+    ],
+  },
 };
 
 export function getScenarioSnapshot(scenarioId: PatientScenarioId | null | undefined): ScenarioSnapshot | null {

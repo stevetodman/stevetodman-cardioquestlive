@@ -112,7 +112,7 @@ interface AnswerRecapCardProps {
   index: number;
 }
 
-function AnswerRecapCard({ question, index }: AnswerRecapCardProps) {
+const AnswerRecapCard: React.FC<AnswerRecapCardProps> = ({ question, index }) => {
   const correctLetter = String.fromCharCode(65 + (question.correctIndex ?? 0));
   const correctOption = question.options[question.correctIndex ?? 0];
 

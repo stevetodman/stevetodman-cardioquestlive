@@ -20,8 +20,8 @@ interface AutonomousSimPanelProps {
     stageId?: string;
     vitals?: Record<string, unknown>;
     budget?: {
-      fallback: boolean;
-      throttled: boolean;
+      fallback?: boolean;
+      throttled?: boolean;
       usdEstimate?: number;
     };
   };

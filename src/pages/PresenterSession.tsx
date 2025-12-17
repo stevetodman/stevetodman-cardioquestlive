@@ -740,7 +740,7 @@ export default function PresenterSession() {
   const generateDebrief = useCallback(() => {
     if (!sessionId || transcriptLog.length === 0) return;
     const turns: DebriefTurn[] = transcriptLog.map((t) => ({
-      role: t.role,
+      role: t.role as "patient" | "doctor",
       text: t.text,
       timestamp: t.timestamp,
     }));
