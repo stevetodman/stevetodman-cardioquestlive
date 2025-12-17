@@ -28,7 +28,8 @@ import { Runtime } from "./typesRuntime";
 import { createOrderHandler } from "./orders";
 import { shouldAutoReply } from "./autoReplyGuard";
 import { createTransport, send, ClientContext } from "./transport";
-import { createDoctorAudioHandler, createAnalysisHandler } from "./handlers";
+import { createDoctorAudioHandler, createAnalysisHandler, createTreatmentHandler } from "./handlers";
+import { createBroadcastUtils } from "./state";
 import { getAuscultationClips } from "./data/auscultation";
 import { withStateLock, tryWithStateLock } from "./stateLock";
 
@@ -78,11 +79,7 @@ const alarmSeenAt: Map<
     hrLow?: number;
   }
 > = new Map();
-const handleOrder = createOrderHandler({
-  ensureRuntime,
-  sessionManager,
-  broadcastSimState,
-});
+// handleOrder initialized after broadcastUtils below
 // Default to secure WebSocket auth; only allow insecure for local dev/tunnels when explicitly set.
 const allowInsecureWs = process.env.ALLOW_INSECURE_VOICE_WS === "true";
 if (allowInsecureWs && process.env.NODE_ENV === "production") {
@@ -159,6 +156,32 @@ function getOrCreateCorrelationId(sessionId: string): string {
   }
   return corrId;
 }
+
+// Initialize broadcast utilities
+const broadcastUtils = createBroadcastUtils({
+  sessionManager,
+  getOrCreateCorrelationId,
+  voiceFallbackSessions,
+  fireAndForget,
+});
+
+// Initialize order handler (depends on broadcastUtils)
+const handleOrder = createOrderHandler({
+  ensureRuntime,
+  sessionManager,
+  broadcastSimState: broadcastUtils.broadcastSimState,
+});
+
+// Initialize treatment handler (depends on handleOrder, broadcastUtils)
+const treatmentHandler = createTreatmentHandler({
+  ensureRuntime,
+  sessionManager,
+  handleOrder,
+  broadcastSimState: broadcastUtils.broadcastSimState,
+  runtimes,
+  lastTreatmentAt,
+  fireAndForget,
+});
 
 function emitVoiceError(
   sessionId: string,
@@ -341,7 +364,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
         }
         case "treatment": {
           const treatmentType = typeof parsed.payload?.treatmentType === "string" ? parsed.payload.treatmentType : undefined;
-          handleTreatment(simId, treatmentType, parsed.payload).catch((err) =>
+          treatmentHandler.handleTreatment(simId, treatmentType, parsed.payload).catch((err) =>
             logError("[handleMessage] Treatment handler failed:", err)
           );
           break;
@@ -359,7 +382,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
           });
           runtime.fallback = true;
           sessionManager.setFallback(simId, true);
-          broadcastSimState(simId, {
+          broadcastUtils.broadcastSimState(simId, {
             ...runtime.scenarioEngine.getState(),
             stageIds: runtime.scenarioEngine.getStageIds(),
             fallback: true,
@@ -377,7 +400,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
               type: "budget.resume_blocked",
               payload: { usdEstimate: budget.usdEstimate },
             }), "logSimEvent:budget.resume_blocked");
-            broadcastSimState(simId, {
+            broadcastUtils.broadcastSimState(simId, {
               ...runtime.scenarioEngine.getState(),
               stageIds: runtime.scenarioEngine.getStageIds(),
               fallback: true,
@@ -431,7 +454,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
                   inputTokens: usage.inputTokens ?? 0,
                   outputTokens: usage.outputTokens ?? 0,
                 });
-                broadcastSimState(simId, {
+                broadcastUtils.broadcastSimState(simId, {
                   ...runtime.scenarioEngine.getState(),
                   stageIds: runtime.scenarioEngine.getStageIds(),
                   budget: runtime.cost.getState(),
@@ -441,7 +464,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
                 runtime.fallback = true;
                 sessionManager.setFallback(simId, true);
                 runtime.scenarioEngine.setFallback(true);
-                broadcastSimState(simId, {
+                broadcastUtils.broadcastSimState(simId, {
                   ...runtime.scenarioEngine.getState(),
                   stageIds: runtime.scenarioEngine.getStageIds(),
                 });
@@ -462,7 +485,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
             sessionId: simId,
             state: "listening",
           });
-          broadcastSimState(simId, {
+          broadcastUtils.broadcastSimState(simId, {
             ...runtime.scenarioEngine.getState(),
             stageIds: runtime.scenarioEngine.getStageIds(),
             fallback: false,
@@ -483,7 +506,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
           const stageId = typeof parsed.payload?.stageId === "string" ? parsed.payload.stageId : undefined;
           if (stageId) {
             runtime.scenarioEngine.setStage(stageId);
-            broadcastSimState(simId, {
+            broadcastUtils.broadcastSimState(simId, {
               ...runtime.scenarioEngine.getState(),
               stageIds: runtime.scenarioEngine.getStageIds(),
               fallback: runtime.fallback,
@@ -712,7 +735,7 @@ async function handleMessage(ws: WebSocket, ctx: ClientContext, raw: WebSocket.R
           runtime.scenarioEngine.setRhythm(newRhythm, `scenario_event: ${event}`);
 
           // Broadcast updated sim state
-          broadcastSimState(simId, {
+          broadcastUtils.broadcastSimState(simId, {
             ...runtime.scenarioEngine.getState(),
             stageIds: runtime.scenarioEngine.getStageIds(),
             fallback: runtime.fallback,
@@ -779,7 +802,7 @@ async function handleForceReply(sessionId: string, userId: string, doctorUtteran
         { ts: Date.now(), treatmentType: `[${routedCharacter}] ${action}` },
       ]);
       // Broadcast updated sim state to reflect the action
-      broadcastSimState(sessionId, {
+      broadcastUtils.broadcastSimState(sessionId, {
         ...runtime.scenarioEngine.getState(),
         stageIds: runtime.scenarioEngine.getStageIds(),
         budget: runtime.cost.getState?.() ?? undefined,
@@ -1210,7 +1233,7 @@ async function attemptRealtimeReconnect(
           inputTokens: usage.inputTokens ?? 0,
           outputTokens: usage.outputTokens ?? 0,
         });
-        broadcastSimState(sessionId, {
+        broadcastUtils.broadcastSimState(sessionId, {
           ...runtime.scenarioEngine.getState(),
           stageIds: runtime.scenarioEngine.getStageIds(),
           budget: runtime.cost.getState(),
@@ -1220,7 +1243,7 @@ async function attemptRealtimeReconnect(
         runtime.fallback = true;
         sessionManager.setFallback(sessionId, true);
         runtime.scenarioEngine.setFallback(true);
-        broadcastSimState(sessionId, {
+        broadcastUtils.broadcastSimState(sessionId, {
           ...runtime.scenarioEngine.getState(),
           stageIds: runtime.scenarioEngine.getStageIds(),
         });
@@ -1254,7 +1277,7 @@ async function attemptRealtimeReconnect(
       text: "Voice connection restored.",
       character: "nurse",
     });
-    broadcastSimState(sessionId, {
+    broadcastUtils.broadcastSimState(sessionId, {
       ...runtime.scenarioEngine.getState(),
       stageIds: runtime.scenarioEngine.getStageIds(),
     });
@@ -1323,7 +1346,7 @@ function ensureRuntime(sessionId: string): Runtime {
           inputTokens: usage.inputTokens ?? 0,
           outputTokens: usage.outputTokens ?? 0,
         });
-        broadcastSimState(sessionId, {
+        broadcastUtils.broadcastSimState(sessionId, {
           ...runtime.scenarioEngine.getState(),
           stageIds: runtime.scenarioEngine.getStageIds(),
           budget: runtime.cost.getState(),
@@ -1334,7 +1357,7 @@ function ensureRuntime(sessionId: string): Runtime {
         runtime.fallback = true;
         sessionManager.setFallback(sessionId, true);
         runtime.scenarioEngine.setFallback(true);
-        broadcastSimState(sessionId, {
+        broadcastUtils.broadcastSimState(sessionId, {
           ...runtime.scenarioEngine.getState(),
           stageIds: runtime.scenarioEngine.getStageIds(),
         });
@@ -1368,7 +1391,7 @@ function ensureRuntime(sessionId: string): Runtime {
     }
   }
 
-  broadcastSimState(sessionId, {
+  broadcastUtils.broadcastSimState(sessionId, {
     ...runtime.scenarioEngine.getState(),
     stageIds: runtime.scenarioEngine.getStageIds(),
   });
@@ -1385,7 +1408,7 @@ async function hydrateSimState(sessionId: string, runtime: Runtime) {
     const persisted = await loadSimState(sessionId);
     if (!persisted) return;
     runtime.scenarioEngine.hydrate(persisted as any);
-    broadcastSimState(sessionId, {
+    broadcastUtils.broadcastSimState(sessionId, {
       ...runtime.scenarioEngine.getState(),
       stageIds: runtime.scenarioEngine.getStageIds(),
       ekgHistory: runtime.scenarioEngine.getState().ekgHistory,
@@ -1451,7 +1474,7 @@ function handleToolIntent(sessionId: string, intent: ToolIntent) {
       })
     );
   }
-  broadcastSimState(sessionId, nextState);
+  broadcastUtils.broadcastSimState(sessionId, nextState);
 }
 
 function handleBudgetSoftLimit(sessionId: string) {
@@ -1471,7 +1494,7 @@ function handleBudgetHardLimit(sessionId: string) {
     runtime.realtime?.close();
     runtime.realtime = undefined;
     sessionManager.setFallback(sessionId, true);
-    broadcastSimState(sessionId, {
+    broadcastUtils.broadcastSimState(sessionId, {
       ...runtime.scenarioEngine.getState(),
       stageIds: runtime.scenarioEngine.getStageIds(),
       fallback: true,
@@ -1657,7 +1680,7 @@ function startScenarioHeartbeat(sessionId: string) {
       result.events?.forEach((evt) =>
         fireAndForget(logSimEvent(sessionId, { type: evt.type, payload: evt.payload as any }), `logSimEvent:${evt.type}`)
       );
-      broadcastSimState(sessionId, {
+      broadcastUtils.broadcastSimState(sessionId, {
         ...runtime.scenarioEngine.getState(),
         stageIds: runtime.scenarioEngine.getStageIds(),
         telemetryWaveform,
@@ -1666,7 +1689,7 @@ function startScenarioHeartbeat(sessionId: string) {
       });
     } else {
       // Always broadcast to keep elapsed time updated
-      broadcastSimState(sessionId, {
+      broadcastUtils.broadcastSimState(sessionId, {
         ...runtime.scenarioEngine.getState(),
         stageIds: runtime.scenarioEngine.getStageIds(),
         telemetryWaveform,
@@ -1679,150 +1702,6 @@ function startScenarioHeartbeat(sessionId: string) {
   scenarioTimers.set(sessionId, handle);
 }
 
-function broadcastSimState(
-  sessionId: string,
-  state: {
-    stageId: string;
-    vitals: any;
-    exam?: Record<string, string>;
-    interventions?: Interventions;
-    telemetry?: boolean;
-    rhythmSummary?: string;
-    telemetryWaveform?: number[];
-    fallback: boolean;
-    budget?: any;
-    stageIds?: string[];
-    scenarioId?: string;
-    findings?: string[];
-    orders?: { id: string; type: "vitals" | "ekg" | "labs" | "imaging" | "cardiac_exam" | "lung_exam" | "general_exam" | "iv_access"; status: "pending" | "complete"; result?: OrderResult; completedAt?: number }[];
-    ekgHistory?: { ts: number; summary: string; imageUrl?: string }[];
-    telemetryHistory?: { ts: number; rhythm?: string; note?: string }[];
-    treatmentHistory?: { ts: number; treatmentType: string; note?: string }[];
-    scenarioStartedAt?: number;
-    elapsedSeconds?: number;
-    extended?: any; // SVT or Myocarditis extended state
-  }
-) {
-  const validated = validateSimStateMessage(state);
-  if (!validated) {
-    logError("sim_state validation failed; skipping broadcast", state);
-    return;
-  }
-  const scenarioId = (validated.scenarioId ?? getScenarioForSession(sessionId)) as PatientScenarioId;
-  const examAudio = getAuscultationClips(scenarioId, validated.stageId);
-
-  // Check completed orders to determine what everyone can see
-  // Exam data is gated for BOTH presenters and participants until ordered
-  const completedOrders = (validated.orders ?? []).filter(o => o.status === "complete");
-  const hasCardiacExam = completedOrders.some(o => o.type === "cardiac_exam");
-  const hasLungExam = completedOrders.some(o => o.type === "lung_exam");
-  const hasGeneralExam = completedOrders.some(o => o.type === "general_exam");
-  const hasAnyExam = hasCardiacExam || hasLungExam || hasGeneralExam;
-
-  // Build partial exam based on what was ordered (for all users)
-  const gatedExam: typeof validated.exam = {};
-  if (hasGeneralExam && validated.exam?.general) gatedExam.general = validated.exam.general;
-  if ((hasCardiacExam || hasGeneralExam) && validated.exam?.cardio) gatedExam.cardio = validated.exam.cardio;
-  if ((hasLungExam || hasGeneralExam) && validated.exam?.lungs) gatedExam.lungs = validated.exam.lungs;
-  if (hasGeneralExam && validated.exam?.perfusion) gatedExam.perfusion = validated.exam.perfusion;
-  if (hasGeneralExam && validated.exam?.neuro) gatedExam.neuro = validated.exam.neuro;
-  if (hasCardiacExam && validated.exam?.heartAudioUrl) gatedExam.heartAudioUrl = validated.exam.heartAudioUrl;
-  if (hasLungExam && validated.exam?.lungAudioUrl) gatedExam.lungAudioUrl = validated.exam.lungAudioUrl;
-
-  // Gated exam audio based on ordered exams
-  const gatedExamAudio = hasAnyExam ? examAudio.filter(a =>
-    (hasCardiacExam && a.type === "heart") ||
-    (hasLungExam && a.type === "lung")
-  ) : [];
-
-  // Get correlationId and voiceFallback status for this session
-  const correlationId = getOrCreateCorrelationId(sessionId);
-  const voiceFallback = voiceFallbackSessions.has(sessionId);
-
-  // Build interventions object, merging ETT from extended state if patient is intubated
-  const extended = (state as any).extended;
-  const baseInterventions = (validated as any).interventions || {};
-  const interventions = {
-    ...baseInterventions,
-    // Add ETT if patient is intubated (from extended airway state)
-    ...(extended?.airway?.type === "intubation" && {
-      ett: { placed: true, size: extended.airway.ettSize, depth: extended.airway.ettDepth }
-    }),
-  };
-
-  // Full state for presenters - they see everything EXCEPT exam is gated until ordered
-  const fullState = {
-    type: "sim_state" as const,
-    sessionId,
-    stageId: validated.stageId,
-    stageIds: validated.stageIds,
-    scenarioId,
-    vitals: validated.vitals ?? {},
-    exam: hasAnyExam ? gatedExam : {},
-    examAudio: gatedExamAudio,
-    interventions,
-    telemetry: validated.telemetry,
-    rhythmSummary: validated.rhythmSummary,
-    telemetryWaveform: validated.telemetryWaveform,
-    findings: validated.findings ?? [],
-    fallback: validated.fallback,
-    voiceFallback,
-    correlationId,
-    budget: validated.budget,
-    orders: validated.orders,
-    ekgHistory: (state as any).ekgHistory,
-    telemetryHistory: (state as any).telemetryHistory,
-    treatmentHistory: (state as any).treatmentHistory,
-    scenarioStartedAt: (state as any).scenarioStartedAt,
-    stageEnteredAt: (state as any).stageEnteredAt,
-    elapsedSeconds: (state as any).elapsedSeconds,
-    extended: (state as any).extended, // SVT/Myocarditis extended state for presenters
-  };
-
-  // Send full state to presenters
-  sessionManager.broadcastToPresenters(sessionId, fullState);
-
-  // For participants: additional gating for vitals/telemetry
-  const hasVitalsOrder = completedOrders.some(o => o.type === "vitals");
-  const hasEkgOrder = completedOrders.some(o => o.type === "ekg");
-  const hasTelemetryEnabled = validated.telemetry === true;
-
-  // Participants only see:
-  // - Vitals if they ordered vitals OR telemetry is on (continuous monitoring)
-  // - Telemetry/rhythm if they ordered EKG or turned on telemetry
-  // - Exam findings only if they ordered specific exam types (same as presenter)
-  // - Interventions (IV, oxygen, etc.) always visible once placed
-  const participantState = {
-    type: "sim_state" as const,
-    sessionId,
-    stageId: validated.stageId,
-    scenarioId,
-    // Vitals revealed when ordered or telemetry on
-    vitals: (hasVitalsOrder || hasTelemetryEnabled) ? (validated.vitals ?? {}) : {},
-    // Exam available based on specific exam orders (reuse gated exam from above)
-    exam: hasAnyExam ? gatedExam : {},
-    examAudio: gatedExamAudio,
-    // Interventions always visible (they can see the IV, oxygen, etc. on the patient)
-    interventions,
-    // Telemetry/rhythm only if EKG ordered or telemetry enabled
-    telemetry: hasTelemetryEnabled,
-    rhythmSummary: (hasEkgOrder || hasTelemetryEnabled) ? validated.rhythmSummary : undefined,
-    telemetryWaveform: (hasEkgOrder || hasTelemetryEnabled) ? validated.telemetryWaveform : undefined,
-    findings: validated.findings ?? [],
-    fallback: validated.fallback,
-    voiceFallback,
-    correlationId,
-    // Orders always visible (so they know status)
-    orders: validated.orders,
-    ekgHistory: (hasEkgOrder || hasTelemetryEnabled) ? (state as any).ekgHistory : undefined,
-    // Treatment history for timeline (always visible so participants can see what's been done)
-    treatmentHistory: (state as any).treatmentHistory,
-    scenarioStartedAt: (state as any).scenarioStartedAt,
-  };
-
-  sessionManager.broadcastToParticipants(sessionId, participantState);
-  fireAndForget(persistSimState(sessionId, state as any), "persistSimState", sessionId);
-}
 
 function buildSystemPrompt(scenario: PatientScenarioId): string {
   const persona =
@@ -1875,7 +1754,7 @@ function handleExamRequest(sessionId: string, examType?: string) {
   runtime.scenarioEngine.hydrate({ orders: nextOrders });
 
   // Broadcast pending state
-  broadcastSimState(sessionId, {
+  broadcastUtils.broadcastSimState(sessionId, {
     ...runtime.scenarioEngine.getState(),
     stageIds: runtime.scenarioEngine.getStageIds(),
     orders: nextOrders,
@@ -1953,7 +1832,7 @@ function handleExamRequest(sessionId: string, examType?: string) {
     });
 
     // Broadcast updated state with completed order
-    broadcastSimState(sessionId, {
+    broadcastUtils.broadcastSimState(sessionId, {
       ...runtime.scenarioEngine.getState(),
       stageIds: runtime.scenarioEngine.getStageIds(),
       orders: completedOrders,
@@ -1970,7 +1849,7 @@ function handleTelemetryToggle(sessionId: string, enabled: boolean) {
   runtime.scenarioEngine.setTelemetry(enabled, runtime.scenarioEngine.getState().rhythmSummary);
   const telemetryWaveform = enabled ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90) : [];
   const telemetryHistory = runtime.scenarioEngine.getState().telemetryHistory ?? [];
-  broadcastSimState(sessionId, {
+  broadcastUtils.broadcastSimState(sessionId, {
     ...runtime.scenarioEngine.getState(),
     stageIds: runtime.scenarioEngine.getStageIds(),
     telemetry: enabled,
@@ -2016,7 +1895,7 @@ function handleShowEkg(sessionId: string) {
     const entry = { ts: Date.now(), summary, imageUrl };
     const updatedArchive = [...(runtime.scenarioEngine.getState().ekgHistory ?? []), entry].slice(-3);
     runtime.scenarioEngine.setEkgHistory(updatedArchive);
-  broadcastSimState(sessionId, {
+  broadcastUtils.broadcastSimState(sessionId, {
     ...runtime.scenarioEngine.getState(),
     stageIds: runtime.scenarioEngine.getStageIds(),
     telemetryWaveform,
@@ -2024,721 +1903,6 @@ function handleShowEkg(sessionId: string) {
   fireAndForget(logSimEvent(sessionId, { type: "ekg.viewed", payload: { summary, imageUrl } }), "logSimEvent:ekg.viewed");
 }
 
-/**
- * Enhanced treatment handler supporting:
- * - Weight-based medication dosing (mg/kg)
- * - Specific routes (IV, IO, IM, etc.)
- * - Cardioversion/defibrillation (J/kg)
- * - Nurse confirmation of exact dose given
- */
-async function handleTreatment(
-  sessionId: string,
-  treatmentType?: string,
-  payload?: Record<string, unknown>
-) {
-  const runtime = ensureRuntime(sessionId);
-  const weightKg = runtime.scenarioEngine.getPatientWeight();
-  const demographics = runtime.scenarioEngine.getDemographics();
-
-  const key = `${sessionId}:${(treatmentType ?? "").toLowerCase()}`;
-  const now = Date.now();
-  const last = lastTreatmentAt.get(key) || 0;
-
-  // Minimum interval between same treatments (prevents spam)
-  const minIntervalMs = treatmentType === "cardioversion" || treatmentType === "defibrillation" ? 3000 : 8000;
-  if (now - last < minIntervalMs) {
-    sessionManager.broadcastToPresenters(sessionId, {
-      type: "patient_transcript_delta",
-      sessionId,
-      text: "Treatment already given; wait a moment before re-dosing.",
-      character: "nurse",
-    });
-    return;
-  }
-  lastTreatmentAt.set(key, now);
-
-  // Check if this is an SVT scenario that needs state locking
-  const initialState = runtime.scenarioEngine.getState();
-  const needsStateLock = hasSVTExtended(initialState);
-
-  // For SVT scenarios, wrap the entire treatment in a state lock to prevent
-  // race conditions with heartbeat ticks that also modify extended state
-  if (needsStateLock) {
-    await withStateLock(sessionId, `treatment:${treatmentType}`, async () => {
-      await executeTreatmentLogic(sessionId, runtime, treatmentType, payload, weightKg, demographics);
-    });
-  } else {
-    await executeTreatmentLogic(sessionId, runtime, treatmentType, payload, weightKg, demographics);
-  }
-}
-
-/**
- * Core treatment execution logic, extracted for state lock wrapping.
- */
-async function executeTreatmentLogic(
-  sessionId: string,
-  runtime: Runtime,
-  treatmentType: string | undefined,
-  payload: Record<string, unknown> | undefined,
-  weightKg: number,
-  demographics: ReturnType<ScenarioEngine["getDemographics"]>
-) {
-  const doseOrdered = payload?.dose as number | undefined;
-  const routeOrdered = payload?.route as string | undefined;
-  const joules = payload?.joules as number | undefined;
-
-  const delta: any = {};
-  let nurseResponse = "";
-  let techResponse: string | undefined;
-  let decayMs = 120000;
-  let decayIntent: ToolIntent | null = null;
-
-  switch ((treatmentType ?? "").toLowerCase()) {
-    // ===== SUPPORTIVE CARE =====
-    case "oxygen":
-    case "o2": {
-      delta.spo2 = 3;
-      delta.hr = -3;
-      const flowRate = (payload?.flowRate as number) ?? 2;
-      const o2Type = (payload?.o2Type as string) ?? "nasal_cannula";
-      runtime.scenarioEngine.updateIntervention("oxygen", {
-        type: o2Type as any,
-        flowRateLpm: flowRate,
-      });
-      nurseResponse = `Oxygen on at ${flowRate} L/min via ${o2Type.replace(/_/g, " ")}. SpO2 should improve.`;
-      techResponse = "Oxygenation improving on the monitor.";
-      decayIntent = { type: "intent_updateVitals", delta: { spo2: -2, hr: 2 } as any };
-      break;
-    }
-    case "fluids":
-    case "bolus": {
-      // Standard: 20 mL/kg NS bolus
-      const volumeMl = doseOrdered ?? Math.round(20 * weightKg);
-      delta.hr = -4;
-      delta.sbpPerMin = 6;
-      delta.dbpPerMin = 4;
-      // Update IV intervention if not already set
-      const currentIv = runtime.scenarioEngine.getState().interventions?.iv;
-      if (!currentIv) {
-        runtime.scenarioEngine.updateIntervention("iv", {
-          location: "right_ac",
-          gauge: 22,
-          fluidsRunning: true,
-          fluidType: "NS",
-        });
-      } else {
-        runtime.scenarioEngine.updateIntervention("iv", {
-          ...currentIv,
-          fluidsRunning: true,
-          fluidType: "NS",
-        });
-      }
-      nurseResponse = `NS bolus ${volumeMl} mL IV running in. That's ${Math.round(volumeMl / weightKg)} mL/kg.`;
-      techResponse = "Perfusion improving with fluids.";
-      decayIntent = { type: "intent_updateVitals", delta: { hr: 2, sbpPerMin: -4, dbpPerMin: -3 } as any };
-      break;
-    }
-    case "iv":
-    case "iv_access": {
-      // Use the delayed order system for IV placement
-      const ivLocation = (payload?.location as string) ?? "right_ac";
-      const ivGauge = (payload?.gauge as number) ?? 22;
-      const ivOrderedBy = payload?.orderedBy
-        ? { id: (payload.orderedBy as any).id ?? "unknown", name: (payload.orderedBy as any).name ?? "Unknown", role: (payload.orderedBy as any).role ?? "presenter" as const }
-        : { id: "system", name: "System", role: "presenter" as const };
-
-      const orderResult = handleOrder(sessionId, "iv_access", ivOrderedBy, { gauge: ivGauge, location: ivLocation });
-
-      if (orderResult.success) {
-        // Update SVT extended state to track that IV was ordered (completion updates ivAccess)
-        const ivState = runtime.scenarioEngine.getState();
-        if (hasSVTExtended(ivState)) {
-          const ext = ivState.extended;
-          runtime.scenarioEngine.updateExtended({
-            ...ext,
-            timelineEvents: [
-              ...ext.timelineEvents,
-              { ts: Date.now(), type: "intervention", description: `IV access ordered (${ivGauge}g ${ivLocation.replace(/_/g, " ")})` },
-            ],
-          });
-        }
-      }
-      // Order handler broadcasts nurse ack, so skip here
-      nurseResponse = "";
-      break;
-    }
-    case "position":
-    case "knee-chest": {
-      delta.spo2 = 4;
-      delta.hr = -5;
-      nurseResponse = "Got them into knee-chest position. Sats improving.";
-      techResponse = "Squatting/knee-chest reducing right-to-left shunt; sats coming up.";
-      decayIntent = { type: "intent_updateVitals", delta: { spo2: -3, hr: 3 } as any };
-      break;
-    }
-
-    // ===== SVT INTERVENTIONS =====
-    case "vagal":
-    case "vagal_maneuver": {
-      // Vagal maneuvers for SVT: ~30% success rate on second attempt
-      // Modified Valsalva, ice to face, or bearing down
-      const currentState = runtime.scenarioEngine.getState();
-      const currentHr = currentState.vitals.hr ?? 90;
-      const method = (payload?.method as string) ?? "valsalva";
-      const methodName = method === "ice_to_face" ? "ice to face" :
-                         method === "modified_valsalva" ? "modified Valsalva" : "bearing down";
-
-      if (currentHr > 180) {
-        // SVT likely - vagal may work
-        // Teaching progression: first attempt fails, second attempt has 30% success
-        const previousAttempts = hasSVTExtended(currentState) ? currentState.extended.vagalAttempts : 0;
-        const vagalSucceeds = previousAttempts >= 1 && Math.random() < 0.3;
-
-        nurseResponse = `Trying ${methodName} now... watching the monitor...`;
-
-        if (vagalSucceeds) {
-          // Vagal converted the SVT!
-          techResponse = "Wait... look at that! Rate's coming down... 180... 140... 100... We're back in sinus!";
-          delta.hr = -(currentHr - 90); // Convert to sinus ~90 bpm
-          decayIntent = null; // No rebound, stay converted
-
-          if (hasSVTExtended(currentState)) {
-            const ext = currentState.extended;
-            runtime.scenarioEngine.updateExtended({
-              ...ext,
-              vagalAttempts: ext.vagalAttempts + 1,
-              vagalAttemptTs: Date.now(),
-              converted: true,
-              conversionMethod: "vagal",
-              conversionTs: Date.now(),
-              currentRhythm: "sinus",
-              checklistCompleted: ext.checklistCompleted.includes("vagal_attempted")
-                ? ext.checklistCompleted
-                : [...ext.checklistCompleted, "vagal_attempted"],
-              timelineEvents: [
-                ...ext.timelineEvents,
-                { ts: Date.now(), type: "treatment", description: `Vagal maneuver (${methodName}) - CONVERTED to sinus rhythm` },
-              ],
-            });
-          }
-        } else {
-          // Vagal failed
-          techResponse = "Rate unchanged. Vagal didn't convert her.";
-          // Small HR drop but no conversion
-          delta.hr = -5;
-          decayIntent = { type: "intent_updateVitals", delta: { hr: 5 } as any };
-          decayMs = 30000;
-
-          if (hasSVTExtended(currentState)) {
-            const ext = currentState.extended;
-            runtime.scenarioEngine.updateExtended({
-              ...ext,
-              vagalAttempts: ext.vagalAttempts + 1,
-              vagalAttemptTs: Date.now(),
-              checklistCompleted: ext.checklistCompleted.includes("vagal_attempted")
-                ? ext.checklistCompleted
-                : [...ext.checklistCompleted, "vagal_attempted"],
-              timelineEvents: [
-                ...ext.timelineEvents,
-                { ts: Date.now(), type: "treatment", description: `Vagal maneuver (${methodName}) attempted - no conversion` },
-              ],
-            });
-          }
-        }
-      } else {
-        nurseResponse = `Heart rate is only ${currentHr}. Vagal maneuvers are for SVT rates over 180.`;
-      }
-      break;
-    }
-    case "sedation": {
-      // Procedural sedation for cardioversion
-      const agent = (payload?.agent as string) ?? "midazolam";
-      const agentDoses: Record<string, { dose: number; unit: string; onset: string }> = {
-        midazolam: { dose: 0.1, unit: "mg/kg", onset: "1-2 minutes" },
-        ketamine: { dose: 1.0, unit: "mg/kg", onset: "30 seconds" },
-        propofol: { dose: 1.0, unit: "mg/kg", onset: "30 seconds" },
-      };
-      const info = agentDoses[agent] ?? agentDoses.midazolam;
-      const actualDose = Math.round(info.dose * weightKg * 10) / 10;
-      nurseResponse = `${agent.charAt(0).toUpperCase() + agent.slice(1)} ${actualDose} ${info.unit === "mg/kg" ? "mg" : info.unit} IV given. ` +
-                      `That's ${info.dose} ${info.unit}. Onset in about ${info.onset}.`;
-      if (agent === "propofol") {
-        delta.sbpPerMin = -10; // Propofol causes hypotension
-        nurseResponse += " Watching the BP closely.";
-      }
-
-      // Update SVT extended state
-      const sedState = runtime.scenarioEngine.getState();
-      if (hasSVTExtended(sedState)) {
-        const ext = sedState.extended;
-        runtime.scenarioEngine.updateExtended({
-          ...ext,
-          sedationGiven: true,
-          sedationAgent: agent,
-          sedationTs: Date.now(),
-          timelineEvents: [
-            ...ext.timelineEvents,
-            { ts: Date.now(), type: "treatment", description: `Sedation given (${agent} ${actualDose} mg)` },
-          ],
-        });
-      }
-      break;
-    }
-
-    // ===== CARDIAC MEDICATIONS =====
-    case "adenosine": {
-      // PALS: First dose 0.1 mg/kg IV rapid push (max 6mg), second dose 0.2 mg/kg (max 12mg)
-      // Must be given rapid IV push followed immediately by NS flush
-      const adenState = runtime.scenarioEngine.getState();
-      const maxFirst = 6;
-      const maxSecond = 12;
-      let doseNumber: 1 | 2 = 1;
-      let recommendedDose = doseOrdered ?? Math.min(0.1 * weightKg, maxFirst);
-
-      // Check if this is second dose (for SVT scenarios)
-      if (hasSVTExtended(adenState)) {
-        const ext = adenState.extended;
-        if (ext.adenosineDoses.length > 0) {
-          doseNumber = 2;
-          // Second dose is 0.2 mg/kg (max 12mg)
-          recommendedDose = doseOrdered ?? Math.min(0.2 * weightKg, maxSecond);
-        }
-      }
-
-      const actualDose = Math.round(recommendedDose * 100) / 100;
-      const rapidPush = payload?.rapidPush !== false;
-      const flushGiven = payload?.flush !== false;
-
-      // For SVT scenarios, simulate conversion based on dose number
-      // First dose: 60% success, Second dose: 90% cumulative
-      // For teaching purposes, we'll make first dose fail and second succeed
-      const isFirstDose = doseNumber === 1;
-      if (isFirstDose) {
-        delta.hr = -30; // Brief dip
-        decayIntent = { type: "intent_updateVitals", delta: { hr: 25 } as any };
-        decayMs = 15000;
-        nurseResponse = `Adenosine ${actualDose} mg IV rapid push given. That's ${(actualDose / weightKg).toFixed(2)} mg/kg. Flushing with 5 mL NS.`;
-        techResponse = "Brief pause... and it's back. Still in SVT. Want to try the higher dose?";
-      } else {
-        delta.hr = -125; // Full conversion from ~220 to ~95
-        nurseResponse = `Adenosine ${actualDose} mg IV rapid push given. That's ${(actualDose / weightKg).toFixed(2)} mg/kg. Flushing with 5 mL NS.`;
-        techResponse = "There it is! She's converting... sinus rhythm. Heart rate coming down nicely.";
-      }
-
-      // Update SVT extended state
-      if (hasSVTExtended(adenState)) {
-        const ext = adenState.extended;
-        const newDose = {
-          ts: Date.now(),
-          doseMg: actualDose,
-          doseMgKg: actualDose / weightKg,
-          doseNumber,
-          rapidPush,
-          flushGiven,
-        };
-        const newChecklist = [...ext.checklistCompleted];
-        // Check for correct dosing (within 20% of recommended)
-        const expectedDose = doseNumber === 1 ? 0.1 * weightKg : 0.2 * weightKg;
-        const doseTolerance = expectedDose * 0.2;
-        if (Math.abs(actualDose - expectedDose) <= doseTolerance && !newChecklist.includes("adenosine_correct_dose")) {
-          newChecklist.push("adenosine_correct_dose");
-        }
-
-        const converted = !isFirstDose; // Second dose converts
-        runtime.scenarioEngine.updateExtended({
-          ...ext,
-          adenosineDoses: [...ext.adenosineDoses, newDose],
-          totalAdenosineMg: ext.totalAdenosineMg + actualDose,
-          converted,
-          conversionMethod: converted ? (doseNumber === 1 ? "adenosine_first" : "adenosine_second") : undefined,
-          conversionTs: converted ? Date.now() : undefined,
-          currentRhythm: converted ? "sinus" : "svt",
-          phase: converted ? "converted" : ext.phase,
-          phaseEnteredAt: converted ? Date.now() : ext.phaseEnteredAt,
-          checklistCompleted: newChecklist,
-          bonusesEarned: rapidPush && flushGiven && !ext.bonusesEarned.includes("proper_flush")
-            ? [...ext.bonusesEarned, "proper_flush"]
-            : ext.bonusesEarned,
-          timelineEvents: [
-            ...ext.timelineEvents,
-            { ts: Date.now(), type: "treatment", description: `Adenosine ${actualDose} mg (dose #${doseNumber})${converted ? " - CONVERTED" : ""}` },
-          ],
-        });
-
-        // If converted, update vitals/rhythm to sinus
-        if (converted) {
-          const convertedPhase = SVT_PHASES.find((p) => p.id === "converted");
-          if (convertedPhase) {
-            runtime.scenarioEngine.hydrate({
-              vitals: convertedPhase.vitalsTarget,
-              exam: convertedPhase.examFindings,
-              rhythmSummary: convertedPhase.rhythmSummary,
-            });
-          }
-        }
-      }
-      break;
-    }
-    case "amiodarone": {
-      // 5 mg/kg IV over 20-60 min (max 300mg for arrest)
-      const recommendedDose = doseOrdered ?? Math.min(5 * weightKg, 300);
-      const actualDose = Math.round(recommendedDose);
-      delta.hr = -15;
-      decayMs = 300000; // Long-acting
-      nurseResponse = `Amiodarone ${actualDose} mg IV loading. That's ${(actualDose / weightKg).toFixed(1)} mg/kg. Running over 20 minutes.`;
-      techResponse = "Rate control medication infusing. Should see gradual effect.";
-      decayIntent = { type: "intent_updateVitals", delta: { hr: 5 } as any };
-      break;
-    }
-    case "epinephrine":
-    case "epi": {
-      // Arrest: 0.01 mg/kg IV/IO (1:10,000) = 0.1 mL/kg
-      // Anaphylaxis: 0.01 mg/kg IM (1:1,000)
-      const route = routeOrdered ?? "iv";
-      const recommendedDose = doseOrdered ?? 0.01 * weightKg;
-      const actualDose = Math.round(recommendedDose * 1000) / 1000; // mg
-      delta.hr = 20;
-      delta.sbpPerMin = 10;
-      decayMs = 180000;
-      const concentration = route.toLowerCase() === "im" ? "1:1,000" : "1:10,000";
-      nurseResponse = `Epinephrine ${actualDose} mg ${route.toUpperCase()} given (${concentration}). That's ${(actualDose / weightKg * 1000).toFixed(0)} mcg/kg.`;
-      techResponse = "Heart rate increasing, perfusion improving.";
-      decayIntent = { type: "intent_updateVitals", delta: { hr: -10, sbpPerMin: -5 } as any };
-      break;
-    }
-    case "atropine": {
-      // PALS: 0.02 mg/kg IV/IO (min 0.1mg to avoid paradoxical bradycardia, max 0.5mg child / 1mg adolescent)
-      // May repeat once; total max 1mg child, 2mg adolescent
-      const minDose = 0.1;
-      const maxDose = demographics.ageYears >= 12 ? 1.0 : 0.5;
-      const recommendedDose = doseOrdered ?? Math.max(minDose, Math.min(0.02 * weightKg, maxDose));
-      const actualDose = Math.round(recommendedDose * 100) / 100;
-      delta.hr = 20;
-      decayMs = 180000;
-      nurseResponse = `Atropine ${actualDose} mg IV push given. That's ${(actualDose / weightKg * 1000).toFixed(0)} mcg/kg (${(actualDose * 1000).toFixed(0)} mcg).`;
-      techResponse = "Watching for rate increase...";
-      decayIntent = { type: "intent_updateVitals", delta: { hr: -10 } as any };
-      break;
-    }
-    case "morphine": {
-      // 0.05-0.1 mg/kg IV (max 4mg)
-      const recommendedDose = doseOrdered ?? Math.min(0.1 * weightKg, 4);
-      const actualDose = Math.round(recommendedDose * 100) / 100;
-      delta.hr = -5;
-      decayMs = 240000;
-      nurseResponse = `Morphine ${actualDose} mg IV given slowly. That's ${(actualDose / weightKg).toFixed(2)} mg/kg. Monitoring respiratory status.`;
-      break;
-    }
-    case "prostaglandin":
-    case "pge1":
-    case "alprostadil": {
-      // 0.05-0.1 mcg/kg/min infusion for ductal-dependent lesions
-      const infusionRate = doseOrdered ?? 0.05;
-      delta.spo2 = 5;
-      delta.hr = -5;
-      decayMs = 600000; // Continuous infusion
-      nurseResponse = `PGE1 infusion started at ${infusionRate} mcg/kg/min. That's ${(infusionRate * weightKg).toFixed(2)} mcg/min total.`;
-      techResponse = "Watching for duct reopening. Sats should improve.";
-      break;
-    }
-    case "lidocaine": {
-      // PALS: 1 mg/kg IV/IO bolus (max 100mg), then 20-50 mcg/kg/min infusion
-      // Used for VF/pVT refractory to defibrillation
-      const recommendedDose = doseOrdered ?? Math.min(1 * weightKg, 100);
-      const actualDose = Math.round(recommendedDose);
-      delta.hr = -5;
-      decayMs = 600000;
-      nurseResponse = `Lidocaine ${actualDose} mg IV bolus given. That's ${(actualDose / weightKg).toFixed(1)} mg/kg.`;
-      techResponse = "Antiarrhythmic on board.";
-      decayIntent = { type: "intent_updateVitals", delta: { hr: 3 } as any };
-      break;
-    }
-    case "calcium":
-    case "calcium_chloride":
-    case "cacl": {
-      // PALS: Calcium chloride 20 mg/kg IV slow push (max 2g) - only for hypocalcemia, hyperkalemia, Ca-blocker OD
-      // CaCl2 10% = 100 mg/mL = 27.2 mg/mL elemental Ca
-      const recommendedDose = doseOrdered ?? Math.min(20 * weightKg, 2000);
-      const actualDose = Math.round(recommendedDose);
-      const volumeMl = Math.round(actualDose / 100 * 10) / 10; // 10% solution
-      delta.hr = 5;
-      delta.sbpPerMin = 5;
-      decayMs = 300000;
-      nurseResponse = `Calcium chloride ${actualDose} mg (${volumeMl} mL of 10%) IV slow push over 30 seconds. That's ${Math.round(actualDose / weightKg)} mg/kg.`;
-      techResponse = "Monitoring for improved contractility.";
-      break;
-    }
-    case "sodium_bicarbonate":
-    case "bicarb":
-    case "nahco3": {
-      // PALS: 1 mEq/kg IV slow push - only for documented acidosis, hyperkalemia, TCA OD
-      // 8.4% solution = 1 mEq/mL
-      const recommendedDose = doseOrdered ?? weightKg; // 1 mEq/kg
-      const actualDose = Math.round(recommendedDose);
-      decayMs = 300000;
-      nurseResponse = `Sodium bicarbonate ${actualDose} mEq (${actualDose} mL of 8.4%) IV slow push. That's ${(actualDose / weightKg).toFixed(1)} mEq/kg.`;
-      techResponse = "Bicarb given. Check follow-up gas.";
-      break;
-    }
-    case "magnesium":
-    case "mag":
-    case "mgso4": {
-      // PALS: 25-50 mg/kg IV over 10-20 min (max 2g) - for torsades, hypomagnesemia
-      const recommendedDose = doseOrdered ?? Math.min(50 * weightKg, 2000);
-      const actualDose = Math.round(recommendedDose);
-      delta.hr = -10;
-      decayMs = 600000;
-      nurseResponse = `Magnesium sulfate ${actualDose} mg IV over 15 minutes. That's ${Math.round(actualDose / weightKg)} mg/kg.`;
-      techResponse = "Magnesium infusing for rhythm stabilization.";
-      break;
-    }
-    case "procainamide": {
-      // PALS: 15 mg/kg IV over 30-60 min (max 17 mg/kg or 1g)
-      // For SVT unresponsive to adenosine, wide-complex tachycardia
-      const recommendedDose = doseOrdered ?? Math.min(15 * weightKg, 1000);
-      const actualDose = Math.round(recommendedDose);
-      delta.hr = -20;
-      decayMs = 600000;
-      nurseResponse = `Procainamide ${actualDose} mg IV infusing over 30 minutes. That's ${Math.round(actualDose / weightKg)} mg/kg. Monitoring BP and QRS.`;
-      techResponse = "Watching QRS width and BP during infusion.";
-      break;
-    }
-
-    // ===== CARDIOVERSION / DEFIBRILLATION =====
-    case "cardioversion":
-    case "sync_cardioversion": {
-      // Synchronized cardioversion: 0.5-1 J/kg, may increase to 2 J/kg
-      const joulesOrdered = joules ?? Math.round(0.5 * weightKg);
-      const cvState = runtime.scenarioEngine.getState();
-      runtime.scenarioEngine.updateIntervention("defibPads", { placed: true });
-
-      // Check if patient was sedated for SVT
-      let wasSedated = true;
-      if (hasSVTExtended(cvState)) {
-        wasSedated = cvState.extended.sedationGiven;
-      }
-
-      if (!wasSedated) {
-        nurseResponse = `Synchronized cardioversion at ${joulesOrdered} J delivered. That's ${(joulesOrdered / weightKg).toFixed(1)} J/kg. She felt that! We should have sedated first.`;
-        techResponse = "Shock delivered... she's crying but... rhythm converting!";
-      } else {
-        nurseResponse = `Synchronized cardioversion at ${joulesOrdered} J delivered. That's ${(joulesOrdered / weightKg).toFixed(1)} J/kg. Patient sedated.`;
-        techResponse = "Shock delivered... watching rhythm... she's converting!";
-      }
-
-      delta.hr = -150; // Convert to sinus ~90
-
-      // Update SVT extended state
-      if (hasSVTExtended(cvState)) {
-        const ext = cvState.extended;
-        const cvAttempt = {
-          ts: Date.now(),
-          joules: joulesOrdered,
-          joulesPerKg: joulesOrdered / weightKg,
-          synchronized: true,
-          sedated: wasSedated,
-          sedationAgent: ext.sedationAgent,
-        };
-
-        runtime.scenarioEngine.updateExtended({
-          ...ext,
-          cardioversionAttempts: [...ext.cardioversionAttempts, cvAttempt],
-          converted: true,
-          conversionMethod: "cardioversion",
-          conversionTs: Date.now(),
-          currentRhythm: "sinus",
-          phase: "converted",
-          phaseEnteredAt: Date.now(),
-          flags: {
-            ...ext.flags,
-            unsedatedCardioversion: !wasSedated,
-          },
-          penaltiesIncurred: !wasSedated && !ext.penaltiesIncurred.includes("unsedated_cardioversion")
-            ? [...ext.penaltiesIncurred, "unsedated_cardioversion"]
-            : ext.penaltiesIncurred,
-          timelineEvents: [
-            ...ext.timelineEvents,
-            { ts: Date.now(), type: "treatment", description: `Synchronized cardioversion ${joulesOrdered} J${!wasSedated ? " (UNSEDATED!)" : ""} - CONVERTED` },
-          ],
-        });
-
-        // Update to converted phase vitals
-        const convertedPhase = SVT_PHASES.find((p) => p.id === "converted");
-        if (convertedPhase) {
-          runtime.scenarioEngine.hydrate({
-            vitals: convertedPhase.vitalsTarget,
-            exam: convertedPhase.examFindings,
-            rhythmSummary: convertedPhase.rhythmSummary,
-          });
-        }
-      }
-      break;
-    }
-    case "defibrillation":
-    case "defib": {
-      // VF/pVT: 2 J/kg first, then 4 J/kg
-      const joulesOrdered = joules ?? Math.round(2 * weightKg);
-      delta.hr = 0; // Pulseless - either converts or stays in arrest
-      runtime.scenarioEngine.updateIntervention("defibPads", { placed: true });
-      nurseResponse = `Defibrillation at ${joulesOrdered} J delivered! That's ${(joulesOrdered / weightKg).toFixed(0)} J/kg. Resuming compressions.`;
-      techResponse = "Shock delivered. Checking rhythm...";
-      break;
-    }
-    case "defib_pads":
-    case "pads": {
-      runtime.scenarioEngine.updateIntervention("defibPads", { placed: true });
-      nurseResponse = "Defibrillator pads placed - apex and right sternal border.";
-      techResponse = "Pads on. Ready for rhythm analysis.";
-      break;
-    }
-    case "monitor":
-    case "cardiac_monitor": {
-      runtime.scenarioEngine.updateIntervention("monitor", { leads: true });
-      nurseResponse = "Patient on the cardiac monitor. Leads attached.";
-      techResponse = "Monitor on. Displaying rhythm strip.";
-
-      // Update SVT extended state
-      const monState = runtime.scenarioEngine.getState();
-      if (hasSVTExtended(monState)) {
-        const ext = monState.extended;
-        runtime.scenarioEngine.updateExtended({
-          ...ext,
-          monitorOn: true,
-          monitorOnTs: Date.now(),
-          checklistCompleted: ext.checklistCompleted.includes("continuous_monitoring")
-            ? ext.checklistCompleted
-            : [...ext.checklistCompleted, "continuous_monitoring"],
-          timelineEvents: [
-            ...ext.timelineEvents,
-            { ts: Date.now(), type: "intervention", description: "Cardiac monitor attached" },
-          ],
-        });
-      }
-      break;
-    }
-    case "ng_tube":
-    case "ng":
-    case "nasogastric": {
-      runtime.scenarioEngine.updateIntervention("ngTube", { placed: true });
-      nurseResponse = "NG tube placed and secured. Good placement confirmed with auscultation.";
-      break;
-    }
-    case "foley":
-    case "foley_catheter":
-    case "urinary_catheter": {
-      runtime.scenarioEngine.updateIntervention("foley", { placed: true });
-      nurseResponse = "Foley catheter placed. Draining clear yellow urine.";
-      break;
-    }
-
-    // ===== OTHER TREATMENTS =====
-    case "ibuprofen":
-    case "motrin": {
-      // 10 mg/kg PO (max 400mg)
-      const recommendedDose = doseOrdered ?? Math.min(10 * weightKg, 400);
-      const actualDose = Math.round(recommendedDose);
-      delta.temp = -0.5;
-      decayMs = 21600000; // 6 hours
-      nurseResponse = `Ibuprofen ${actualDose} mg PO given. That's ${Math.round(actualDose / weightKg)} mg/kg.`;
-      break;
-    }
-    case "acetaminophen":
-    case "tylenol": {
-      // 15 mg/kg PO (max 1000mg)
-      const recommendedDose = doseOrdered ?? Math.min(15 * weightKg, 1000);
-      const actualDose = Math.round(recommendedDose);
-      delta.temp = -0.5;
-      decayMs = 14400000; // 4 hours
-      nurseResponse = `Acetaminophen ${actualDose} mg PO given. That's ${Math.round(actualDose / weightKg)} mg/kg.`;
-      break;
-    }
-    case "aspirin":
-    case "asa": {
-      // Kawasaki: 80-100 mg/kg/day divided q6h (high dose) or 3-5 mg/kg/day (low dose)
-      const recommendedDose = doseOrdered ?? Math.min(20 * weightKg, 650); // Single dose
-      const actualDose = Math.round(recommendedDose);
-      nurseResponse = `Aspirin ${actualDose} mg PO given. That's ${Math.round(actualDose / weightKg)} mg/kg.`;
-      break;
-    }
-
-    default:
-      // Unknown treatment - nurse asks for clarification
-      sessionManager.broadcastToSession(sessionId, {
-        type: "patient_transcript_delta",
-        sessionId,
-        text: `I need the medication name, dose, and route. Patient weighs ${weightKg} kg.`,
-        character: "nurse",
-      });
-      return;
-  }
-
-  // Apply vitals changes
-  runtime.scenarioEngine.applyVitalsAdjustment(delta);
-
-  // Update rhythm based on new vitals (treatments affecting HR change the rhythm)
-  const newRhythm = runtime.scenarioEngine.getDynamicRhythm();
-  runtime.scenarioEngine.setRhythm(newRhythm, `treatment: ${treatmentType}`);
-
-  const telemetryWaveform = runtime.scenarioEngine.getState().telemetry
-    ? buildTelemetryWaveform(runtime.scenarioEngine.getState().vitals.hr ?? 90)
-    : undefined;
-
-  maybeAdvanceStageFromTreatment(runtime, treatmentType);
-
-  // Record in treatment history
-  const history = runtime.scenarioEngine.getState().treatmentHistory ?? [];
-  runtime.scenarioEngine.setTreatmentHistory([
-    ...history,
-    { ts: Date.now(), treatmentType: treatmentType ?? "unknown", note: nurseResponse },
-  ]);
-
-  // Broadcast updated state
-  broadcastSimState(sessionId, {
-    ...runtime.scenarioEngine.getState(),
-    stageIds: runtime.scenarioEngine.getStageIds(),
-    telemetryWaveform,
-    treatmentHistory: runtime.scenarioEngine.getState().treatmentHistory,
-  });
-
-  // Nurse confirms dose
-  if (nurseResponse) {
-    sessionManager.broadcastToSession(sessionId, {
-      type: "patient_transcript_delta",
-      sessionId,
-      text: nurseResponse,
-      character: "nurse",
-    });
-    if (techResponse && runtime.scenarioEngine.getState().telemetry) {
-      sessionManager.broadcastToSession(sessionId, {
-        type: "patient_transcript_delta",
-        sessionId,
-        text: techResponse,
-        character: "tech",
-      });
-    }
-  }
-
-  fireAndForget(logSimEvent(sessionId, {
-    type: "treatment.applied",
-    payload: { treatmentType, weightKg, ...payload, nurseResponse },
-  }), "logSimEvent:treatment.applied");
-
-  // Schedule effect decay
-  if (decayIntent) {
-    setTimeout(() => {
-      const rt = runtimes.get(sessionId);
-      if (!rt) return;
-      rt.scenarioEngine.applyIntent(decayIntent);
-      broadcastSimState(sessionId, {
-        ...rt.scenarioEngine.getState(),
-        stageIds: rt.scenarioEngine.getStageIds(),
-        telemetryWaveform: rt.scenarioEngine.getState().telemetry
-          ? buildTelemetryWaveform(rt.scenarioEngine.getState().vitals.hr ?? 90)
-          : undefined,
-      });
-    }, decayMs);
-  }
-}
 
 async function withRetry<T>(
   fn: () => Promise<T>,
@@ -2786,17 +1950,3 @@ async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
   return res;
 }
 
-function maybeAdvanceStageFromTreatment(runtime: Runtime, treatmentType?: string) {
-  const scenarioId = runtime.scenarioEngine.getState().scenarioId as PatientScenarioId;
-  const stageId = runtime.scenarioEngine.getState().stageId;
-  const t = (treatmentType ?? "").toLowerCase();
-  if (scenarioId === "palpitations_svt" && stageId === "stage_2_episode" && t.includes("rate")) {
-    runtime.scenarioEngine.setStage("stage_3_post_episode");
-  }
-  if (scenarioId === "ductal_shock" && stageId === "stage_1_shock" && (t.includes("fluid") || t.includes("bolus"))) {
-    runtime.scenarioEngine.setStage("stage_2_improving");
-  }
-  if (scenarioId === "cyanotic_spell" && stageId === "stage_2_spell" && (t.includes("oxygen") || t.includes("knee") || t.includes("position"))) {
-    runtime.scenarioEngine.setStage("stage_3_recovery");
-  }
-}
